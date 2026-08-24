@@ -2,7 +2,7 @@ name: Daily CRO Staff Briefing
 
 on:
   schedule:
-    - cron: '0 22 * * *'
+    - cron: '30 21 * * *'
   workflow_dispatch:
 
 permissions:
@@ -15,7 +15,7 @@ concurrency:
 jobs:
   generate-deploy-email:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Check out repository
@@ -57,6 +57,20 @@ jobs:
           done
           echo "Render did not deploy the new briefing in time. Email not sent."
           exit 1
+
+      - name: Wait until 07:00 KST for scheduled delivery
+        if: github.event_name == 'schedule'
+        run: |
+          TODAY_KST=$(TZ=Asia/Seoul date +%F)
+          TARGET=$(TZ=Asia/Seoul date -d "$TODAY_KST 07:00:00" +%s)
+          NOW=$(date +%s)
+          if [ "$NOW" -lt "$TARGET" ]; then
+            WAIT_SECONDS=$((TARGET - NOW))
+            echo "Briefing is ready. Waiting ${WAIT_SECONDS}s until 07:00 KST."
+            sleep "$WAIT_SECONDS"
+          else
+            echo "It is already after 07:00 KST. Sending immediately."
+          fi
 
       - name: Send Gmail briefing email
         env:
