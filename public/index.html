@@ -1620,6 +1620,8 @@ function renderNewsCard(item, idx, opts) {
   html += '<div class="card-meta">';
   html += '<span class="card-idx">' + String(idx + 1).padStart(2, '0') + '</span>';
   if (item.critical) html += '<span class="badge badge-crit">WATCH</span>';
+  if (item.source_type === 'media') html += '<span class="badge badge-blue">언론기사</span>';
+  if (item.source_type === 'official') html += '<span class="badge badge-sec">공식자료</span>';
   if (item.entity) html += '<span class="badge badge-blue">' + esc(item.entity) + '</span>';
   if (item.published) html += '<span class="badge badge-muted">' + esc(item.published) + '</span>';
   if (item.window === 'related') html += '<span class="badge badge-sec">유관(날짜외)</span>';
@@ -1653,6 +1655,7 @@ function renderBriefing(data) {
   var daily = data.daily_news || [];
   var subsidiary = data.subsidiary_news || [];
   var additional = data.additional_news || [];
+  var sourceMix = meta.source_mix || {};
   var forward = data.forward_looking_points || [];
   var ins = data.insights || {};
   var dateLabel = formatDateLabel(meta.briefing_date);
@@ -1667,7 +1670,7 @@ function renderBriefing(data) {
     '  <p class="doc-sub" id="metaLine"></p>',
     '  <div class="kpi-row">',
     '    <div class="kpi"><div class="kpi-label">Critical News</div><div class="kpi-value">' + critical.length + '</div><div class="kpi-hint">즉시 확인</div></div>',
-    '    <div class="kpi"><div class="kpi-label">Unique Total</div><div class="kpi-value">' + (critical.length + daily.length + subsidiary.length + additional.length) + '</div><div class="kpi-hint">중복 제외 · 기준 10</div></div>',
+    '    <div class="kpi"><div class="kpi-label">언론기사</div><div class="kpi-value">' + (sourceMix.media || 0) + '</div><div class="kpi-hint">최소 6건 · 공식 최대 4건</div></div>',
     '    <div class="kpi"><div class="kpi-label">날짜</div><div class="kpi-value">' + esc(dateLabel) + '</div><div class="kpi-hint">' + esc(meta.briefing_date || '') + '</div></div>',
     '    <div class="kpi"><div class="kpi-label">관점</div><div class="kpi-value small">우리금융<br>그룹CRO</div><div class="kpi-hint">Group Risk Lens</div></div>',
     '  </div>',
