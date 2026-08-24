@@ -26,6 +26,58 @@ function extractOutputText(response) {
   return parts.join('\n').trim();
 }
 
+function retryDelayMs(response, body, attempt) {
+  const retryAfter = Number(response.headers.get('retry-after'));
+  if (Number.isFinite(retryAfter) && retryAfter > 0) {
+    return Math.min(60_000, Math.ceil(retryAfter * 1000) + 1000);
+  }
+
+  const message = String(body?.error?.message || '');
+  const match = message.match(/try again in\s+([\d.]+)(ms|s)/i);
+  if (match) {
+    const amount = Number(match[1]);
+    const milliseconds = match[2].toLowerCase() === 's' ? amount * 1000 : amount;
+    return Math.min(60_000, Math.max(2_000, Math.ceil(milliseconds) + 1000));
+  }
+
+  return Math.min(60_000, 5_000 * (2 ** (attempt - 1)));
+}
+
+async function requestBriefing(requestBody, maxAttempts = 4) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 240_000);
+    let response;
+
+    try {
+      response = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const body = await response.json().catch(() => ({}));
+    if (response.ok) return body;
+
+    if (response.status !== 429 || attempt === maxAttempts) {
+      throw new Error(`OpenAI briefing generation failed (${response.status}): ${body?.error?.message || 'unknown error'}`);
+    }
+
+    const delay = retryDelayMs(response, body, attempt);
+    console.warn(`OpenAI rate limit reached. Retrying in ${delay}ms (${attempt}/${maxAttempts}).`);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+
+  throw new Error('OpenAI briefing generation exhausted all retry attempts.');
+}
+
 const newsItem = {
   type: 'object',
   additionalProperties: false,
@@ -129,44 +181,24 @@ CRO 품질 게이트:
 반드시 제공된 JSON 스키마에 맞춰 한국어로 답하라.
 `;
 
-const controller = new AbortController();
-const timeout = setTimeout(() => controller.abort(), 240_000);
-let response;
-try {
-  response = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model,
-      input: prompt,
-      tools: [{ type: 'web_search' }],
-      include: ['web_search_call.action.sources'],
-      store: false,
-      reasoning: { effort: 'medium' },
-      text: {
-        verbosity: 'medium',
-        format: {
-          type: 'json_schema',
-          name: 'cro_staff_daily_briefing',
-          strict: true,
-          schema
-        }
-      },
-      max_output_tokens: 9000
-    }),
-    signal: controller.signal
-  });
-} finally {
-  clearTimeout(timeout);
-}
-
-const body = await response.json().catch(() => ({}));
-if (!response.ok) {
-  throw new Error(`OpenAI briefing generation failed (${response.status}): ${body?.error?.message || 'unknown error'}`);
-}
+const body = await requestBriefing({
+  model,
+  input: prompt,
+  tools: [{ type: 'web_search' }],
+  include: ['web_search_call.action.sources'],
+  store: false,
+  reasoning: { effort: 'medium' },
+  text: {
+    verbosity: 'medium',
+    format: {
+      type: 'json_schema',
+      name: 'cro_staff_daily_briefing',
+      strict: true,
+      schema
+    }
+  },
+  max_output_tokens: 6000
+});
 
 const text = extractOutputText(body);
 if (!text) throw new Error('OpenAI response did not contain briefing JSON.');
