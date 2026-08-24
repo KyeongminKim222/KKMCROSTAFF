@@ -1,0 +1,67 @@
+name: Daily CRO Staff Briefing
+
+on:
+  schedule:
+    - cron: '0 22 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-cro-staff-briefing
+  cancel-in-progress: false
+
+jobs:
+  generate-deploy-email:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Generate researched briefing
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-5.4-mini' }}
+        run: node scripts/generate-daily-briefing.mjs
+
+      - name: Commit briefing data
+        run: |
+          git config user.name "CRO Staff Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add public/briefing.json
+          git commit -m "Update daily CRO Staff briefing" || exit 0
+          git push
+
+      - name: Wait for Render auto-deploy
+        env:
+          RENDER_HEALTH_URL: https://kkmcrostaff.onrender.com/healthz
+        run: |
+          EXPECTED_DATE=$(node -e "console.log(require('./public/briefing.json').meta.briefing_date)")
+          for attempt in $(seq 1 45); do
+            BODY=$(curl -fsS --max-time 20 "$RENDER_HEALTH_URL" || true)
+            DEPLOYED_DATE=$(printf '%s' "$BODY" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).briefing_date||'')}catch{console.log('')}})")
+            if [ "$DEPLOYED_DATE" = "$EXPECTED_DATE" ]; then
+              echo "Render deployed briefing date $EXPECTED_DATE"
+              exit 0
+            fi
+            echo "Waiting for Render deploy ($attempt/45): expected=$EXPECTED_DATE deployed=$DEPLOYED_DATE"
+            sleep 20
+          done
+          echo "Render did not deploy the new briefing in time. Email not sent."
+          exit 1
+
+      - name: Send Gmail briefing email
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          REPORT_URL: ${{ secrets.REPORT_URL }}
+        run: python scripts/send-gmail.py
