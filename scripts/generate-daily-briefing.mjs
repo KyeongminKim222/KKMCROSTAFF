@@ -46,6 +46,36 @@ function extractSourceUrls(response) {
   return [...urls];
 }
 
+const disposableQueryParams = new Set([
+  'curpage', 'page', 'pageno', 'pageindex',
+  'srchbegindt', 'srchctgry', 'srchenddt', 'srchkey', 'srchtext',
+  'source', 'ref', 'referrer'
+]);
+
+function canonicalUrlKey(rawUrl) {
+  const url = new URL(rawUrl);
+  url.hash = '';
+  url.hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+  for (const key of [...url.searchParams.keys()]) {
+    const lower = key.toLowerCase();
+    const value = url.searchParams.get(key);
+    if (!value || lower.startsWith('utm_') || disposableQueryParams.has(lower)) {
+      url.searchParams.delete(key);
+    }
+  }
+  url.searchParams.sort();
+  const pathname = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, '') : url.pathname;
+  const query = url.searchParams.toString();
+  return `${url.protocol}//${url.hostname}${url.port ? `:${url.port}` : ''}${pathname}${query ? `?${query}` : ''}`;
+}
+
+function urlPathKey(rawUrl) {
+  const url = new URL(rawUrl);
+  const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+  const pathname = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, '') : url.pathname;
+  return `${hostname}${pathname}`;
+}
+
 function retryDelayMs(response, body, attempt) {
   const retryAfter = Number(response.headers.get('retry-after'));
   if (Number.isFinite(retryAfter) && retryAfter > 0) {
@@ -269,11 +299,17 @@ const global = await researchStage(
 await coolDown('Global market and regulation research');
 
 const researchEvidence = { domestic, woori_and_peers: wooriAndPeers, global };
-const researchedUrls = new Set(
-  Object.values(researchEvidence).flatMap((evidence) => evidence.source_urls || [])
-);
-if (researchedUrls.size < 10) {
-  throw new Error(`Research produced only ${researchedUrls.size} unique source URLs; at least 10 are required.`);
+const researchedUrlByCanonical = new Map();
+const researchedUrlsByPath = new Map();
+for (const sourceUrl of Object.values(researchEvidence).flatMap((evidence) => evidence.source_urls || [])) {
+  researchedUrlByCanonical.set(canonicalUrlKey(sourceUrl), sourceUrl);
+  const pathKey = urlPathKey(sourceUrl);
+  const matches = researchedUrlsByPath.get(pathKey) || [];
+  if (!matches.includes(sourceUrl)) matches.push(sourceUrl);
+  researchedUrlsByPath.set(pathKey, matches);
+}
+if (researchedUrlByCanonical.size < 10) {
+  throw new Error(`Research produced only ${researchedUrlByCanonical.size} unique source URLs; at least 10 are required.`);
 }
 const synthesisPrompt = `
 당신은 우리금융그룹 전체 CRO를 지원하는 전략 비서 CRO STAFF다. 실행일은 ${date} KST다.
@@ -345,9 +381,20 @@ const urls = new Set();
 for (const item of allNews) {
   const url = new URL(item.url);
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error(`Invalid article URL: ${item.url}`);
-  if (urls.has(item.url)) throw new Error(`Duplicate article URL: ${item.url}`);
-  if (!researchedUrls.has(item.url)) throw new Error(`Final briefing used a URL that was not researched: ${item.url}`);
-  urls.add(item.url);
+  const canonicalKey = canonicalUrlKey(item.url);
+  let researchedUrl = researchedUrlByCanonical.get(canonicalKey);
+  if (!researchedUrl) {
+    const pathMatches = researchedUrlsByPath.get(urlPathKey(item.url)) || [];
+    if (pathMatches.length === 1) researchedUrl = pathMatches[0];
+  }
+  if (!researchedUrl) throw new Error(`Final briefing used a URL that was not researched: ${item.url}`);
+  if (item.url !== researchedUrl) {
+    console.log(`Normalized researched URL: ${item.url} -> ${researchedUrl}`);
+    item.url = researchedUrl;
+  }
+  const verifiedKey = canonicalUrlKey(item.url);
+  if (urls.has(verifiedKey)) throw new Error(`Duplicate article URL: ${item.url}`);
+  urls.add(verifiedKey);
 }
 if (allNews.length !== 10) throw new Error(`Final briefing contained ${allNews.length} articles; exactly 10 are required.`);
 briefing.critical.forEach((item) => { item.critical = true; });
