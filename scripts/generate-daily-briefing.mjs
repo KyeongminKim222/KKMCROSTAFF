@@ -43,7 +43,7 @@ function retryDelayMs(response, body, attempt) {
   return Math.min(60_000, 5_000 * (2 ** (attempt - 1)));
 }
 
-async function requestBriefing(requestBody, maxAttempts = 5) {
+async function requestBriefing(requestBody, maxAttempts = 3) {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 240_000);
@@ -70,7 +70,7 @@ async function requestBriefing(requestBody, maxAttempts = 5) {
       throw new Error(`OpenAI briefing generation failed (${response.status}): ${body?.error?.message || 'unknown error'}`);
     }
 
-    const delay = Math.max(70_000, retryDelayMs(response, body, attempt));
+    const delay = Math.max(90_000, retryDelayMs(response, body, attempt));
     console.warn(`OpenAI rate limit reached. Retrying in ${delay}ms (${attempt}/${maxAttempts}).`);
     await new Promise((resolve) => setTimeout(resolve, delay));
   }
@@ -163,6 +163,7 @@ const prompt = `
 5. 우리금융그룹과 계열사 직접 영향은 범주와 관계없이 상향
 
 선정 규칙:
+- 웹 검색 호출은 최대 2회다. 첫 검색은 한국 금융시장·규제·경쟁사·우리금융을 함께 조사하고, 두 번째 검색은 글로벌 금융시장·해외 규제와 첫 검색의 핵심 근거 보강을 함께 수행한다.
 - 크리티컬 최대 3건, 데일리 금융·리스크 최대 3건, 우리금융그룹·계열사 최대 3건으로 구성한다.
 - 신뢰할 만한 기사가 부족하면 숫자를 억지로 채우지 않는다.
 - 동일 사건의 중복 보도는 대표 원문 하나로 통합한다.
@@ -185,9 +186,10 @@ const body = await requestBriefing({
   model,
   input: prompt,
   tools: [{ type: 'web_search', search_context_size: 'low' }],
+  max_tool_calls: 2,
   include: ['web_search_call.action.sources'],
   store: false,
-  reasoning: { effort: 'medium' },
+  reasoning: { effort: 'low' },
   text: {
     verbosity: 'medium',
     format: {
