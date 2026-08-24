@@ -45,7 +45,9 @@ The server validates the token, stores authorization in an HttpOnly cookie, and 
 
 ## 4. Daily report update
 
-GitHub Actions runs at 22:00 UTC, which is 07:00 KST. It researches the latest 24 hours with the OpenAI Responses API web-search tool, updates `public/briefing.json`, pushes the change, waits for Render auto-deploy, and sends the stable report link through Gmail.
+GitHub Actions starts at 21:30 UTC, which is 06:30 KST. It runs three paced media-research stages for Korean financial news, Woori and peer news, and global financial news, followed by a separate official-source verification stage. After an independent CRO quality-gate synthesis, it updates `public/briefing.json`, waits for Render auto-deploy, and sends the stable report link at 07:00 KST. Manual workflow runs send immediately after a successful deploy.
+
+The production quality gate requires exactly 10 unique URLs: 3 critical issues, 3 daily financial-risk items, 3 Woori/subsidiary items, and 1 additional high-relevance issue. At least 6 must be reporting from reliable media, while official releases and filings are capped at 4 and serve primarily as verification. The primary window is the latest 24 hours. When needed to complete the 10-item baseline without fabricating news, directly relevant background sources from the previous seven days may be included and are visibly marked as related.
 
 ### Gmail preparation
 
@@ -79,4 +81,4 @@ Open the repository's `Actions` tab, select `Daily CRO Staff Briefing`, click `R
 - Set an OpenAI project budget and usage alerts.
 - Rotate `REPORT_ACCESS_TOKEN` if an email link is forwarded outside the intended audience.
 - The included limiter is process-memory based. For multiple server instances, replace it with a shared rate-limit store before broad deployment.
-- GitHub scheduled workflows can start later than the exact cron minute during platform congestion; the configured schedule target is 07:00 KST.
+- GitHub scheduled workflows can start later than the exact cron minute during platform congestion. The configured research start is 06:30 KST and the delivery target is 07:00 KST; if GitHub starts late, email is sent as soon as research and deployment finish.
