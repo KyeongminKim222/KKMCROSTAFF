@@ -105,7 +105,11 @@ async function requestOpenAi(label, requestBody, maxAttempts = 3) {
 
 function parseStructuredOutput(body, label) {
   const text = extractOutputText(body);
-  if (!text) throw new Error(`${label} did not contain structured output.`);
+  if (!text) {
+    const outputTypes = (body.output || []).map((item) => item.type).join(', ') || 'none';
+    const incompleteReason = body?.incomplete_details?.reason || body?.error?.message || 'not provided';
+    throw new Error(`${label} did not contain structured output (status=${body.status || 'unknown'}, output_types=${outputTypes}, reason=${incompleteReason}).`);
+  }
   try {
     return JSON.parse(text);
   } catch {
@@ -296,6 +300,7 @@ CRO 품질 게이트:
 - 자본·유동성·신용·시장·운영·사이버·법무/준법·평판·전략 리스크 영향을 평가한다.
 - 영향 전파 속도, 영향 범위, 대응 가능 시간, 규제기관 관심으로 긴급도를 판단한다.
 - 기사 간 연결고리, 리스크 전이 경로, 오늘 확인할 지표·질문, 단기 모니터링 포인트를 도출한다.
+- 각 기사 summary와 why_woori_cro는 각각 최대 2문장으로 간결하게 작성하고 watchpoints는 1~2개만 제시한다.
 
 조사 근거 JSON:
 ${JSON.stringify(researchEvidence)}
@@ -303,24 +308,37 @@ ${JSON.stringify(researchEvidence)}
 반드시 제공된 JSON 스키마에 맞춰 한국어로 답하라.
 `;
 
-const synthesisBody = await requestOpenAi('CRO quality-gate synthesis', {
-  model,
-  input: synthesisPrompt,
-  store: false,
-  reasoning: { effort: 'medium' },
-  text: {
-    verbosity: 'medium',
-    format: {
-      type: 'json_schema',
-      name: 'cro_staff_daily_briefing',
-      strict: true,
-      schema
+let briefing;
+let synthesisError;
+for (let attempt = 1; attempt <= 3; attempt += 1) {
+  const synthesisBody = await requestOpenAi('CRO quality-gate synthesis', {
+    model,
+    input: synthesisPrompt,
+    store: false,
+    reasoning: { effort: 'low' },
+    text: {
+      verbosity: 'low',
+      format: {
+        type: 'json_schema',
+        name: 'cro_staff_daily_briefing',
+        strict: true,
+        schema
+      }
+    },
+    max_output_tokens: 14000
+  });
+  try {
+    briefing = parseStructuredOutput(synthesisBody, 'CRO quality-gate synthesis');
+    break;
+  } catch (error) {
+    synthesisError = error;
+    if (attempt < 3) {
+      console.warn(`${error.message} Retrying synthesis after TPM cooldown (${attempt}/3).`);
+      await coolDown('CRO quality-gate synthesis retry');
     }
-  },
-  max_output_tokens: 7000
-});
-
-const briefing = parseStructuredOutput(synthesisBody, 'CRO quality-gate synthesis');
+  }
+}
+if (!briefing) throw synthesisError || new Error('CRO quality-gate synthesis failed without a result.');
 
 const allNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news'].flatMap((key) => briefing[key] || []);
 const urls = new Set();
