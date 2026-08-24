@@ -1,3 +1,8 @@
+.github/workflows/daily-briefing.yml
+scripts/generate-daily-briefing.mjs
+scripts/send-gmail.py
+public/briefing.json
+
 # CRO Staff Secure Briefing Server
 
 This package serves the daily HTML briefing and keeps the OpenAI API key on the server. Report recipients never enter or receive the OpenAI key.
