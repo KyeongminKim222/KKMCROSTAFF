@@ -43,7 +43,7 @@ function retryDelayMs(response, body, attempt) {
   return Math.min(60_000, 5_000 * (2 ** (attempt - 1)));
 }
 
-async function requestBriefing(requestBody, maxAttempts = 4) {
+async function requestBriefing(requestBody, maxAttempts = 5) {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 240_000);
@@ -70,7 +70,7 @@ async function requestBriefing(requestBody, maxAttempts = 4) {
       throw new Error(`OpenAI briefing generation failed (${response.status}): ${body?.error?.message || 'unknown error'}`);
     }
 
-    const delay = retryDelayMs(response, body, attempt);
+    const delay = Math.max(70_000, retryDelayMs(response, body, attempt));
     console.warn(`OpenAI rate limit reached. Retrying in ${delay}ms (${attempt}/${maxAttempts}).`);
     await new Promise((resolve) => setTimeout(resolve, delay));
   }
@@ -184,7 +184,7 @@ CRO 품질 게이트:
 const body = await requestBriefing({
   model,
   input: prompt,
-  tools: [{ type: 'web_search' }],
+  tools: [{ type: 'web_search', search_context_size: 'low' }],
   include: ['web_search_call.action.sources'],
   store: false,
   reasoning: { effort: 'medium' },
