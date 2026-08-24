@@ -43,10 +43,12 @@ function retryDelayMs(response, body, attempt) {
   return Math.min(60_000, 5_000 * (2 ** (attempt - 1)));
 }
 
-async function requestBriefing(requestBody, maxAttempts = 3) {
+const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+async function requestOpenAi(label, requestBody, maxAttempts = 3) {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 240_000);
+    const timeout = setTimeout(() => controller.abort(), 300_000);
     let response;
 
     try {
@@ -66,16 +68,35 @@ async function requestBriefing(requestBody, maxAttempts = 3) {
     const body = await response.json().catch(() => ({}));
     if (response.ok) return body;
 
-    if (response.status !== 429 || attempt === maxAttempts) {
-      throw new Error(`OpenAI briefing generation failed (${response.status}): ${body?.error?.message || 'unknown error'}`);
+    const retryable = response.status === 429 || response.status >= 500;
+    if (!retryable || attempt === maxAttempts) {
+      throw new Error(`${label} failed (${response.status}): ${body?.error?.message || 'unknown error'}`);
     }
 
-    const delay = Math.max(90_000, retryDelayMs(response, body, attempt));
-    console.warn(`OpenAI rate limit reached. Retrying in ${delay}ms (${attempt}/${maxAttempts}).`);
-    await new Promise((resolve) => setTimeout(resolve, delay));
+    const delay = response.status === 429
+      ? Math.max(90_000, retryDelayMs(response, body, attempt))
+      : Math.min(60_000, 15_000 * attempt);
+    console.warn(`${label} received HTTP ${response.status}. Retrying in ${delay}ms (${attempt}/${maxAttempts}).`);
+    await sleep(delay);
   }
 
-  throw new Error('OpenAI briefing generation exhausted all retry attempts.');
+  throw new Error(`${label} exhausted all retry attempts.`);
+}
+
+function parseStructuredOutput(body, label) {
+  const text = extractOutputText(body);
+  if (!text) throw new Error(`${label} did not contain structured output.`);
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`${label} returned invalid JSON.`);
+  }
+}
+
+async function coolDown(label) {
+  const milliseconds = 75_000;
+  console.log(`${label} complete. Cooling down OpenAI TPM for ${milliseconds / 1000} seconds.`);
+  await sleep(milliseconds);
 }
 
 const newsItem = {
@@ -95,6 +116,17 @@ const newsItem = {
     confidence: { type: 'string', enum: ['높음', '중간', '낮음'] },
     critical: { type: 'boolean' },
     watchpoints: { type: 'array', maxItems: 4, items: { type: 'string' } }
+  }
+};
+
+const candidateSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['candidates', 'coverage_notes', 'insufficient_evidence'],
+  properties: {
+    candidates: { type: 'array', maxItems: 12, items: newsItem },
+    coverage_notes: { type: 'array', maxItems: 5, items: { type: 'string' } },
+    insufficient_evidence: { type: 'string' }
   }
 };
 
@@ -150,10 +182,91 @@ try {
 } catch {}
 
 const date = kstDate();
-const prompt = `
-당신은 우리금융그룹 전체 CRO를 지원하는 전략 비서 CRO STAFF다. 실행일은 ${date} KST다.
+const commonResearchRules = `
+실행일은 ${date} KST다. 실행 시점 기준 최근 24시간의 공개 정보만 기본 후보로 삼아라.
+공식 발표, 공시, 금융·감독·규제기관, 중앙은행, 거래소, 기업 IR 등 1차 자료를 우선하고 주요 통신사·경제지 보도로 교차 확인하라.
+각 후보는 서로 다른 단일 사건이어야 하며, 같은 사건의 반복 보도는 대표 원문 하나로 통합하라.
+URL은 실제 검색으로 확인한 기사 또는 공식 발표의 직접 링크만 사용하고 검색결과 페이지나 임의 URL을 만들지 마라.
+게시 일시는 KST 기준으로 적고 확인할 수 없으면 '게시 시각 미확인'이라고 명시하라.
+확인된 사실과 CRO 관점의 분석을 구분하고, 수치·날짜·기관명·기업명을 검증하라.
+자본·유동성·신용·시장·운영·사이버·법무/준법·평판·전략 리스크 영향을 평가하라.
+신뢰할 만한 후보가 부족하면 숫자를 채우지 말고 insufficient_evidence에 이유를 적어라.
+전일 제목은 중대한 신규 사실이 있을 때만 다시 후보에 포함하라: ${JSON.stringify(previousTitles)}
+반드시 제공된 JSON 스키마에 맞춰 한국어로 답하라.
+`;
 
-공개 웹을 충분히 검색하여 실행 시점 기준 최근 24시간의 금융 리스크 브리핑을 작성하라. 금융위원회, 금융감독원, 한국은행, 기획재정부, 거래소, DART, 기업 공식 발표 등 1차 자료를 우선하고 주요 통신사·경제지의 신뢰도 높은 보도를 교차 확인하라.
+function validateCandidateBatch(batch, label) {
+  const urls = new Set();
+  for (const item of batch.candidates || []) {
+    const url = new URL(item.url);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error(`${label} returned an invalid URL: ${item.url}`);
+    if (urls.has(item.url)) throw new Error(`${label} returned a duplicate URL: ${item.url}`);
+    urls.add(item.url);
+  }
+  console.log(`${label} produced ${(batch.candidates || []).length} candidate articles.`);
+  return batch;
+}
+
+async function researchStage(label, schemaName, scope) {
+  const body = await requestOpenAi(label, {
+    model,
+    input: `당신은 CRO STAFF의 조사 담당자다.\n\n조사 범위:\n${scope}\n\n공통 조사 규칙:\n${commonResearchRules}`,
+    tools: [{
+      type: 'web_search',
+      search_context_size: 'medium',
+      user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' }
+    }],
+    tool_choice: 'required',
+    max_tool_calls: 2,
+    include: ['web_search_call.action.sources'],
+    store: false,
+    reasoning: { effort: 'low' },
+    text: {
+      verbosity: 'medium',
+      format: {
+        type: 'json_schema',
+        name: schemaName,
+        strict: true,
+        schema: candidateSchema
+      }
+    },
+    max_output_tokens: 5000
+  });
+  return validateCandidateBatch(parseStructuredOutput(body, label), label);
+}
+
+const domestic = await researchStage(
+  'Korean market and regulation research',
+  'cro_korean_market_candidates',
+  `한국 금융시장 리스크와 한국 금융 규제·정책 변화를 조사하라.
+금융위원회, 금융감독원, 한국은행, 기획재정부, 예금보험공사, 한국거래소, DART 발표를 우선 확인하라.
+금리·환율·유동성·부동산 PF·가계/기업 신용·자본규제·소비자보호·사이버 및 운영리스크를 폭넓게 점검하고 CRO 관련성이 높은 후보를 최대 12건 제시하라.`
+);
+await coolDown('Korean market and regulation research');
+
+const wooriAndPeers = await researchStage(
+  'Woori and peer institutions research',
+  'cro_woori_peer_candidates',
+  `우리금융그룹과 계열사, 국내 주요 금융 경쟁사 동향을 조사하라.
+우리금융지주·우리은행·우리카드·우리금융캐피탈·우리종합금융·우리자산운용 등 그룹 관련 공식 발표와 공시를 우선 확인하라.
+KB·신한·하나·NH·IBK 및 주요 증권·보험·카드사의 자본, 건전성, 인수합병, 제재, 사고, 실적과 리스크 변화를 함께 점검하라.
+우리금융에 직접 영향을 주는 사안은 중요도를 상향하고 후보를 최대 12건 제시하라.`
+);
+await coolDown('Woori and peer institutions research');
+
+const global = await researchStage(
+  'Global market and regulation research',
+  'cro_global_candidates',
+  `글로벌 금융시장과 해외 규제·정책 중 우리금융그룹으로 전이될 수 있는 리스크를 조사하라.
+주요 중앙은행, 재무·감독기관, BIS·FSB·IMF 및 글로벌 금융회사 공식 발표를 우선 확인하라.
+금리·달러·채권·주식·원자재·지정학·해외 상업용 부동산·은행 건전성·사이버·제재·AML 변화를 점검하고 후보를 최대 12건 제시하라.`
+);
+await coolDown('Global market and regulation research');
+
+const candidateBatches = { domestic, woori_and_peers: wooriAndPeers, global };
+const synthesisPrompt = `
+당신은 우리금융그룹 전체 CRO를 지원하는 전략 비서 CRO STAFF다. 실행일은 ${date} KST다.
+아래 세 조사팀의 검증 후보만 사용하여 최종 데일리 브리핑을 작성하라. 후보에 없는 사실, 수치, URL을 새로 만들지 마라.
 
 우선순위:
 1. 한국 금융시장 리스크
@@ -162,34 +275,31 @@ const prompt = `
 4. 글로벌 금융시장 및 해외 규제·정책
 5. 우리금융그룹과 계열사 직접 영향은 범주와 관계없이 상향
 
-선정 규칙:
-- 웹 검색 호출은 최대 2회다. 첫 검색은 한국 금융시장·규제·경쟁사·우리금융을 함께 조사하고, 두 번째 검색은 글로벌 금융시장·해외 규제와 첫 검색의 핵심 근거 보강을 함께 수행한다.
+최종 선정 규칙:
 - 크리티컬 최대 3건, 데일리 금융·리스크 최대 3건, 우리금융그룹·계열사 최대 3건으로 구성한다.
-- 신뢰할 만한 기사가 부족하면 숫자를 억지로 채우지 않는다.
-- 동일 사건의 중복 보도는 대표 원문 하나로 통합한다.
-- 다음 전일 제목은 중대한 신규 사실이 있을 때만 다시 포함한다: ${JSON.stringify(previousTitles)}
-- 각 URL은 실제 검색으로 확인한 기사 또는 공식 발표의 직접 링크여야 한다. 검색결과 페이지나 임의 URL을 만들지 않는다.
-- 게시 일시는 KST 기준으로 명확히 적고, 확인할 수 없으면 '게시 시각 미확인'이라고 적는다.
-- 확인된 사실과 분석·추론을 구분하고, 투자 권고나 확정적 시장 예측을 하지 않는다.
+- 신뢰할 만한 후보가 부족하면 숫자를 억지로 채우지 않는다.
+- 동일 사건과 동일 URL을 제거하고 대표 원문 하나만 남긴다.
+- URL은 후보에 있는 값을 글자 하나도 바꾸지 않고 그대로 복사한다.
+- 전일 제목은 중대한 신규 사실이 있을 때만 다시 포함한다: ${JSON.stringify(previousTitles)}
+- 확인된 사실과 분석·추론을 구분하고 투자 권고나 확정적 시장 예측을 하지 않는다.
 
 CRO 품질 게이트:
-- 같은 사건과 동일 URL 중복 제거
-- 수치, 날짜, 게시 시각, 기관명, 기업명 검증
-- 자본·유동성·신용·시장·운영·사이버·법무/준법·평판·전략 리스크 영향 평가
-- 영향 전파 속도, 영향 범위, 대응 가능 시간, 규제기관 관심으로 긴급도 판단
-- 기사 간 연결고리, 리스크 전이 경로, 오늘 확인할 지표·질문, 단기 모니터링 포인트 도출
+- 수치, 날짜, 게시 시각, 기관명, 기업명과 근거 신뢰도를 후보 간 비교한다.
+- 자본·유동성·신용·시장·운영·사이버·법무/준법·평판·전략 리스크 영향을 평가한다.
+- 영향 전파 속도, 영향 범위, 대응 가능 시간, 규제기관 관심으로 긴급도를 판단한다.
+- 기사 간 연결고리, 리스크 전이 경로, 오늘 확인할 지표·질문, 단기 모니터링 포인트를 도출한다.
+
+조사 후보 JSON:
+${JSON.stringify(candidateBatches)}
 
 반드시 제공된 JSON 스키마에 맞춰 한국어로 답하라.
 `;
 
-const body = await requestBriefing({
+const synthesisBody = await requestOpenAi('CRO quality-gate synthesis', {
   model,
-  input: prompt,
-  tools: [{ type: 'web_search', search_context_size: 'low' }],
-  max_tool_calls: 2,
-  include: ['web_search_call.action.sources'],
+  input: synthesisPrompt,
   store: false,
-  reasoning: { effort: 'low' },
+  reasoning: { effort: 'medium' },
   text: {
     verbosity: 'medium',
     format: {
@@ -199,21 +309,26 @@ const body = await requestBriefing({
       schema
     }
   },
-  max_output_tokens: 6000
+  max_output_tokens: 7000
 });
 
-const text = extractOutputText(body);
-if (!text) throw new Error('OpenAI response did not contain briefing JSON.');
-const briefing = JSON.parse(text);
+const briefing = parseStructuredOutput(synthesisBody, 'CRO quality-gate synthesis');
 
 const allNews = ['critical', 'daily_news', 'subsidiary_news'].flatMap((key) => briefing[key] || []);
 const urls = new Set();
+const candidateUrls = new Set(
+  Object.values(candidateBatches)
+    .flatMap((batch) => batch.candidates || [])
+    .map((item) => item.url)
+);
 for (const item of allNews) {
   const url = new URL(item.url);
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error(`Invalid article URL: ${item.url}`);
   if (urls.has(item.url)) throw new Error(`Duplicate article URL: ${item.url}`);
+  if (!candidateUrls.has(item.url)) throw new Error(`Final briefing used a URL that was not researched: ${item.url}`);
   urls.add(item.url);
 }
+if (!allNews.length) throw new Error('Final briefing did not contain any verified articles.');
 briefing.critical.forEach((item) => { item.critical = true; });
 briefing.daily_news.forEach((item) => { item.critical = false; });
 briefing.subsidiary_news.forEach((item) => { item.critical = false; });
@@ -224,7 +339,8 @@ briefing.meta = {
   mode: 'daily',
   briefing_date: date,
   generated_at: new Date().toISOString(),
-  primary_window: '실행 시점 기준 최근 24시간 (KST)'
+  primary_window: '실행 시점 기준 최근 24시간 (KST)',
+  research_method: '3-stage web research + independent CRO quality-gate synthesis'
 };
 briefing.insights.as_of = `${date} KST`;
 
