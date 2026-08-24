@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "product": "CRO Staff News & Critical Monitor",
+    "perspective": "우리금융그룹 CRO",
+    "mode": "daily",
+    "briefing_date": "2026-08-21",
+    "generated_at": "2026-08-21T07:19:22+09:00",
+    "primary_window": "최근 24시간 (KST)"
+  },
+  "executive_judgment": "초기 배포 데이터입니다. 자동 실행 후 최신 브리핑으로 교체됩니다.",
+  "executive_judgment_bullets": [],
+  "critical": [],
+  "daily_news": [],
+  "subsidiary_news": [],
+  "forward_looking_points": [],
+  "insights": {
+    "as_of": "2026-08-21 KST",
+    "headline": "자동 브리핑 갱신 대기",
+    "bullets": [],
+    "action_items": [],
+    "stance": ""
+  },
+  "monitoring_points": []
+}

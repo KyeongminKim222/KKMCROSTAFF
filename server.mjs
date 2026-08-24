@@ -6,6 +6,7 @@ import path from 'node:path';
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const reportPath = path.join(rootDir, 'public', 'index.html');
+const briefingPath = path.join(rootDir, 'public', 'briefing.json');
 const port = Number(process.env.PORT || 8080);
 const openAiKey = process.env.OPENAI_API_KEY || '';
 const accessToken = process.env.REPORT_ACCESS_TOKEN || '';
@@ -127,6 +128,15 @@ function extractOutputText(response) {
   return parts.join('\n\n').trim();
 }
 
+async function currentBriefingDate() {
+  try {
+    const briefing = JSON.parse(await readFile(briefingPath, 'utf8'));
+    return String((briefing.meta || {}).briefing_date || '');
+  } catch {
+    return '';
+  }
+}
+
 async function handleAsk(req, res) {
   if (!isAuthorized(req)) return json(res, 401, { error: '보고서 링크 인증이 필요합니다.' });
   if (!hasSameOrigin(req)) return json(res, 403, { error: '허용되지 않은 출처입니다.' });
@@ -205,7 +215,7 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
 
   if (req.method === 'GET' && url.pathname === '/healthz') {
-    return json(res, 200, { ok: true });
+    return json(res, 200, { ok: true, briefing_date: await currentBriefingDate() });
   }
 
   if (req.method === 'GET' && url.pathname.startsWith('/report/')) {
@@ -228,6 +238,17 @@ const server = createServer(async (req, res) => {
     const html = await readFile(reportPath);
     res.writeHead(200, secureHeaders('text/html; charset=utf-8'));
     return res.end(html);
+  }
+
+  if (req.method === 'GET' && url.pathname === '/briefing.json') {
+    if (!isAuthorized(req)) return json(res, 401, { error: '보고서 링크 인증이 필요합니다.' });
+    try {
+      const briefing = await readFile(briefingPath);
+      res.writeHead(200, secureHeaders('application/json; charset=utf-8'));
+      return res.end(briefing);
+    } catch {
+      return json(res, 404, { error: '브리핑 데이터가 아직 생성되지 않았습니다.' });
+    }
   }
 
   if (req.method === 'GET' && url.pathname === '/api/health') {

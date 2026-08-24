@@ -1,8 +1,3 @@
-.github/workflows/daily-briefing.yml
-scripts/generate-daily-briefing.mjs
-scripts/send-gmail.py
-public/briefing.json
-
 # CRO Staff Secure Briefing Server
 
 This package serves the daily HTML briefing and keeps the OpenAI API key on the server. Report recipients never enter or receive the OpenAI key.
@@ -50,7 +45,33 @@ The server validates the token, stores authorization in an HttpOnly cookie, and 
 
 ## 4. Daily report update
 
-Replace `public/index.html` with the newly generated briefing and restart or redeploy the service. The email link can remain unchanged because the server always serves the current `public/index.html`.
+GitHub Actions runs at 22:00 UTC, which is 07:00 KST. It researches the latest 24 hours with the OpenAI Responses API web-search tool, updates `public/briefing.json`, pushes the change, waits for Render auto-deploy, and sends the stable report link through Gmail.
+
+### Gmail preparation
+
+1. Turn on Google 2-Step Verification.
+2. Create a 16-digit Google App Password for this automation.
+3. Do not use or upload the normal Gmail password.
+
+### GitHub Actions secrets
+
+In the GitHub repository, open `Settings` → `Secrets and variables` → `Actions` and add:
+
+- `OPENAI_API_KEY`: OpenAI project API key used for daily web research.
+- `GMAIL_USER`: sender Gmail address.
+- `GMAIL_APP_PASSWORD`: 16-digit Google App Password.
+- `EMAIL_TO`: one or more recipients separated by commas.
+- `REPORT_URL`: the complete tokenized link, such as `https://YOUR-DOMAIN/report/YOUR_REPORT_ACCESS_TOKEN`.
+
+Optionally add the Actions variable `OPENAI_MODEL`; the default is `gpt-5.4-mini`.
+
+Under `Settings` → `Actions` → `General` → `Workflow permissions`, enable `Read and write permissions` so the workflow can commit `public/briefing.json`.
+
+In Render, set `Auto-Deploy` to `On Commit` for the `main` branch.
+
+### First test
+
+Open the repository's `Actions` tab, select `Daily CRO Staff Briefing`, click `Run workflow`, and monitor all five stages. Gmail is sent only after Render's `/healthz` reports the newly generated briefing date.
 
 ## Production notes
 
@@ -58,3 +79,4 @@ Replace `public/index.html` with the newly generated briefing and restart or red
 - Set an OpenAI project budget and usage alerts.
 - Rotate `REPORT_ACCESS_TOKEN` if an email link is forwarded outside the intended audience.
 - The included limiter is process-memory based. For multiple server instances, replace it with a shared rate-limit store before broad deployment.
+- GitHub scheduled workflows can start later than the exact cron minute during platform congestion; the configured schedule target is 07:00 KST.

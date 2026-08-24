@@ -1469,14 +1469,18 @@ document.addEventListener('DOMContentLoaded', function () {
     return String(m.generated_at || m.briefing_date || '');
   }
   var embedded = (typeof window.__EMBEDDED_BRIEFING__ === 'object' && window.__EMBEDDED_BRIEFING__) ? window.__EMBEDDED_BRIEFING__ : null;
-  Promise.resolve([embedded, null]).then(function (pair) {
+  fetch('/briefing.json', { cache: 'no-store', credentials: 'same-origin' })
+    .then(function (response) { return response.ok ? response.json() : null; })
+    .catch(function () { return null; })
+    .then(function (live) { return [embedded, live]; })
+    .then(function (pair) {
     var staticData = pair[0];
     var liveData = pair[1];
     var data = null;
     var ns = newsCount(staticData);
     var nl = newsCount(liveData);
-    if (ns > 0) data = staticData;
-    else if (nl > 0) data = liveData;
+    if (nl > 0) data = liveData;
+    else if (ns > 0) data = staticData;
     else data = staticData || liveData;
     if (!data) throw new Error('브리핑 데이터를 불러오지 못했습니다.');
     if (newsCount(data) <= 0) {
