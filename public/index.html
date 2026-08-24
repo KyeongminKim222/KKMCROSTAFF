@@ -1460,7 +1460,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function newsCount(d) {
     if (!d || typeof d !== 'object') return -1;
-    return (d.critical || []).length + (d.daily_news || []).length;
+    return (d.critical || []).length + (d.daily_news || []).length +
+      (d.subsidiary_news || []).length + (d.additional_news || []).length;
   }
 
   function briefingStamp(d) {
@@ -1540,6 +1541,9 @@ function collectHeadlineRows(data) {
   });
   (data.subsidiary_news || []).forEach(function (it) {
     rows.push({ tone: 'sub', label: '계열사', title: it.title || '', url: it.url || '' });
+  });
+  (data.additional_news || []).forEach(function (it) {
+    rows.push({ tone: 'daily', label: '추가', title: it.title || '', url: it.url || '' });
   });
   return rows;
 }
@@ -1648,6 +1652,7 @@ function renderBriefing(data) {
   var critical = data.critical || [];
   var daily = data.daily_news || [];
   var subsidiary = data.subsidiary_news || [];
+  var additional = data.additional_news || [];
   var forward = data.forward_looking_points || [];
   var ins = data.insights || {};
   var dateLabel = formatDateLabel(meta.briefing_date);
@@ -1662,7 +1667,7 @@ function renderBriefing(data) {
     '  <p class="doc-sub" id="metaLine"></p>',
     '  <div class="kpi-row">',
     '    <div class="kpi"><div class="kpi-label">Critical News</div><div class="kpi-value">' + critical.length + '</div><div class="kpi-hint">즉시 확인</div></div>',
-    '    <div class="kpi"><div class="kpi-label">Unique Total</div><div class="kpi-value">' + (critical.length + daily.length + subsidiary.length) + '</div><div class="kpi-hint">중복 제외 · 목표 ~10</div></div>',
+    '    <div class="kpi"><div class="kpi-label">Unique Total</div><div class="kpi-value">' + (critical.length + daily.length + subsidiary.length + additional.length) + '</div><div class="kpi-hint">중복 제외 · 기준 10</div></div>',
     '    <div class="kpi"><div class="kpi-label">날짜</div><div class="kpi-value">' + esc(dateLabel) + '</div><div class="kpi-hint">' + esc(meta.briefing_date || '') + '</div></div>',
     '    <div class="kpi"><div class="kpi-label">관점</div><div class="kpi-value small">우리금융<br>그룹CRO</div><div class="kpi-hint">Group Risk Lens</div></div>',
     '  </div>',
@@ -1704,6 +1709,10 @@ function renderBriefing(data) {
   dHtml += '<div class="section-head"><h2 class="section-title">DAILY NEWS</h2><span class="badge badge-blue">' + daily.length + '건</span></div>';
   dHtml += '<div class="grid-2">';
   daily.forEach(function (item, i) { dHtml += renderNewsCard(item, i, { tone: 'daily' }); });
+  if (additional.length) {
+    dHtml += '<div class="panel" style="grid-column:1/-1"><p class="sec-kicker">ADDITIONAL CRO RELEVANCE</p><h3 style="margin:4px 0 0">추가 고관련 이슈</h3></div>';
+    additional.forEach(function (item, i) { dHtml += renderNewsCard(item, daily.length + i, { tone: 'daily' }); });
+  }
   dHtml += '</div></div>';
   document.getElementById('daily').innerHTML = dHtml;
 
@@ -2108,6 +2117,7 @@ function slimBriefing(data) {
     critical: (data.critical || []).map(slimItem).filter(Boolean),
     daily_news: (data.daily_news || []).map(slimItem).filter(Boolean),
     subsidiary_news: (data.subsidiary_news || []).map(slimItem).filter(Boolean),
+    additional_news: (data.additional_news || []).map(slimItem).filter(Boolean),
     forward_looking_points: (data.forward_looking_points || []).slice(0, 4).map(function (f) {
       return { title: f.title || '', horizon: f.horizon || '', cro_angle: String(f.cro_angle || '').slice(0, 160) };
     })
@@ -2195,6 +2205,7 @@ function localBriefingAnswer(q, data) {
   var crit = data.critical || [];
   var daily = data.daily_news || [];
   var sub = data.subsidiary_news || [];
+  var additional = data.additional_news || [];
   var fwd = data.forward_looking_points || [];
   var mon = data.monitoring_points || [];
   var ins = data.insights || {};
@@ -2324,7 +2335,8 @@ function localBriefingAnswer(q, data) {
     var pool = []
       .concat(crit.map(function (x) { return Object.assign({ _section: 'CRITICAL' }, x); }))
       .concat(daily.map(function (x) { return Object.assign({ _section: 'DAILY' }, x); }))
-      .concat(sub.map(function (x) { return Object.assign({ _section: 'SUBSIDIARY' }, x); }));
+      .concat(sub.map(function (x) { return Object.assign({ _section: 'SUBSIDIARY' }, x); }))
+      .concat(additional.map(function (x) { return Object.assign({ _section: 'ADDITIONAL' }, x); }));
     pool.forEach(function (it) {
       var blob = ((it.title || '') + ' ' + (it.summary || '') + ' ' + (it.why_woori_cro || '')).toLowerCase();
       it._s = 0;
