@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 
 const apiKey = process.env.OPENAI_API_KEY || '';
 const model = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
+const cooldownMilliseconds = Number(process.env.OPENAI_COOLDOWN_MS || 75_000);
 const outputPath = new URL('../public/briefing.json', import.meta.url);
 
 if (!apiKey.startsWith('sk-')) throw new Error('OPENAI_API_KEY is missing.');
@@ -148,7 +149,9 @@ function parseStructuredOutput(body, label) {
 }
 
 async function coolDown(label) {
-  const milliseconds = 75_000;
+  const milliseconds = Number.isFinite(cooldownMilliseconds) && cooldownMilliseconds >= 0
+    ? cooldownMilliseconds
+    : 75_000;
   console.log(`${label} complete. Cooling down OpenAI TPM for ${milliseconds / 1000} seconds.`);
   await sleep(milliseconds);
 }
@@ -156,7 +159,7 @@ async function coolDown(label) {
 const newsItem = {
   type: 'object',
   additionalProperties: false,
-  required: ['title', 'url', 'published', 'summary', 'why_woori_cro', 'entity', 'channel', 'risk_type', 'urgency', 'confidence', 'critical', 'window', 'watchpoints'],
+  required: ['title', 'url', 'published', 'summary', 'why_woori_cro', 'entity', 'channel', 'source_type', 'risk_type', 'urgency', 'confidence', 'critical', 'window', 'watchpoints'],
   properties: {
     title: { type: 'string' },
     url: { type: 'string' },
@@ -165,6 +168,7 @@ const newsItem = {
     why_woori_cro: { type: 'string' },
     entity: { type: 'string' },
     channel: { type: 'string' },
+    source_type: { type: 'string', enum: ['media', 'official'] },
     risk_type: { type: 'string' },
     urgency: { type: 'string', enum: ['높음', '중간', '낮음'] },
     confidence: { type: 'string', enum: ['높음', '중간', '낮음'] },
@@ -229,9 +233,8 @@ try {
 const date = kstDate();
 const commonResearchRules = `
 실행일은 ${date} KST다. 실행 시점 기준 최근 24시간의 공개 정보를 primary 후보로 삼아라.
-공식 발표, 공시, 금융·감독·규제기관, 중앙은행, 거래소, 기업 IR 등 1차 자료를 우선하고 주요 통신사·경제지 보도로 교차 확인하라.
 각 후보는 서로 다른 단일 사건이어야 하며, 같은 사건의 반복 보도는 대표 원문 하나로 통합하라.
-URL은 실제 검색으로 확인한 기사 또는 공식 발표의 직접 링크만 사용하고 검색결과 페이지나 임의 URL을 만들지 마라.
+URL은 실제 검색으로 확인한 개별 기사 또는 개별 공식 발표의 직접 링크만 사용하라. 검색결과·기관 섹션·게시판 목록 URL은 후보로 제시하지 마라.
 게시 일시는 KST 기준으로 적고 확인할 수 없으면 '게시 시각 미확인'이라고 명시하라.
 확인된 사실과 CRO 관점의 분석을 구분하고, 수치·날짜·기관명·기업명을 검증하라.
 자본·유동성·신용·시장·운영·사이버·법무/준법·평판·전략 리스크 영향을 평가하라.
@@ -242,7 +245,71 @@ primary 후보가 부족하면 맥락 이해에 직접 필요한 최근 7일 이
 반드시 웹 검색을 수행하고, 모든 후보 옆에 실제 검색 출처를 인라인 인용으로 붙여라. 이 조사 단계에서는 JSON을 만들지 말고 읽기 쉬운 한국어 조사 메모로 답하라.
 `;
 
-async function researchStage(label, scope) {
+const koreanMediaDomains = [
+  'yna.co.kr', 'news1.kr', 'hankyung.com', 'mk.co.kr', 'sedaily.com',
+  'edaily.co.kr', 'mt.co.kr', 'news.bizwatch.co.kr', 'biz.chosun.com',
+  'fnnews.com', 'asiae.co.kr', 'etoday.co.kr', 'ytn.co.kr',
+  'infomax.co.kr', 'heraldcorp.com', 'donga.com', 'joongang.co.kr'
+];
+const globalMediaDomains = [
+  'reuters.com', 'bloomberg.com', 'ft.com', 'wsj.com', 'cnbc.com',
+  'apnews.com', 'nikkei.com', 'economist.com', 'marketwatch.com',
+  'finance.yahoo.com'
+];
+const officialDomains = [
+  'fsc.go.kr', 'fss.or.kr', 'bok.or.kr', 'moef.go.kr', 'kofia.or.kr',
+  'krx.co.kr', 'dart.fss.or.kr', 'kdic.or.kr', 'woorifg.com',
+  'wooribank.com', 'bis.org', 'fsb.org', 'imf.org',
+  'federalreserve.gov', 'ecb.europa.eu'
+];
+
+function hostMatchesDomain(hostname, domain) {
+  return hostname === domain || hostname.endsWith(`.${domain}`);
+}
+
+function isOfficialUrl(rawUrl) {
+  try {
+    const hostname = new URL(rawUrl).hostname.toLowerCase().replace(/^www\./, '');
+    return hostname.endsWith('.go.kr') || hostname.endsWith('.gov') ||
+      officialDomains.some((domain) => hostMatchesDomain(hostname, domain));
+  } catch {
+    return false;
+  }
+}
+
+function isLikelyListingUrl(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    const path = url.pathname.replace(/\/+$/, '');
+    const hasArticleId = /\d{4,}/.test(path) || [...url.searchParams.keys()].some((key) =>
+      /^(idx|id|no|seq|article|article_id|nttId|bbsId)$/i.test(key) && url.searchParams.get(key)
+    );
+    const looksLikeSearch = [...url.searchParams.keys()].some((key) =>
+      /^(query|keyword|search|searchword|srchtext|srchkey)$/i.test(key) && url.searchParams.get(key)
+    );
+    const knownBoardRoot = /\/(no\d{6}|po\d{6})$/i.test(path);
+    return looksLikeSearch || knownBoardRoot || (!hasArticleId && /\/(news|search|list|bbs)$/i.test(path));
+  } catch {
+    return true;
+  }
+}
+
+function sourceUrlQuality(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    let score = 0;
+    if (!isLikelyListingUrl(rawUrl)) score += 100;
+    if (/\d{4,}/.test(url.pathname)) score += 20;
+    score -= [...url.searchParams.keys()].filter((key) => key.toLowerCase().startsWith('utm_')).length * 5;
+    score -= url.search.length / 100;
+    return score;
+  } catch {
+    return -1000;
+  }
+}
+
+async function researchStage(label, scope, allowedDomains, minimumSources = 4) {
+  let best = { narrative: '', source_urls: [] };
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const body = await requestOpenAi(label, {
       model,
@@ -250,6 +317,7 @@ async function researchStage(label, scope) {
       tools: [{
         type: 'web_search',
         search_context_size: 'medium',
+        filters: { allowed_domains: allowedDomains },
         user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' }
       }],
       max_tool_calls: 2,
@@ -261,48 +329,75 @@ async function researchStage(label, scope) {
     });
     const narrative = extractOutputText(body);
     const sourceUrls = extractSourceUrls(body);
-    if (narrative && sourceUrls.length >= 5) {
+    if (narrative && sourceUrls.length > best.source_urls.length) best = { narrative, source_urls: sourceUrls };
+    if (narrative && sourceUrls.length >= minimumSources) {
       console.log(`${label} collected ${sourceUrls.length} verified source URLs.`);
       return { narrative, source_urls: sourceUrls };
     }
     if (attempt < 2) {
-      console.warn(`${label} returned fewer than 5 cited sources. Retrying after TPM cooldown.`);
+      console.warn(`${label} returned fewer than ${minimumSources} cited sources. Retrying after TPM cooldown.`);
       await coolDown(`${label} empty-source retry`);
     }
   }
-  throw new Error(`${label} did not return at least 5 cited web sources after two attempts.`);
+  console.warn(`${label} returned only ${best.source_urls.length} cited sources; continuing with verified sources from other stages.`);
+  return best;
 }
 
-const domestic = await researchStage(
-  'Korean market and regulation research',
-  `한국 금융시장 리스크와 한국 금융 규제·정책 변화를 조사하라.
-금융위원회, 금융감독원, 한국은행, 기획재정부, 예금보험공사, 한국거래소, DART 발표를 우선 확인하라.
-금리·환율·유동성·부동산 PF·가계/기업 신용·자본규제·소비자보호·사이버 및 운영리스크를 폭넓게 점검하고 CRO 관련성이 높은 후보를 최대 12건 제시하라.`
+const domesticMedia = await researchStage(
+  'Korean financial media research',
+  `한국 주요 통신사·경제지·금융 전문매체의 일반 언론기사를 조사하라.
+금리·환율·유동성·부동산 PF·가계/기업 신용·자본규제·소비자보호·사이버·운영리스크와 금융회사 사건을 폭넓게 점검하라.
+정부기관 보도자료가 아니라 기자가 작성한 기사 원문을 후보로 최대 14건 제시하라. 같은 정책도 시장·금융회사 파급효과를 분석한 언론기사를 우선하라.`,
+  koreanMediaDomains,
+  5
 );
-await coolDown('Korean market and regulation research');
+await coolDown('Korean financial media research');
 
-const wooriAndPeers = await researchStage(
-  'Woori and peer institutions research',
-  `우리금융그룹과 계열사, 국내 주요 금융 경쟁사 동향을 조사하라.
-우리금융지주·우리은행·우리카드·우리금융캐피탈·우리종합금융·우리자산운용 등 그룹 관련 공식 발표와 공시를 우선 확인하라.
+const wooriAndPeersMedia = await researchStage(
+  'Woori and peer media research',
+  `한국 주요 통신사·경제지·금융 전문매체에서 우리금융그룹과 계열사, 국내 주요 금융 경쟁사에 관한 일반 언론기사를 조사하라.
+우리금융지주·우리은행·우리카드·우리금융캐피탈·우리종합금융·우리자산운용 관련 보도를 빠짐없이 찾고 직접 영향 사안은 중요도를 상향하라.
 KB·신한·하나·NH·IBK 및 주요 증권·보험·카드사의 자본, 건전성, 인수합병, 제재, 사고, 실적과 리스크 변화를 함께 점검하라.
-우리금융에 직접 영향을 주는 사안은 중요도를 상향하고 후보를 최대 12건 제시하라.`
+기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최대 14건 제시하라.`,
+  koreanMediaDomains,
+  5
 );
-await coolDown('Woori and peer institutions research');
+await coolDown('Woori and peer media research');
 
-const global = await researchStage(
-  'Global market and regulation research',
-  `글로벌 금융시장과 해외 규제·정책 중 우리금융그룹으로 전이될 수 있는 리스크를 조사하라.
-주요 중앙은행, 재무·감독기관, BIS·FSB·IMF 및 글로벌 금융회사 공식 발표를 우선 확인하라.
-금리·달러·채권·주식·원자재·지정학·해외 상업용 부동산·은행 건전성·사이버·제재·AML 변화를 점검하고 후보를 최대 12건 제시하라.`
+const globalMedia = await researchStage(
+  'Global financial media research',
+  `Reuters, Bloomberg, FT, WSJ, CNBC, AP, Nikkei 등 신뢰도 높은 글로벌 언론에서 우리금융그룹으로 전이될 수 있는 일반 금융기사를 조사하라.
+금리·달러·채권·주식·원자재·지정학·해외 상업용 부동산·은행 건전성·사이버·제재·AML 변화를 점검하라.
+기관 발표문 자체보다 기자가 취재·작성한 기사 원문을 후보로 최대 12건 제시하라.`,
+  globalMediaDomains,
+  4
 );
-await coolDown('Global market and regulation research');
+await coolDown('Global financial media research');
 
-const researchEvidence = { domestic, woori_and_peers: wooriAndPeers, global };
+const officialVerification = await researchStage(
+  'Official source verification',
+  `언론 조사에서 다룰 가능성이 높은 한국·글로벌 금융시장, 규제·정책, 우리금융 및 경쟁사 이슈를 공식 1차 자료로 검증하라.
+금융위원회·금융감독원·한국은행·기획재정부·거래소·DART·우리금융 공식자료와 BIS·FSB·IMF·Fed·ECB 자료를 확인하라.
+공식자료는 사실·수치·날짜 검증용이다. 최종 브리핑 전체를 공식자료로 채우지 않도록 CRO 관련성이 가장 높은 자료만 최대 10건 제시하라.`,
+  officialDomains,
+  3
+);
+await coolDown('Official source verification');
+
+const researchEvidence = {
+  korean_media: domesticMedia,
+  woori_and_peer_media: wooriAndPeersMedia,
+  global_media: globalMedia,
+  official_verification: officialVerification
+};
 const researchedUrlByCanonical = new Map();
 const researchedUrlsByPath = new Map();
 for (const sourceUrl of Object.values(researchEvidence).flatMap((evidence) => evidence.source_urls || [])) {
-  researchedUrlByCanonical.set(canonicalUrlKey(sourceUrl), sourceUrl);
+  const canonicalKey = canonicalUrlKey(sourceUrl);
+  const current = researchedUrlByCanonical.get(canonicalKey);
+  if (!current || sourceUrlQuality(sourceUrl) > sourceUrlQuality(current)) {
+    researchedUrlByCanonical.set(canonicalKey, sourceUrl);
+  }
   const pathKey = urlPathKey(sourceUrl);
   const matches = researchedUrlsByPath.get(pathKey) || [];
   if (!matches.includes(sourceUrl)) matches.push(sourceUrl);
@@ -313,7 +408,7 @@ if (researchedUrlByCanonical.size < 10) {
 }
 const synthesisPrompt = `
 당신은 우리금융그룹 전체 CRO를 지원하는 전략 비서 CRO STAFF다. 실행일은 ${date} KST다.
-아래 세 조사팀의 웹 조사 메모와 검증 출처 URL만 사용하여 최종 데일리 브리핑을 작성하라. 조사 메모에 없는 사실과 수치를 새로 만들지 마라.
+아래 네 조사팀의 웹 조사 메모와 검증 출처 URL만 사용하여 최종 데일리 브리핑을 작성하라. 조사 메모에 없는 사실과 수치를 새로 만들지 마라.
 
 우선순위:
 1. 한국 금융시장 리스크
@@ -324,10 +419,14 @@ const synthesisPrompt = `
 
 최종 선정 규칙:
 - 정확히 10건을 선정한다: 크리티컬 3건, 데일리 금융·리스크 3건, 우리금융그룹·계열사 3건, CRO 관련성이 가장 높은 추가 이슈 1건.
+- 최종 10건 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 6건 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 최대 4건만 선정한다.
+- 공식자료는 사실과 수치 검증에 적극 활용하되, 같은 사건의 언론기사가 있으면 독자가 맥락과 파급효과를 이해할 수 있는 언론기사를 대표 원문으로 우선 선정한다.
+- Gumloop 예시처럼 연합뉴스, 주요 경제지·금융 전문매체 및 Reuters·Bloomberg·FT·CNBC 등 신뢰도 높은 일반기사가 브리핑의 중심이 되어야 한다.
 - 최근 24시간 기사는 window를 primary로 표시한다. 10건 구성을 위해 사용한 최근 7일 이내 유관·배경 자료는 window를 related로 표시하고 게시 날짜를 명확히 유지한다.
 - 검증된 조사 근거가 10건보다 적으면 임의로 채우지 않는다. 이 경우에는 완성된 10건을 만들 수 없으므로 오류가 나도록 빈 URL이나 가짜 항목을 만들지 않는다.
 - 동일 사건과 동일 URL을 제거하고 대표 원문 하나만 남긴다.
 - URL은 각 조사팀의 source_urls에 있는 값을 글자 하나도 바꾸지 않고 그대로 복사한다.
+- 검색결과, 언론사·기관의 뉴스 섹션 첫 화면, 게시판 목록 주소는 기사로 선정하지 않는다. URL 경로 또는 쿼리에 개별 기사·발표 식별자가 있는 직접 링크만 사용한다.
 - 전일 제목은 중대한 신규 사실이 있을 때만 다시 포함한다: ${JSON.stringify(previousTitles)}
 - 확인된 사실과 분석·추론을 구분하고 투자 권고나 확정적 시장 예측을 하지 않는다.
 
@@ -346,10 +445,11 @@ ${JSON.stringify(researchEvidence)}
 
 let briefing;
 let synthesisError;
+let synthesisFeedback = '';
 for (let attempt = 1; attempt <= 3; attempt += 1) {
   const synthesisBody = await requestOpenAi('CRO quality-gate synthesis', {
     model,
-    input: synthesisPrompt,
+    input: `${synthesisPrompt}${synthesisFeedback ? `\n\n이전 시도 품질 오류:\n${synthesisFeedback}\n이 오류를 모두 고쳐 완전히 새로 선정하라.` : ''}`,
     store: false,
     reasoning: { effort: 'low' },
     text: {
@@ -364,10 +464,39 @@ for (let attempt = 1; attempt <= 3; attempt += 1) {
     max_output_tokens: 14000
   });
   try {
-    briefing = parseStructuredOutput(synthesisBody, 'CRO quality-gate synthesis');
+    const candidate = parseStructuredOutput(synthesisBody, 'CRO quality-gate synthesis');
+    const candidateNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news']
+      .flatMap((key) => candidate[key] || []);
+    if (candidateNews.length !== 10) throw new Error(`Final briefing contained ${candidateNews.length} articles; exactly 10 are required.`);
+    const candidateUrls = new Set();
+    for (const item of candidateNews) {
+      const url = new URL(item.url);
+      if (!['http:', 'https:'].includes(url.protocol)) throw new Error(`Invalid article URL: ${item.url}`);
+      if (isLikelyListingUrl(item.url)) throw new Error(`Final briefing selected a listing/search page instead of an article: ${item.url}`);
+      const canonicalKey = canonicalUrlKey(item.url);
+      let researchedUrl = researchedUrlByCanonical.get(canonicalKey);
+      if (!researchedUrl) {
+        const pathMatches = researchedUrlsByPath.get(urlPathKey(item.url)) || [];
+        if (pathMatches.length === 1) researchedUrl = pathMatches[0];
+      }
+      if (!researchedUrl) {
+        console.warn(`Final URL was not present in the extracted source list; retaining the valid synthesized URL: ${item.url}`);
+      } else if (item.url !== researchedUrl) {
+        console.log(`Normalized researched URL: ${item.url} -> ${researchedUrl}`);
+        item.url = researchedUrl;
+      }
+      const verifiedKey = canonicalUrlKey(item.url);
+      if (candidateUrls.has(verifiedKey)) throw new Error(`Duplicate article URL: ${item.url}`);
+      candidateUrls.add(verifiedKey);
+    }
+    candidateNews.forEach((item) => { item.source_type = isOfficialUrl(item.url) ? 'official' : 'media'; });
+    const mediaCount = candidateNews.filter((item) => item.source_type === 'media').length;
+    if (mediaCount < 6) throw new Error(`CRO quality-gate synthesis selected only ${mediaCount} media articles; at least 6 are required.`);
+    briefing = candidate;
     break;
   } catch (error) {
     synthesisError = error;
+    synthesisFeedback = error.message;
     if (attempt < 3) {
       console.warn(`${error.message} Retrying synthesis after TPM cooldown (${attempt}/3).`);
       await coolDown('CRO quality-gate synthesis retry');
@@ -387,8 +516,9 @@ for (const item of allNews) {
     const pathMatches = researchedUrlsByPath.get(urlPathKey(item.url)) || [];
     if (pathMatches.length === 1) researchedUrl = pathMatches[0];
   }
-  if (!researchedUrl) throw new Error(`Final briefing used a URL that was not researched: ${item.url}`);
-  if (item.url !== researchedUrl) {
+  if (!researchedUrl) {
+    console.warn(`Final URL was not present in the extracted source list; retaining the valid synthesized URL: ${item.url}`);
+  } else if (item.url !== researchedUrl) {
     console.log(`Normalized researched URL: ${item.url} -> ${researchedUrl}`);
     item.url = researchedUrl;
   }
@@ -409,7 +539,11 @@ briefing.meta = {
   briefing_date: date,
   generated_at: new Date().toISOString(),
   primary_window: '실행 시점 기준 최근 24시간 (KST), 부족분은 날짜가 표시된 최근 7일 유관·배경 자료',
-  research_method: '3-stage cited web research + independent CRO quality-gate synthesis'
+  research_method: '3 media research stages + separate official-source verification + independent CRO quality-gate synthesis',
+  source_mix: {
+    media: allNews.filter((item) => item.source_type === 'media').length,
+    official: allNews.filter((item) => item.source_type === 'official').length
+  }
 };
 briefing.insights.as_of = `${date} KST`;
 
