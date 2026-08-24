@@ -22,13 +22,13 @@ date = meta.get("briefing_date", "")
 headline = briefing.get("insights", {}).get("headline") or briefing.get("executive_judgment", "오늘의 CRO STAFF 브리핑")
 
 items = []
-for section in ("critical", "daily_news", "subsidiary_news"):
+for section in ("critical", "daily_news", "subsidiary_news", "additional_news"):
     for item in briefing.get(section, []):
         items.append(item)
 
 top_items = "".join(
     f'<li style="margin:7px 0"><a href="{escape(item.get("url", ""))}">{escape(item.get("title", ""))}</a></li>'
-    for item in items[:6]
+    for item in items[:10]
 )
 
 html_body = f"""
