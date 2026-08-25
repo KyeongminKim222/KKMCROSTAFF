@@ -41,7 +41,7 @@ Send this form of link to recipients:
 https://YOUR-DOMAIN/report/YOUR_REPORT_ACCESS_TOKEN
 ```
 
-The server validates the token, stores authorization in an HttpOnly cookie, and redirects to the report. Readers can view the report and use the Q&A without an API key prompt.
+The server validates the token, serves the report directly, and stores authorization in an HttpOnly cookie. This also supports email-app embedded browsers that do not reliably retain cookies across an immediate redirect. Readers can view the report and use the Q&A without an API key prompt.
 
 ## 4. Daily report update
 
