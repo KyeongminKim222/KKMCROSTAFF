@@ -449,8 +449,7 @@ const synthesisPrompt = `
 - 최종 10건 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 6건 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 최대 4건만 선정한다.
 - 공식자료는 사실과 수치 검증에 적극 활용하되, 같은 사건의 언론기사가 있으면 독자가 맥락과 파급효과를 이해할 수 있는 언론기사를 대표 원문으로 우선 선정한다.
 - Gumloop 예시처럼 연합뉴스, 주요 경제지·금융 전문매체 및 Reuters·Bloomberg·FT·CNBC 등 신뢰도 높은 일반기사가 브리핑의 중심이 되어야 한다.
-- 최종 10건은 모두 실행일(${date} KST) 당일에 게시된 기사만 선택한다. 어제 이전에 게시된 기사이거나 정확한 게시일을 확인할 수 없는 기사는 최종 10건에서 반드시 제외한다. - 오늘 기사의 배경 이해를 돕기 위한 과거 사실은 summary나 why_woori_cro 문장 속에서 짧게 언급할 수 있지만, 그 과거 기사 자체를 별도 항목으로 선택하지 않는다.
-- 검증된 조사 근거가 10건보다 적으면 임의로 채우지 않는다. 이 경우에는 완성된 10건을 만들 수 없으므로 오류가 나도록 빈 URL이나 가짜 항목을 만들지 않는다.
+- 최종 10건 중 최소 8건은 실행일(${date} KST) 당일에 게시된 기사여야 하며 window는 primary로 표시한다. - 우리금융 계열사 또는 공식 발표 중 오늘 게시된 기사를 도저히 찾을 수 없는 경우에 한해서만, 최근 7일 이내의 배경·참고 기사를 최대 2건까지 예외로 선택할 수 있으며 이때는 window를 반드시 related로 표시하고 게시 날짜를 정확히 적는다. - related로 표시하는 기사도 subsidiary_news라면 반드시 실제 우리금융 계열사 자체에 관한 기사여야 한다. - "오늘자 검증 가능한 기사 없음" 같은 placeholder 문구를 title이나 다른 필드에 넣지 마라. 그런 항목을 만들 수 없으면 조사 근거 안에서 실제로 존재하는 다른 기사로 대체하라.
 - 동일 사건과 동일 URL을 제거하고 대표 원문 하나만 남긴다.
 - critical, daily_news, subsidiary_news, additional_news 네 카테고리를 통틀어 같은 URL이나 같은 게시물 번호(seq, id 등)를 가진 기사를 두 번 이상 선택하지 마라. 카테고리를 넘나드는 중복도 동일 사건 중복으로 간주하고 반드시 제거하라.
 - 만약 특정 사건이 여러 카테고리에 모두 적합해 보이면, 그 사건은 가장 관련성이 높은 카테고리 하나에만 배치하고 다른 카테고리에는 조사 근거 안에서 완전히 다른 사건을 새로 찾아 채워라. url 필드를 빈 문자열이나 추정값으로 채우지 말고, 반드시 조사 근거에 있는 실제 URL만 사용하라.
@@ -572,9 +571,23 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     }
     for (const item of candidateNews) {
       const articleDate = extractDateFromPublished(item.published);
-      if (articleDate !== date) {
-        throw new Error(`Article was not dated today (${date}): ${item.title} (published: ${item.published || '미기재'})`);
+      if (item.window === 'primary') {
+        if (articleDate !== date) {
+          throw new Error(`Primary article was not dated today (${date}): ${item.title} (published: ${item.published || '미기재'})`);
+        }
+      } else {
+        if (!articleDate) {
+          throw new Error(`Related article had no verifiable date: ${item.title}`);
+        }
+        const daysDiff = (new Date(date) - new Date(articleDate)) / (1000 * 60 * 60 * 24);
+        if (daysDiff < 0 || daysDiff > 7) {
+          throw new Error(`Related article was outside the allowed date range: ${item.title} (published: ${item.published})`);
+        }
       }
+    }
+    const relatedCount = candidateNews.filter((item) => item.window !== 'primary').length;
+    if (relatedCount > 2) {
+      throw new Error(`Too many related (non-today) articles selected: ${relatedCount}. Limit is 2.`);
     }
     for (const item of candidate.subsidiary_news || []) {
       if (!mentionsWooriSubsidiary(item)) {
