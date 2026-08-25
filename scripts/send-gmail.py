@@ -110,10 +110,10 @@ def render_forward_looking(items):
 insights = briefing.get("insights", {})
 
 sections_html = "".join([
-    render_bullets("Executive Judgment 세부", briefing.get("executive_judgment_bullets", [])),
-    render_news_section("Critical Issues", briefing.get("critical", [])),
+    render_bullets("Executive Judgment", briefing.get("executive_judgment_bullets", [])),
+    render_news_section("Priority Watch", briefing.get("critical", [])),
     render_news_section("Daily News", briefing.get("daily_news", [])),
-    render_news_section("Subsidiary News", briefing.get("subsidiary_news", [])),
+    render_news_section("Subsidiary Radar(우리금융그룹 계열사 뉴스)", briefing.get("subsidiary_news", [])),
     render_news_section("Additional News", briefing.get("additional_news", [])),
     render_forward_looking(briefing.get("forward_looking_points", [])),
     render_bullets("Insights", insights.get("bullets", [])),
@@ -130,6 +130,7 @@ html_body = f"""
   <h1 style="font-size:24px;margin:0 0 12px;color:#003b70">CRO STAFF 일일 리스크 브리핑</h1>
   <p style="font-size:14px;color:#334155">{escape(date)} KST</p>
   <p style="font-size:17px;font-weight:700">{escape(headline)}</p>
+  <h2 style="font-size:17px;color:#003b70;border-bottom:2px solid #e2e8f0;padding-bottom:6px;margin-top:20px">핵심판단</h2>
   <p style="font-size:14px;color:#334155">{escape(briefing.get("executive_judgment", ""))}</p>
   {stance_html}
 
