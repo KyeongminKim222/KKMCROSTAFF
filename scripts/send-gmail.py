@@ -38,7 +38,7 @@ for section in ("critical", "daily_news", "subsidiary_news", "additional_news"):
         items.append(item)
 
 top_items = "".join(
-    f'<li style="margin:7px 0"><span style="font-size:11px;color:#64748b">[{"언론" if item.get("source_type") == "media" else "공식"}]</span> <a href="{escape(item.get("url", ""))}">{escape(item.get("title", ""))}</a></li>'
+    f'<li style="margin:7px 0"><span style="font-size:11px;color:#64748b">[{"언론" if item.get("source_type") == "media" else "공식"} · {escape(item.get("source_name", "출처"))}]</span> <a href="{escape(item.get("url", ""))}">{escape(item.get("title", ""))}</a></li>'
     for item in items[:10]
 )
 

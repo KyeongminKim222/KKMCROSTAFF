@@ -159,11 +159,12 @@ async function coolDown(label) {
 const newsItem = {
   type: 'object',
   additionalProperties: false,
-  required: ['title', 'url', 'published', 'summary', 'why_woori_cro', 'entity', 'channel', 'source_type', 'risk_type', 'urgency', 'confidence', 'critical', 'window', 'watchpoints'],
+  required: ['title', 'url', 'published', 'source_name', 'summary', 'why_woori_cro', 'entity', 'channel', 'source_type', 'risk_type', 'urgency', 'confidence', 'critical', 'window', 'watchpoints'],
   properties: {
     title: { type: 'string' },
     url: { type: 'string' },
     published: { type: 'string' },
+    source_name: { type: 'string' },
     summary: { type: 'string' },
     why_woori_cro: { type: 'string' },
     entity: { type: 'string' },
@@ -174,7 +175,12 @@ const newsItem = {
     confidence: { type: 'string', enum: ['높음', '중간', '낮음'] },
     critical: { type: 'boolean' },
     window: { type: 'string', enum: ['primary', 'related'] },
-    watchpoints: { type: 'array', maxItems: 4, items: { type: 'string' } }
+    watchpoints: {
+      type: 'array',
+      minItems: 2,
+      maxItems: 3,
+      items: { type: 'string' }
+    }
   }
 };
 
@@ -184,7 +190,12 @@ const schema = {
   required: ['executive_judgment', 'executive_judgment_bullets', 'critical', 'daily_news', 'subsidiary_news', 'additional_news', 'forward_looking_points', 'insights', 'monitoring_points'],
   properties: {
     executive_judgment: { type: 'string' },
-    executive_judgment_bullets: { type: 'array', minItems: 2, maxItems: 5, items: { type: 'string' } },
+    executive_judgment_bullets: {
+      type: 'array',
+      minItems: 3,
+      maxItems: 4,
+      items: { type: 'string' }
+    },
     critical: { type: 'array', minItems: 3, maxItems: 3, items: newsItem },
     daily_news: { type: 'array', minItems: 3, maxItems: 3, items: newsItem },
     subsidiary_news: { type: 'array', minItems: 3, maxItems: 3, items: newsItem },
@@ -211,12 +222,12 @@ const schema = {
       required: ['headline', 'bullets', 'action_items', 'stance'],
       properties: {
         headline: { type: 'string' },
-        bullets: { type: 'array', minItems: 2, maxItems: 5, items: { type: 'string' } },
-        action_items: { type: 'array', minItems: 2, maxItems: 5, items: { type: 'string' } },
+        bullets: { type: 'array', minItems: 3, maxItems: 5, items: { type: 'string' } },
+        action_items: { type: 'array', minItems: 3, maxItems: 5, items: { type: 'string' } },
         stance: { type: 'string' }
       }
     },
-    monitoring_points: { type: 'array', minItems: 3, maxItems: 7, items: { type: 'string' } }
+    monitoring_points: { type: 'array', minItems: 4, maxItems: 7, items: { type: 'string' } }
   }
 };
 
@@ -242,6 +253,7 @@ URL은 실제 검색으로 확인한 개별 기사 또는 개별 공식 발표�
 primary 후보가 부족하면 맥락 이해에 직접 필요한 최근 7일 이내 유관·배경 자료를 추가 조사하되 반드시 related라고 표시하고 날짜를 명확히 적어라.
 전일 제목은 중대한 신규 사실이 있을 때만 다시 후보에 포함하라: ${JSON.stringify(previousTitles)}
 각 후보에 제목, 매체·기관, 게시 일시, 직접 URL, 확인된 사실, 우리금융 CRO 중요성, 리스크 유형, 긴급도, 근거 신뢰도와 확인할 질문을 포함하라.
+모든 한국어 서술은 임원 보고서에 맞는 정중한 합니다체로 작성하라. 문장을 '한다·이다·있다·된다·필요하다'로 끝내지 말고 '합니다·입니다·있습니다·됩니다·필요합니다'로 끝내라.
 반드시 웹 검색을 수행하고, 모든 후보 옆에 실제 검색 출처를 인라인 인용으로 붙여라. 이 조사 단계에서는 JSON을 만들지 말고 읽기 쉬운 한국어 조사 메모로 답하라.
 `;
 
@@ -435,7 +447,12 @@ CRO 품질 게이트:
 - 자본·유동성·신용·시장·운영·사이버·법무/준법·평판·전략 리스크 영향을 평가한다.
 - 영향 전파 속도, 영향 범위, 대응 가능 시간, 규제기관 관심으로 긴급도를 판단한다.
 - 기사 간 연결고리, 리스크 전이 경로, 오늘 확인할 지표·질문, 단기 모니터링 포인트를 도출한다.
-- 각 기사 summary와 why_woori_cro는 각각 최대 2문장으로 간결하게 작성하고 watchpoints는 1~2개만 제시한다.
+- 모든 문장은 예외 없이 정중한 합니다체를 사용한다. '한다·이다·있다·된다·필요하다·전망된다' 같은 해라체 종결은 금지하고 '합니다·입니다·있습니다·됩니다·필요합니다·전망됩니다'로 쓴다.
+- executive_judgment_bullets는 Gumloop 예시처럼 3~4개로 작성하고, 각 항목은 '확인된 변화 → 핵심 수치·맥락 → 그룹 리스크 판단'을 2문장으로 설명한다. executive_judgment에는 이 판단을 충분한 문단으로 종합한다.
+- 각 기사 summary는 3~5문장으로 작성한다. 첫 문장에서 매체명과 게시일을 밝히고, 이후 핵심 수치·당사자·발생 경위·현재 상태를 원문 범위 안에서 구체적으로 설명한다. 단순 헤드라인 재진술이나 2문장 요약은 금지한다.
+- why_woori_cro는 2~3문장으로 작성한다. 우리은행 또는 관련 계열사에 미치는 자본·유동성·신용·시장·운영·준법·평판·전략 영향과 30~90일 의사결정 포인트를 구체적으로 연결한다.
+- watchpoints는 기사마다 2~3개를 제시한다. 기관 발표 일정, 비율·스프레드·연체율·충당금·한도 등 실제로 확인할 지표나 질문으로 작성한다.
+- 오늘의 CRO STAFF 인사이트는 기사들을 나열하지 말고 공통 동인, 1차·2차 전이경로, 현재 판단을 뒤집을 조건, 1주·2주·90일 모니터링 행동을 연결한다.
 
 조사 근거 JSON:
 ${JSON.stringify(researchEvidence)}
@@ -446,14 +463,56 @@ ${JSON.stringify(researchEvidence)}
 let briefing;
 let synthesisError;
 let synthesisFeedback = '';
+
+function usesNonFormalKorean(text) {
+  return String(text || '')
+    .split(/[.!?]+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean)
+    .some((sentence) => sentence.endsWith('다') && !sentence.endsWith('니다'));
+}
+
+function sentenceCount(text) {
+  return String(text || '').split(/[.!?]+/).map((sentence) => sentence.trim()).filter(Boolean).length;
+}
+
+function narrativeQualityError(candidate, candidateNews) {
+  const narrativeFields = [
+    candidate.executive_judgment,
+    ...(candidate.executive_judgment_bullets || []),
+    ...candidateNews.flatMap((item) => [item.summary, item.why_woori_cro]),
+    (candidate.insights || {}).headline,
+    ...((candidate.insights || {}).bullets || []),
+    ...((candidate.insights || {}).action_items || []),
+    (candidate.insights || {}).stance
+  ];
+  if (narrativeFields.some(usesNonFormalKorean)) {
+    return 'Korean narrative used plain 한다체 instead of formal 합니다체.';
+  }
+  const shortSummary = candidateNews.find((item) => String(item.summary || '').length < 180);
+  if (shortSummary) return `Article summary was too short for Gumloop-quality depth: ${shortSummary.title}`;
+  const shallowSummary = candidateNews.find((item) => sentenceCount(item.summary) < 3);
+  if (shallowSummary) return `Article summary contained fewer than 3 sentences: ${shallowSummary.title}`;
+  const missingAttribution = candidateNews.find((item) => !String(item.summary || '').includes(String(item.source_name || '')));
+  if (missingAttribution) return `Article summary did not name its source: ${missingAttribution.title}`;
+  const shortImplication = candidateNews.find((item) => String(item.why_woori_cro || '').length < 90);
+  if (shortImplication) return `CRO implication was too short: ${shortImplication.title}`;
+  const shallowImplication = candidateNews.find((item) => sentenceCount(item.why_woori_cro) < 2);
+  if (shallowImplication) return `CRO implication contained fewer than 2 sentences: ${shallowImplication.title}`;
+  if (String(candidate.executive_judgment || '').length < 280) {
+    return 'Executive judgment was too short for decision-useful synthesis.';
+  }
+  return '';
+}
+
 for (let attempt = 1; attempt <= 3; attempt += 1) {
   const synthesisBody = await requestOpenAi('CRO quality-gate synthesis', {
     model,
     input: `${synthesisPrompt}${synthesisFeedback ? `\n\n이전 시도 품질 오류:\n${synthesisFeedback}\n이 오류를 모두 고쳐 완전히 새로 선정하라.` : ''}`,
     store: false,
-    reasoning: { effort: 'low' },
+    reasoning: { effort: 'medium' },
     text: {
-      verbosity: 'low',
+      verbosity: 'medium',
       format: {
         type: 'json_schema',
         name: 'cro_staff_daily_briefing',
@@ -461,7 +520,7 @@ for (let attempt = 1; attempt <= 3; attempt += 1) {
         schema
       }
     },
-    max_output_tokens: 14000
+    max_output_tokens: 16000
   });
   try {
     const candidate = parseStructuredOutput(synthesisBody, 'CRO quality-gate synthesis');
@@ -492,6 +551,8 @@ for (let attempt = 1; attempt <= 3; attempt += 1) {
     candidateNews.forEach((item) => { item.source_type = isOfficialUrl(item.url) ? 'official' : 'media'; });
     const mediaCount = candidateNews.filter((item) => item.source_type === 'media').length;
     if (mediaCount < 6) throw new Error(`CRO quality-gate synthesis selected only ${mediaCount} media articles; at least 6 are required.`);
+    const qualityError = narrativeQualityError(candidate, candidateNews);
+    if (qualityError) throw new Error(qualityError);
     briefing = candidate;
     break;
   } catch (error) {
