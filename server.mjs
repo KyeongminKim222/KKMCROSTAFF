@@ -229,8 +229,9 @@ const server = createServer(async (req, res) => {
       'Max-Age=2592000',
       isProduction ? 'Secure' : ''
     ].filter(Boolean).join('; ');
-    res.writeHead(302, { Location: '/', 'Set-Cookie': cookie, 'Cache-Control': 'no-store' });
-    return res.end();
+    const html = await readFile(reportPath);
+    res.writeHead(200, { ...secureHeaders('text/html; charset=utf-8'), 'Set-Cookie': cookie });
+    return res.end(html);
   }
 
   if (req.method === 'GET' && url.pathname === '/') {
