@@ -274,7 +274,21 @@ const officialDomains = [
   'wooribank.com', 'bis.org', 'fsb.org', 'imf.org',
   'federalreserve.gov', 'ecb.europa.eu'
 ];
+const wooriSubsidiaryKeywords = [
+  '우리금융', '우리은행', '우리카드', '우리금융캐피탈', '우리종합금융',
+  '우리자산운용', '우리에프아이에스', '우리금융저축은행', '우리글로벌자산운용',
+  '동양생명', 'ABL생명', '우리금융지주'
+];
 
+function mentionsWooriSubsidiary(item) {
+  const haystack = `${item.title || ''} ${item.entity || ''} ${item.summary || ''} ${item.why_woori_cro || ''}`;
+  return wooriSubsidiaryKeywords.some((keyword) => haystack.includes(keyword));
+}
+
+function extractDateFromPublished(publishedText) {
+  const match = String(publishedText || '').match(/(\d{4})-(\d{2})-(\d{2})/);
+  return match ? match[0] : '';
+}
 function hostMatchesDomain(hostname, domain) {
   return hostname === domain || hostname.endsWith(`.${domain}`);
 }
@@ -431,10 +445,11 @@ const synthesisPrompt = `
 
 최종 선정 규칙:
 - 정확히 10건을 선정한다: 크리티컬 3건, 데일리 금융·리스크 3건, 우리금융그룹·계열사 3건, CRO 관련성이 가장 높은 추가 이슈 1건.
+- 우리금융그룹·계열사 3건(subsidiary_news)에는 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 동양생명, ABL생명 등 우리금융그룹 계열사 자체에 관한 기사만 선택한다. KB금융, 신한금융, 하나금융, NH농협금융, 한국금융지주 등 다른 금융지주·경쟁사 기사는 daily_news에는 배치할 수 있어도 subsidiary_news에는 절대 포함하지 마라.
 - 최종 10건 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 6건 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 최대 4건만 선정한다.
 - 공식자료는 사실과 수치 검증에 적극 활용하되, 같은 사건의 언론기사가 있으면 독자가 맥락과 파급효과를 이해할 수 있는 언론기사를 대표 원문으로 우선 선정한다.
 - Gumloop 예시처럼 연합뉴스, 주요 경제지·금융 전문매체 및 Reuters·Bloomberg·FT·CNBC 등 신뢰도 높은 일반기사가 브리핑의 중심이 되어야 한다.
-- 최근 24시간 기사는 window를 primary로 표시한다. 10건 구성을 위해 사용한 최근 7일 이내 유관·배경 자료는 window를 related로 표시하고 게시 날짜를 명확히 유지한다.
+- 최종 10건은 모두 실행일(${date} KST) 당일에 게시된 기사만 선택한다. 어제 이전에 게시된 기사이거나 정확한 게시일을 확인할 수 없는 기사는 최종 10건에서 반드시 제외한다. - 오늘 기사의 배경 이해를 돕기 위한 과거 사실은 summary나 why_woori_cro 문장 속에서 짧게 언급할 수 있지만, 그 과거 기사 자체를 별도 항목으로 선택하지 않는다.
 - 검증된 조사 근거가 10건보다 적으면 임의로 채우지 않는다. 이 경우에는 완성된 10건을 만들 수 없으므로 오류가 나도록 빈 URL이나 가짜 항목을 만들지 않는다.
 - 동일 사건과 동일 URL을 제거하고 대표 원문 하나만 남긴다.
 - critical, daily_news, subsidiary_news, additional_news 네 카테고리를 통틀어 같은 URL이나 같은 게시물 번호(seq, id 등)를 가진 기사를 두 번 이상 선택하지 마라. 카테고리를 넘나드는 중복도 동일 사건 중복으로 간주하고 반드시 제거하라.
@@ -548,6 +563,17 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
       const verifiedKey = canonicalUrlKey(item.url);
       if (candidateUrls.has(verifiedKey)) throw new Error(`Duplicate article URL: ${item.url}`);
       candidateUrls.add(verifiedKey);
+    }
+    for (const item of candidateNews) {
+      const articleDate = extractDateFromPublished(item.published);
+      if (articleDate !== date) {
+        throw new Error(`Article was not dated today (${date}): ${item.title} (published: ${item.published || '미기재'})`);
+      }
+    }
+    for (const item of candidate.subsidiary_news || []) {
+      if (!mentionsWooriSubsidiary(item)) {
+        throw new Error(`Subsidiary news item did not reference a Woori Financial Group subsidiary: ${item.title}`);
+      }
     }
     candidateNews.forEach((item) => { item.source_type = isOfficialUrl(item.url) ? 'official' : 'media'; });
     const mediaCount = candidateNews.filter((item) => item.source_type === 'media').length;
