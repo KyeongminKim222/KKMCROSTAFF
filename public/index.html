@@ -1622,6 +1622,7 @@ function renderNewsCard(item, idx, opts) {
   if (item.critical) html += '<span class="badge badge-crit">WATCH</span>';
   if (item.source_type === 'media') html += '<span class="badge badge-blue">언론기사</span>';
   if (item.source_type === 'official') html += '<span class="badge badge-sec">공식자료</span>';
+  if (item.source_name) html += '<span class="badge badge-muted">' + esc(item.source_name) + '</span>';
   if (item.entity) html += '<span class="badge badge-blue">' + esc(item.entity) + '</span>';
   if (item.published) html += '<span class="badge badge-muted">' + esc(item.published) + '</span>';
   if (item.window === 'related') html += '<span class="badge badge-sec">유관(날짜외)</span>';
@@ -2102,8 +2103,9 @@ function slimBriefing(data) {
       title: it.title || '',
       url: it.url || '',
       published: it.published || '',
-      summary: String(it.summary || '').slice(0, 220),
-      why_woori_cro: String(it.why_woori_cro || it.cro_angle || '').slice(0, 220),
+      source_name: it.source_name || '',
+      summary: String(it.summary || '').slice(0, 700),
+      why_woori_cro: String(it.why_woori_cro || it.cro_angle || '').slice(0, 450),
       entity: it.entity || '',
       channel: it.channel || '',
       critical: !!it.critical
