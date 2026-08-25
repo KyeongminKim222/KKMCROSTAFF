@@ -453,6 +453,7 @@ const synthesisPrompt = `
 - 검증된 조사 근거가 10건보다 적으면 임의로 채우지 않는다. 이 경우에는 완성된 10건을 만들 수 없으므로 오류가 나도록 빈 URL이나 가짜 항목을 만들지 않는다.
 - 동일 사건과 동일 URL을 제거하고 대표 원문 하나만 남긴다.
 - critical, daily_news, subsidiary_news, additional_news 네 카테고리를 통틀어 같은 URL이나 같은 게시물 번호(seq, id 등)를 가진 기사를 두 번 이상 선택하지 마라. 카테고리를 넘나드는 중복도 동일 사건 중복으로 간주하고 반드시 제거하라.
+- 만약 특정 사건이 여러 카테고리에 모두 적합해 보이면, 그 사건은 가장 관련성이 높은 카테고리 하나에만 배치하고 다른 카테고리에는 조사 근거 안에서 완전히 다른 사건을 새로 찾아 채워라. url 필드를 빈 문자열이나 추정값으로 채우지 말고, 반드시 조사 근거에 있는 실제 URL만 사용하라.
 - URL은 각 조사팀의 source_urls에 있는 값을 글자 하나도 바꾸지 않고 그대로 복사한다.
 - 검색결과, 언론사·기관의 뉴스 섹션 첫 화면, 게시판 목록 주소는 기사로 선정하지 않는다. URL 경로 또는 쿼리에 개별 기사·발표 식별자가 있는 직접 링크만 사용한다.
 - 전일 제목은 중대한 신규 사실이 있을 때만 다시 포함한다: ${JSON.stringify(previousTitles)}
@@ -520,7 +521,7 @@ function narrativeQualityError(candidate, candidateNews) {
   }
   return '';
 }
-const MAX_SYNTHESIS_ATTEMPTS = 5;
+const MAX_SYNTHESIS_ATTEMPTS = 7;
 for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
   const synthesisBody = await requestOpenAi('CRO quality-gate synthesis', {
     model,
@@ -545,7 +546,12 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     if (candidateNews.length !== 10) throw new Error(`Final briefing contained ${candidateNews.length} articles; exactly 10 are required.`);
     const candidateUrls = new Set();
     for (const item of candidateNews) {
-      const url = new URL(item.url);
+      let url;
+      try {
+        url = new URL(item.url);
+      } catch {
+        throw new Error(`Article URL was missing or malformed for "${item.title || '제목 없음'}": ${JSON.stringify(item.url)}`);
+      }
       if (!['http:', 'https:'].includes(url.protocol)) throw new Error(`Invalid article URL: ${item.url}`);
       if (isLikelyListingUrl(item.url)) throw new Error(`Final briefing selected a listing/search page instead of an article: ${item.url}`);
       const canonicalKey = canonicalUrlKey(item.url);
@@ -586,7 +592,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     synthesisError = error;
     synthesisFeedback = error.message;
     if (attempt < MAX_SYNTHESIS_ATTEMPTS) {
-      console.warn(`${error.message} Retrying synthesis after TPM cooldown (${attempt}/MAX_SYNTHESIS_ATTEMPTS).`);
+console.warn(`${error.message} Retrying synthesis after TPM cooldown (${attempt}/${MAX_SYNTHESIS_ATTEMPTS}).`);
       await coolDown('CRO quality-gate synthesis retry');
     }
   }
