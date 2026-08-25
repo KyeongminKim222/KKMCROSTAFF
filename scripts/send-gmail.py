@@ -6,12 +6,23 @@ import time
 from email.message import EmailMessage
 from html import escape
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 
 gmail_user = os.environ["GMAIL_USER"].strip()
 gmail_password = os.environ["GMAIL_APP_PASSWORD"].replace(" ", "").strip()
 recipients = [item.strip() for item in os.environ["EMAIL_TO"].replace(";", ",").split(",") if item.strip()]
 report_url = os.environ["REPORT_URL"].strip()
+
+parsed_report_url = urlparse(report_url)
+report_path_parts = [unquote(part) for part in parsed_report_url.path.split("/") if part]
+if parsed_report_url.scheme != "https" or len(report_path_parts) != 2 or report_path_parts[0] != "report":
+    raise RuntimeError(
+        "REPORT_URL must be the complete HTTPS link: "
+        "https://kkmcrostaff.onrender.com/report/YOUR_REPORT_ACCESS_TOKEN"
+    )
+if len(report_path_parts[1]) < 32:
+    raise RuntimeError("The token inside REPORT_URL must contain at least 32 characters.")
 
 if not recipients:
     raise RuntimeError("EMAIL_TO has no recipients")
