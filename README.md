@@ -49,6 +49,8 @@ GitHub Actions starts at 21:30 UTC, which is 06:30 KST. It runs three paced medi
 
 The production quality gate requires exactly 10 unique URLs: 3 critical issues, 3 daily financial-risk items, 3 Woori/subsidiary items, and 1 additional high-relevance issue. At least 6 must be reporting from reliable media, while official releases and filings are capped at 4 and serve primarily as verification. The primary window is the latest 24 hours. When needed to complete the 10-item baseline without fabricating news, directly relevant background sources from the previous seven days may be included and are visibly marked as related.
 
+The narrative quality gate follows the original Gumloop briefing style: formal Korean `합니다체`, 3-5 fact-rich sentences per article, 2-3 CRO implication sentences, 2-3 concrete watchpoints, and a cross-article insight covering transmission paths and near-term management questions.
+
 ### Gmail preparation
 
 1. Turn on Google 2-Step Verification.
