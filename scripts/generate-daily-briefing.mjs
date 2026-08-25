@@ -437,6 +437,7 @@ const synthesisPrompt = `
 - 최근 24시간 기사는 window를 primary로 표시한다. 10건 구성을 위해 사용한 최근 7일 이내 유관·배경 자료는 window를 related로 표시하고 게시 날짜를 명확히 유지한다.
 - 검증된 조사 근거가 10건보다 적으면 임의로 채우지 않는다. 이 경우에는 완성된 10건을 만들 수 없으므로 오류가 나도록 빈 URL이나 가짜 항목을 만들지 않는다.
 - 동일 사건과 동일 URL을 제거하고 대표 원문 하나만 남긴다.
+- critical, daily_news, subsidiary_news, additional_news 네 카테고리를 통틀어 같은 URL이나 같은 게시물 번호(seq, id 등)를 가진 기사를 두 번 이상 선택하지 마라. 카테고리를 넘나드는 중복도 동일 사건 중복으로 간주하고 반드시 제거하라.
 - URL은 각 조사팀의 source_urls에 있는 값을 글자 하나도 바꾸지 않고 그대로 복사한다.
 - 검색결과, 언론사·기관의 뉴스 섹션 첫 화면, 게시판 목록 주소는 기사로 선정하지 않는다. URL 경로 또는 쿼리에 개별 기사·발표 식별자가 있는 직접 링크만 사용한다.
 - 전일 제목은 중대한 신규 사실이 있을 때만 다시 포함한다: ${JSON.stringify(previousTitles)}
@@ -504,8 +505,8 @@ function narrativeQualityError(candidate, candidateNews) {
   }
   return '';
 }
-
-for (let attempt = 1; attempt <= 3; attempt += 1) {
+const MAX_SYNTHESIS_ATTEMPTS = 5;
+for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
   const synthesisBody = await requestOpenAi('CRO quality-gate synthesis', {
     model,
     input: `${synthesisPrompt}${synthesisFeedback ? `\n\n이전 시도 품질 오류:\n${synthesisFeedback}\n이 오류를 모두 고쳐 완전히 새로 선정하라.` : ''}`,
@@ -558,8 +559,8 @@ for (let attempt = 1; attempt <= 3; attempt += 1) {
   } catch (error) {
     synthesisError = error;
     synthesisFeedback = error.message;
-    if (attempt < 3) {
-      console.warn(`${error.message} Retrying synthesis after TPM cooldown (${attempt}/3).`);
+    if (attempt < MAX_SYNTHESIS_ATTEMPTS) {
+      console.warn(`${error.message} Retrying synthesis after TPM cooldown (${attempt}/MAX_SYNTHESIS_ATTEMPTS).`);
       await coolDown('CRO quality-gate synthesis retry');
     }
   }
