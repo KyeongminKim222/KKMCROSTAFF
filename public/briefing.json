@@ -1,264 +1,264 @@
 {
-  "executive_judgment": "오늘 CRO 관점 핵심은 기업신용 악화, 가계대출 총량 재조정, 그리고 우리금융의 비은행 확장·편입 이슈가 동시에 겹친다는 점입니다. 직접 실적은 양호하더라도, 규제·건전성·평판 리스크가 영업 확대 속도를 제약할 가능성을 계속 점검해야 합니다.",
+  "executive_judgment": "한국 금융시장은 가계·기업 신용질화와 대출총량 재조정이 동시에 진행되고 있어, 단기적으로는 건전성·준법·평판 리스크 점검이 우선입니다. 우리금융은 실적 개선보다 자회사별 여신/사고 통제와 부동산·중소기업 익스포저 관리가 더 중요한 구간입니다.",
   "executive_judgment_bullets": [
-    "기업대출 연체율 상승은 충당금·건전성 관리 압력을 키웁니다.",
-    "가계대출 총량 완화 신호는 영업 경쟁과 준법 리스크를 동시에 자극합니다.",
-    "우리금융은 실적 호조와 비은행 확대가 자본·운영 리스크로 전이되는지 확인이 필요합니다."
+    "가계부채 확대와 기업 연체 증가가 함께 보여 신용리스크가 상향됐습니다.",
+    "금융사고 공시·내부통제 이슈는 운영/준법/평판 리스크로 즉시 전이될 수 있습니다.",
+    "우리금융은 비은행 실적보다 계열사별 대출총량, 사고 재발방지, 충당금 점검이 우선입니다."
   ],
   "critical": [
     {
       "title": "이자 못갚아 기업 쓰러지는데…이자장사로 배 불린 은행",
       "url": "https://www.mk.co.kr/news/economy/12133968",
       "published": "2026-08-23",
-      "summary": "기업대출 연체율이 상승했고, 은행권 이자이익도 증가했다는 보도입니다. 건전성 악화와 수익구조 쏠림이 함께 부각됩니다.",
-      "why_woori_cro": "기업 신용위험과 충당금 부담을 동시에 자극합니다. 우리금융의 기업대출 포트폴리오와 업종 편중 점검이 필요합니다.",
+      "summary": "금감원 상반기 은행 영업실적을 인용해 국내은행 이자이익이 32조2000억원이라고 보도했습니다. 동시에 기업 대출 연체와 법인 파산 증가 흐름을 함께 짚었습니다.",
+      "why_woori_cro": "기업여신 건전성 악화와 이자이익 둔화 가능성을 함께 봐야 합니다. 충당금과 NIM 방어의 균형 점검이 필요합니다.",
       "entity": "은행권",
-      "channel": "economy",
+      "channel": "금융",
       "source_type": "media",
-      "risk_type": "신용/자본/평판",
+      "risk_type": "신용, 자본, 전략, 평판",
       "urgency": "높음",
-      "confidence": "중간",
+      "confidence": "높음",
       "critical": true,
-      "window": "related",
+      "window": "primary",
       "watchpoints": [
-        "우리금융 기업대출 연체율 추세",
-        "업종별 익스포저와 충당금 적립 방향"
+        "우리은행 기업대출 연체율",
+        "업종별 충당금 추가 적립 필요성"
       ]
     },
     {
-      "title": "대출 빗장 푸는 농협은행…두달여만에 비대면 변동형 주담대 재개",
-      "url": "https://www.news1.kr/amp/finance/general-finance/6263139",
+      "title": "4대 은행 금융사고 10년간 5500억…절반 이상은 '사기'",
+      "url": "https://www.news1.kr/amp/finance/general-finance/6264180",
+      "published": "2026-08-20 18:03",
+      "summary": "국회 자료와 공시를 근거로 지난 10년간 금융사고 규모가 5500억원이며, 절반 이상이 사기라고 보도했습니다. 8월 12일 외부인 사기 금융사고 공시도 함께 언급됐습니다.",
+      "why_woori_cro": "내부통제 미흡과 외부인 사기 차단 실패가 반복되는지 점검해야 합니다. 사고 공시 이후 검사·제재와 평판 훼손 가능성도 큽니다.",
+      "entity": "은행권",
+      "channel": "금융",
+      "source_type": "media",
+      "risk_type": "운영, 사이버, 법무/준법, 평판",
+      "urgency": "높음",
+      "confidence": "높음",
+      "critical": true,
+      "window": "primary",
+      "watchpoints": [
+        "외부인 사기 통제 절차",
+        "재발방지 이행 점검"
+      ]
+    },
+    {
+      "title": "가계빚 사상 첫 2000조 돌파…'영끌·빚투'에 2분기 26조 급증",
+      "url": "https://www.news1.kr/amp/economy/trend/6262911",
       "published": "2026-08-19",
-      "summary": "NH농협은행이 변동형 주택담보대출 취급을 재개하며 일부 가계대출 규제를 완화했습니다. 은행권의 총량 관리 기조 변화 가능성이 제기됩니다.",
-      "why_woori_cro": "주담대 경쟁 재개는 금리경쟁, DSR 관리, 소비자보호 리스크로 이어질 수 있습니다. 우리은행의 비대면·변동형 정책 재점검이 필요합니다.",
-      "entity": "NH농협은행",
-      "channel": "general-finance",
+      "summary": "한국은행 2분기 가계신용 잠정치를 인용해 잔액이 2019조8000억원, 전분기 대비 25조9000억원 증가했다고 보도했습니다. 비은행권 가계대출 증가세 둔화도 함께 언급됐습니다.",
+      "why_woori_cro": "가계대출 총량과 취약차주 부담이 동시에 커져 DSR·연체·재조정 리스크를 봐야 합니다. 계열사별 풍선효과도 함께 점검 대상입니다.",
+      "entity": "가계신용/은행권",
+      "channel": "거시",
       "source_type": "media",
-      "risk_type": "시장/신용/준법",
+      "risk_type": "신용, 자본, 시장, 소비자보호",
       "urgency": "높음",
-      "confidence": "중간",
+      "confidence": "높음",
       "critical": true,
-      "window": "related",
+      "window": "primary",
       "watchpoints": [
-        "타 은행 확산 여부",
-        "우리은행 주담대 운영정책 변화"
-      ]
-    },
-    {
-      "title": "5대 은행 가계대출 목표 1조 초과…은행권 총량 관리 '비상'",
-      "url": "https://www.news1.kr/amp/finance/general-finance/6253007",
-      "published": "2026-08-09",
-      "summary": "5대 은행 가계대출 잔액이 650조원을 넘었고, 일부 은행은 변동형 주담대 취급 중단 등 총량 관리에 들어갔다는 보도입니다. 수요와 규제 관리가 동시에 압박받는 국면입니다.",
-      "why_woori_cro": "가계대출 증가는 자본·유동성·민원 리스크를 함께 키웁니다. 우리금융의 성장 목표와 규제 한도 충돌 여부를 확인해야 합니다.",
-      "entity": "5대 은행",
-      "channel": "general-finance",
-      "source_type": "media",
-      "risk_type": "자본/유동성/신용",
-      "urgency": "높음",
-      "confidence": "중간",
-      "critical": true,
-      "window": "related",
-      "watchpoints": [
-        "우리은행 가계대출 증가속도",
-        "하반기 총량 목표 재조정 여부"
+        "주담대·신용대출 연체 조짐",
+        "비은행권 이동 수요"
       ]
     }
   ],
   "daily_news": [
     {
-      "title": "우리금융, 상반기 순익 1.6조 ‘깜짝실적’…비은행 약진에 영업수익 최대",
-      "url": "https://www.news1.kr/amp/finance/general-finance/6238463",
-      "published": "2026-07-24 18:05",
-      "summary": "우리금융 상반기 순이익이 1조6천억 원대였고 비은행 부문이 실적을 견인했다는 보도입니다. 배당 기준일과 지급 예정일도 함께 언급됩니다.",
-      "why_woori_cro": "실적 호조는 자본여력 측면에서 긍정적이지만, 비은행 확대에 따른 리스크가 함께 커질 수 있습니다. 수익의 질과 자본 소모를 같이 봐야 합니다.",
-      "entity": "우리금융그룹",
-      "channel": "general-finance",
+      "title": "[단독]은행 이어 2금융권도 대출 총량 늘린다…21일 금감원 소집",
+      "url": "https://www.news1.kr/amp/finance/general-finance/6264734",
+      "published": "2026-08-20 17:49",
+      "summary": "금융당국이 가계대출 관리목표 확대에 맞춰 2금융권 추가 여력 배분에 착수했다고 보도했습니다. 금감원이 상호금융·저축은행·여전사 담당자를 소집한다고 전했습니다.",
+      "why_woori_cro": "우리금융 계열 비은행과 판매채널에 직접 파급될 수 있습니다. 총량 재배분이 자회사 영업전략과 건전성에 미치는 영향을 봐야 합니다.",
+      "entity": "금융당국/2금융권",
+      "channel": "정책",
       "source_type": "media",
-      "risk_type": "자본/신용/전략",
+      "risk_type": "신용, 전략, 규제, 평판",
+      "urgency": "높음",
+      "confidence": "높음",
+      "critical": false,
+      "window": "primary",
+      "watchpoints": [
+        "계열사별 대출여력 배분",
+        "총량 확대에 따른 연체율 변화"
+      ]
+    },
+    {
+      "title": "대출공포 이제 그만…잔금대출 '선착순 대란'·주담대 '오픈런' 숨통",
+      "url": "https://www.news1.kr/amp/finance/general-finance/6257877",
+      "published": "2026-08-13",
+      "summary": "가계대출 증가율 목표 상향과 함께 LTV·DSR·주담대 한도는 유지된다고 보도했습니다. 정책 완화 기대가 주담대 수요 재확대로 이어질 수 있다는 흐름도 담겼습니다.",
+      "why_woori_cro": "주담대 수요와 규제 완화 기대가 동시에 움직여 포트폴리오 믹스가 흔들릴 수 있습니다. 수도권 중심 익스포저와 PF 연계성을 같이 봐야 합니다.",
+      "entity": "은행권",
+      "channel": "부동산/대출",
+      "source_type": "media",
+      "risk_type": "신용, 시장, 전략",
       "urgency": "중간",
       "confidence": "높음",
       "critical": false,
       "window": "related",
       "watchpoints": [
-        "비은행 이익 기여 구조",
-        "CET1 및 RWA 변화"
+        "주담대 수요 재확대",
+        "PF·주담대 동시 익스포저"
       ]
     },
     {
-      "title": "KB금융 상반기 당기순이익 3조 8846억원…비은행 기여도 44% 달해",
-      "url": "https://v2.www.edaily.co.kr/News/Read?mediaCodeNo=257&newsId=04867526645517472",
-      "published": "2026-07-23",
-      "summary": "환율·금리 변동 속에서도 이자이익과 수수료이익이 실적을 지지했다는 기사입니다. 대형 금융지주의 수익성과 건전성 평가 기준을 보여줍니다.",
-      "why_woori_cro": "동종 지주와 비교해 충당금, 비은행 기여, 변동성 대응력을 점검할 수 있습니다. 우리금융의 벤치마크 자료로 유용합니다.",
-      "entity": "KB금융",
-      "channel": "finance",
+      "title": "“5조 털어냈는데도 10년 만에 최고”…중기 연체율 1% 육박 ‘빚의 경고등’",
+      "url": "https://www.mk.co.kr/news/economy/12132923",
+      "published": "2026-08-21 09:15",
+      "summary": "금감원 수치를 바탕으로 국내은행 원화대출 연체율이 0.56%라고 전했습니다. 기사 제목과 스니펫은 중소기업 연체율 상승을 경고하고 있습니다.",
+      "why_woori_cro": "중소기업 익스포저가 큰 은행은 충당금과 RWA 부담이 커질 수 있습니다. 업종별 취약차주 선별이 필요합니다.",
+      "entity": "은행권",
+      "channel": "금융",
       "source_type": "media",
-      "risk_type": "시장/신용/전략",
+      "risk_type": "신용, 자본, 전략",
+      "urgency": "높음",
+      "confidence": "높음",
+      "critical": false,
+      "window": "primary",
+      "watchpoints": [
+        "중소기업 연체율 추이",
+        "건설·도소매·부동산업 익스포저"
+      ]
+    }
+  ],
+  "subsidiary_news": [
+    {
+      "title": "우리금융, 상반기 순익 1.6조 ‘깜짝실적’…비은행 약진에 영업수익 최대",
+      "url": "https://www.news1.kr/amp/finance/general-finance/6238463",
+      "published": "2026-07-24 18:05",
+      "summary": "우리금융 상반기 순익이 1조6천억 원대라고 보도됐습니다. 비은행 부문의 약진이 실적 개선 요인으로 제시됐습니다.",
+      "why_woori_cro": "실적 개선이 비은행 편입 효과인지 구조적 개선인지 확인이 필요합니다. CET1과 주주환원 여력에도 연결됩니다.",
+      "entity": "우리금융그룹",
+      "channel": "실적",
+      "source_type": "media",
+      "risk_type": "전략, 시장, 자본, 평판",
       "urgency": "중간",
-      "confidence": "중간",
+      "confidence": "높음",
       "critical": false,
       "window": "related",
       "watchpoints": [
-        "동종사 CCR 비교",
-        "비은행 비중 확대 효과"
+        "비은행 이익의 지속성",
+        "자본비율과 주주환원 여력"
       ]
     },
     {
       "title": "우리금융硏 “한은, 8월 기준금리 ‘매파적 동결’ 전망”",
       "url": "https://www.yna.co.kr/amp/view/AKR20260806099800002",
       "published": "2026-08-06 14:20",
-      "summary": "우리금융경영연구소가 8월 금통위의 기준금리 동결을 전망했다는 보도입니다. 금리 경로와 은행권 NIM, 연체율의 연결성이 강조됩니다.",
-      "why_woori_cro": "금리 방향은 조달비용과 가계·기업 신용위험에 직접 연결됩니다. ALM과 대손비용 민감도 점검이 필요합니다.",
+      "summary": "우리금융경영연구소가 8월 금통위 동결을 전망했다고 보도했습니다. 환율 안정세와 금융시장 변동성 등을 근거로 들었습니다.",
+      "why_woori_cro": "금리 경로는 NIM, 조달비용, 신용위험에 동시에 영향을 줍니다. 내부 시나리오와 실제 시장 흐름의 괴리를 확인해야 합니다.",
       "entity": "우리금융경영연구소",
-      "channel": "amp/view",
+      "channel": "금리",
       "source_type": "media",
-      "risk_type": "시장/유동성/신용",
+      "risk_type": "시장, 유동성, 신용",
       "urgency": "중간",
       "confidence": "중간",
       "critical": false,
       "window": "related",
       "watchpoints": [
-        "8월 금통위 결과",
-        "금리 동결 시 연체율 민감도"
-      ]
-    }
-  ],
-  "subsidiary_news": [
-    {
-      "title": "우리금융그룹, 2026년 상반기 경영실적 발표",
-      "url": "https://www.woorifg.com/kor/pr/news/view.do?f=&q=&seq=892",
-      "published": "2026-08-24",
-      "summary": "우리금융이 상반기 실적에서 2분기 순이익 1조원 이상 회복과 비은행 기여도 확대를 언급했습니다. 종합금융그룹 전환 성과를 강조했습니다.",
-      "why_woori_cro": "실적 개선은 긍정적이지만 비은행 확대가 자본·운영 리스크로 전이되는지 확인해야 합니다. 수익의 질과 자본적정성을 함께 봐야 합니다.",
-      "entity": "우리금융그룹",
-      "channel": "pr/news",
-      "source_type": "official",
-      "risk_type": "자본/전략/평판",
-      "urgency": "높음",
-      "confidence": "높음",
-      "critical": false,
-      "window": "primary",
-      "watchpoints": [
-        "비은행 기여 확대의 지속성",
-        "CET1 및 RWA 영향"
+        "금리 시나리오와 실적 가정 일치 여부",
+        "연체율 반응 속도"
       ]
     },
     {
-      "title": "동양생명 주총서 주식교환안 가결…우리금융 자회사 편입 속도",
-      "url": "https://stock.mk.co.kr/news/view/1126473",
-      "published": "2026-07-11",
-      "summary": "동양생명 주주총회에서 주식교환안이 가결됐고, 우리금융지주 편입과 신주 상장이 예정됐다는 보도입니다. 자회사 편입 절차가 구체화됐습니다.",
-      "why_woori_cro": "보험사 편입은 포트폴리오 다변화에 유리하지만 자본부담, 계리, IT통합, 준법 리스크가 함께 커집니다. 편입 이후 관리체계를 확인해야 합니다.",
-      "entity": "동양생명/우리금융",
-      "channel": "news/view",
+      "title": "3000세대 넘는데 한도는 5000억…디에이치방배 ‘선착순 대출’ 혼란",
+      "url": "https://www.news1.kr/amp/finance/general-finance/6254602",
+      "published": "2026-08-11 05:40",
+      "summary": "주요 은행들이 잔금대출 한도를 배정했고, 우리은행과 NH농협은행은 검토 중이라고 보도했습니다. 집단대출 한도 관리와 현장 혼선이 함께 드러났습니다.",
+      "why_woori_cro": "주담대·잔금대출 운영과 승인기준이 바뀌는지 확인이 필요합니다. 특정 사업장 집중은 평판과 여신집행 리스크를 키울 수 있습니다.",
+      "entity": "우리은행",
+      "channel": "대출",
       "source_type": "media",
-      "risk_type": "자본/운영/준법",
+      "risk_type": "신용, 유동성, 시장, 평판",
       "urgency": "중간",
       "confidence": "높음",
       "critical": false,
       "window": "related",
       "watchpoints": [
-        "편입 완료 시점",
-        "K-ICS 및 통합 리스크"
-      ]
-    },
-    {
-      "title": "우리금융, 수해 피해지역에 5억원 기부 및 특별금융 지원",
-      "url": "https://stock.mk.co.kr/news/view/1146108",
-      "published": "2026-08-21",
-      "summary": "우리금융이 수해 피해 복구를 위해 5억원 기부와 금융지원을 실시한다는 보도입니다. 사회공헌과 피해 지원이 함께 언급됩니다.",
-      "why_woori_cro": "평판 측면에서는 긍정적이지만 특별금융 집행 과정의 심사·부실 가능성도 함께 봐야 합니다. 민원과 운영리스크 점검이 필요합니다.",
-      "entity": "우리금융그룹",
-      "channel": "news/view",
-      "source_type": "media",
-      "risk_type": "평판/운영/신용",
-      "urgency": "낮음",
-      "confidence": "중간",
-      "critical": false,
-      "window": "related",
-      "watchpoints": [
-        "특별금융 심사기준",
-        "피해고객 지원 범위"
+        "잔금대출 한도 배정 원칙",
+        "특정 단지 집중도"
       ]
     }
   ],
   "additional_news": [
     {
-      "title": "금융위원회, 자본시장법 개정안 국회 본회의 통과",
-      "url": "https://www.fsc.go.kr/no010101/87570?curPage=&srchBeginDt=&srchCtgry=&srchEndDt=.&srchKey=&srchText=",
-      "published": "2026-08-20",
-      "summary": "상장법인의 합병가액 산정기준 변경 등을 위한 자본시장법 개정안이 국회 본회의를 통과했습니다. 합병·지분교환 관련 제도 변화가 예고됩니다.",
-      "why_woori_cro": "향후 M&A, 지분교환, 자회사 편입에서 법무·준법·평판 리스크가 커질 수 있습니다. 우리금융의 거래 구조 검토가 필요합니다.",
-      "entity": "금융위원회",
-      "channel": "no010101",
-      "source_type": "official",
-      "risk_type": "법무/준법/전략",
+      "title": "증권 끌고 은행 밀고…5대금융 13조 최대순익",
+      "url": "https://www.mk.co.kr/news/economy/12106929",
+      "published": "2026-07-25 전후",
+      "summary": "KB·신한·하나·우리·NH농협금융의 상반기 순이익 합계가 13조1183억원이라고 보도했습니다. 증권·은행 부문이 실적을 견인한 것으로 설명했습니다.",
+      "why_woori_cro": "경쟁사 대비 그룹 이익 체력을 비교하는 기준점이 됩니다. 비은행 기여도와 비용 구조를 함께 봐야 합니다.",
+      "entity": "5대 금융그룹",
+      "channel": "실적",
+      "source_type": "media",
+      "risk_type": "시장, 자본, 전략",
       "urgency": "중간",
-      "confidence": "높음",
+      "confidence": "중간",
       "critical": false,
-      "window": "primary",
+      "window": "related",
       "watchpoints": [
-        "시행 시점",
-        "향후 인수합병 구조 영향"
+        "경쟁사 대비 비은행 기여도",
+        "비용 증가 압박"
       ]
     }
   ],
   "forward_looking_points": [
     {
-      "title": "한국은행 8월 금통위 결과",
-      "horizon": "1주",
-      "likelihood": "중간",
-      "cro_angle": "금리 동결/인하 여부가 NIM, 조달비용, 연체율에 직접 영향",
-      "trigger": "8월 27일 금통위 의사결정"
-    },
-    {
-      "title": "가계대출 총량관리 재조정",
+      "title": "가계대출 총량 재배분의 후속 조정",
       "horizon": "1~2주",
       "likelihood": "높음",
-      "cro_angle": "은행권 경쟁 심화 시 주담대, DSR, 민원 리스크가 확대",
-      "trigger": "경쟁사 변동형·비대면 주담대 재개 확산"
+      "cro_angle": "은행권과 2금융권 사이에서 대출 여력이 재배분될 가능성이 있어 자회사별 성장 목표와 건전성 기준을 다시 봐야 합니다.",
+      "trigger": "금감원 소집 이후 업권별 배분 기준 발표"
     },
     {
-      "title": "비은행 편입 이후 통합 리스크 점검",
-      "horizon": "1~3개월",
+      "title": "기업·중소기업 연체율 추가 상승",
+      "horizon": "1~4주",
       "likelihood": "중간",
-      "cro_angle": "보험 편입에 따른 자본, IT, 준법, 운영 통합 리스크가 본격화",
-      "trigger": "동양생명 편입 완료 및 후속 공시"
+      "cro_angle": "연체 확대가 충당금과 RWA를 동시에 압박할 수 있습니다.",
+      "trigger": "부실채권 증가 또는 업종별 경기 둔화"
+    },
+    {
+      "title": "금융사고 공시 확대와 내부통제 점검 강화",
+      "horizon": "즉시~2주",
+      "likelihood": "높음",
+      "cro_angle": "외부인 사기·오류송금·여신사기 유형에 대한 재점검이 필요합니다.",
+      "trigger": "동종업권 사고 공시 및 감독당국 후속 검사"
     }
   ],
   "insights": {
-    "headline": "실적 호조보다 건전성·규제 대응 속도가 더 중요한 국면",
+    "headline": "가계·기업 신용 악화와 대출정책 조정이 동시에 진행되는 방어 국면",
     "bullets": [
-      "기업 연체율 상승과 가계대출 완화가 동시에 나타나 신용리스크가 양면으로 커졌습니다.",
-      "우리금융은 실적과 비은행 확대를 방어 논리로 쓰되, 자본소모와 통합리스크를 같이 관리해야 합니다.",
-      "경쟁사 주담대 재개는 영업 기회이자 준법·소비자보호 리스크입니다."
+      "시장 전체는 대출 총량 조절과 연체 확대가 동시에 나타나는 구간입니다.",
+      "우리금융은 실적보다 내부통제·여신포트폴리오·계열사별 풍선효과 관리가 우선입니다.",
+      "부동산·중소기업·사기성 금융사고가 서로 연결돼 운영/준법과 신용 리스크가 함께 커질 수 있습니다."
     ],
     "action_items": [
-      "기업대출 업종별 연체·충당금 스트레스 점검",
-      "가계대출 총량·변동형 주담대 한도 재점검",
-      "동양생명 편입 통합 리스크와 자본 영향 재확인"
+      "우리은행 및 비은행 계열의 대출총량, 연체율, 재분류 현황을 즉시 점검합니다.",
+      "외부인 사기 및 내부통제 취약부문에 대한 재발방지 이행상태를 확인합니다.",
+      "수도권 주담대·집단대출, 중소기업 익스포저, 보험/판매채널 준법통제를 함께 모니터링합니다."
     ],
-    "stance": "확정적 예측 없이, 오늘은 건전성·규제·통합 리스크 모니터링을 우선해야 합니다.",
+    "stance": "보수적 모니터링 강화",
     "as_of": "2026-08-25 KST"
   },
   "monitoring_points": [
-    "기업대출 연체율과 업종 편중",
-    "은행권 변동형 주담대 재개 확산",
-    "우리금융 CET1 및 비은행 기여도",
-    "동양생명 편입 후 통합 일정",
-    "금통위 결과와 시장금리 반응"
+    "우리은행 가계·기업대출 증가율과 연체율",
+    "계열사별 금융사고 재발방지 조치",
+    "2금융권 총량 배분이 우리금융 계열에 미치는 영향",
+    "중소기업·부동산업 익스포저 집중도",
+    "주담대·잔금대출 한도 운영 변화"
   ],
   "meta": {
     "product": "CRO Staff News & Critical Monitor",
     "perspective": "우리금융그룹 CRO",
     "mode": "daily",
     "briefing_date": "2026-08-25",
-    "generated_at": "2026-08-25T00:17:49.326Z",
+    "generated_at": "2026-08-25T00:40:04.524Z",
     "primary_window": "실행 시점 기준 최근 24시간 (KST), 부족분은 날짜가 표시된 최근 7일 유관·배경 자료",
     "research_method": "3 media research stages + separate official-source verification + independent CRO quality-gate synthesis",
     "source_mix": {
-      "media": 8,
-      "official": 2
+      "media": 10,
+      "official": 0
     }
   }
 }
