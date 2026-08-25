@@ -510,7 +510,7 @@ for (let attempt = 1; attempt <= 3; attempt += 1) {
     model,
     input: `${synthesisPrompt}${synthesisFeedback ? `\n\n이전 시도 품질 오류:\n${synthesisFeedback}\n이 오류를 모두 고쳐 완전히 새로 선정하라.` : ''}`,
     store: false,
-    reasoning: { effort: 'medium' },
+    reasoning: { effort: 'low' },
     text: {
       verbosity: 'medium',
       format: {
@@ -520,7 +520,7 @@ for (let attempt = 1; attempt <= 3; attempt += 1) {
         schema
       }
     },
-    max_output_tokens: 16000
+    max_output_tokens: 24000
   });
   try {
     const candidate = parseStructuredOutput(synthesisBody, 'CRO quality-gate synthesis');
