@@ -475,10 +475,10 @@ ${JSON.stringify(researchEvidence)}
 
 반드시 제공된 JSON 스키마에 맞춰 한국어로 답하라.
 `;
-
 let briefing;
 let synthesisError;
 let synthesisFeedback = '';
+const rejectedUrls = new Set();
 
 function usesNonFormalKorean(text) {
   return String(text || '')
@@ -520,11 +520,21 @@ function narrativeQualityError(candidate, candidateNews) {
   }
   return '';
 }
+
+function extractUrlsFromText(text) {
+  const matches = String(text || '').match(/https?:\/\/[^\s)]+/g) || [];
+  return matches.map((url) => url.replace(/[).,]+$/, ''));
+}
+
 const MAX_SYNTHESIS_ATTEMPTS = 7;
+
 for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
+  const bannedUrlsText = rejectedUrls.size > 0
+    ? `\n\n다음 URL은 이전 시도에서 이미 실패했으므로 이번 시도에서 절대 다시 선택하지 마라. 대신 조사 근거 안에 있는 완전히 다른 URL을 선택하라:\n${[...rejectedUrls].join('\n')}`
+    : '';
   const synthesisBody = await requestOpenAi('CRO quality-gate synthesis', {
     model,
-    input: `${synthesisPrompt}${synthesisFeedback ? `\n\n이전 시도 품질 오류:\n${synthesisFeedback}\n이 오류를 모두 고쳐 완전히 새로 선정하라.` : ''}`,
+    input: `${synthesisPrompt}${synthesisFeedback ? `\n\n이전 시도 품질 오류:\n${synthesisFeedback}\n이 오류를 모두 고쳐 완전히 새로 선정하라.` : ''}${bannedUrlsText}`,
     store: false,
     reasoning: { effort: 'low' },
     text: {
@@ -611,8 +621,9 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
   } catch (error) {
     synthesisError = error;
     synthesisFeedback = error.message;
+    extractUrlsFromText(error.message).forEach((url) => rejectedUrls.add(url));
     if (attempt < MAX_SYNTHESIS_ATTEMPTS) {
-console.warn(`${error.message} Retrying synthesis after TPM cooldown (${attempt}/${MAX_SYNTHESIS_ATTEMPTS}).`);
+      console.warn(`${error.message} Retrying synthesis after TPM cooldown (${attempt}/${MAX_SYNTHESIS_ATTEMPTS}).`);
       await coolDown('CRO quality-gate synthesis retry');
     }
   }
