@@ -38,7 +38,9 @@ function extractSourceUrls(response) {
     if (typeof value.url === 'string') {
       try {
         const url = new URL(value.url);
-        if (['http:', 'https:'].includes(url.protocol)) urls.add(value.url);
+        if (['http:', 'https:'].includes(url.protocol) && !isLikelyListingUrl(value.url)) {
+          urls.add(value.url);
+        }
       } catch {}
     }
     Object.values(value).forEach(visit);
