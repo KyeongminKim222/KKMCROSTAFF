@@ -244,6 +244,14 @@ try {
 } catch {}
 
 const date = kstDate();
+
+try {
+  const existing = JSON.parse(await readFile(outputPath, 'utf8'));
+  if (existing?.meta?.briefing_date === date && !existing?.meta?.fallback_notice) {
+    console.log(`Briefing for ${date} already exists. Skipping duplicate run.`);
+    process.exit(0);
+  }
+} catch {}
 const commonResearchRules = `
 실행일은 ${date} KST다. 실행 시점 기준 최근 24시간의 공개 정보를 primary 후보로 삼아라.
 각 후보는 서로 다른 단일 사건이어야 하며, 같은 사건의 반복 보도는 대표 원문 하나로 통합하라.
