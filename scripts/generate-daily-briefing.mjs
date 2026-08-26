@@ -310,7 +310,7 @@ function isLikelyListingUrl(rawUrl) {
     const hasArticleId = /\d{4,}/.test(path) || [...url.searchParams.keys()].some((key) =>
       /^(idx|id|no|seq|article|article_id|nttId|bbsId)$/i.test(key) && url.searchParams.get(key)
     );
-    const looksLikeSearch = [...url.searchParams.keys()].some((key) =>
+    const looksLikeSearch = !hasArticleId && [...url.searchParams.keys()].some((key) =>
       /^(query|keyword|search|searchword|srchtext|srchkey)$/i.test(key) && url.searchParams.get(key)
     );
     const knownBoardRoot = /\/(no\d{6}|po\d{6})$/i.test(path);
