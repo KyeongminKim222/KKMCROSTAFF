@@ -570,6 +570,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     const candidateNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news']
       .flatMap((key) => candidate[key] || []);
     if (candidateNews.length < 7) throw new Error(`Final briefing contained only ${candidateNews.length} articles; at least 7 are required.`);
+    const candidateUrls = new Set();
     for (const item of candidateNews) {
       let url;
       try {
