@@ -69,11 +69,15 @@ def render_news_item(item):
 
 
 def render_news_section(title_kr, items):
+    header = f'<h2 style="font-size:17px;color:#003b70;border-bottom:2px solid #e2e8f0;padding-bottom:6px;margin-top:28px">{escape(title_kr)}</h2>'
     if not items:
-        return ""
+        return f"""
+        {header}
+        <p style="font-size:13px;color:#94a3b8;font-style:italic;margin:8px 0 20px">오늘은 해당 카테고리에 보고할 새소식이 없습니다.</p>
+        """
     body = "".join(render_news_item(item) for item in items)
     return f"""
-    <h2 style="font-size:17px;color:#003b70;border-bottom:2px solid #e2e8f0;padding-bottom:6px;margin-top:28px">{escape(title_kr)}</h2>
+    {header}
     <ul style="padding-left:0;margin:10px 0">{body}</ul>
     """
 
