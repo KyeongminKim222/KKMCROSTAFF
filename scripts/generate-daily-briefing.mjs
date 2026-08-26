@@ -291,6 +291,25 @@ function extractDateFromPublished(publishedText) {
   const match = String(publishedText || '').match(/(\d{4})-(\d{2})-(\d{2})/);
   return match ? match[0] : '';
 }
+function extractDateFromPublished(publishedText) {
+  const match = String(publishedText || '').match(/(\d{4})-(\d{2})-(\d{2})/);
+  return match ? match[0] : '';
+}
+
+function parsePublishedKst(publishedText) {
+  const text = String(publishedText || '');
+  const dateMatch = text.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (!dateMatch) return { date: null, hasTime: false };
+  const datePart = dateMatch[0];
+  const timeMatch = text.match(/(\d{2}):(\d{2})/);
+  if (timeMatch) {
+    const withTime = new Date(`${datePart}T${timeMatch[0]}:00+09:00`);
+    if (!Number.isNaN(withTime.getTime())) return { date: withTime, hasTime: true };
+  }
+  const dateOnly = new Date(`${datePart}T00:00:00+09:00`);
+  if (!Number.isNaN(dateOnly.getTime())) return { date: dateOnly, hasTime: false };
+  return { date: null, hasTime: false };
+}
 function hostMatchesDomain(hostname, domain) {
   return hostname === domain || hostname.endsWith(`.${domain}`);
 }
@@ -583,22 +602,24 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     }
     const now = new Date();
     for (const item of candidateNews) {
-      const publishedAt = new Date(String(item.published || '').replace(/\s?KST$/i, '+09:00').replace(' ', 'T'));
-      const hasValidTimestamp = !Number.isNaN(publishedAt.getTime());
+      const parsedPublished = parsePublishedKst(item.published);
+      if (!parsedPublished.date) {
+        throw new Error(`Article had no verifiable date: ${item.title} (published: ${item.published || '미기재'})`);
+      }
       if (item.window === 'primary') {
-        if (!hasValidTimestamp) {
-          throw new Error(`Primary article had no verifiable timestamp: ${item.title} (published: ${item.published || '미기재'})`);
-        }
-        const hoursDiff = (now - publishedAt) / (1000 * 60 * 60);
-        if (hoursDiff < -3 || hoursDiff > 36) {
-          throw new Error(`Primary article was not within the recent 36 hour window: ${item.title} (published: ${item.published || '미기재'})`);
+        if (parsedPublished.hasTime) {
+          const hoursDiff = (now - parsedPublished.date) / (1000 * 60 * 60);
+          if (hoursDiff < -3 || hoursDiff > 36) {
+            throw new Error(`Primary article was not within the recent 36 hour window: ${item.title} (published: ${item.published || '미기재'})`);
+          }
+        } else {
+          const daysDiff = (now - parsedPublished.date) / (1000 * 60 * 60 * 24);
+          if (daysDiff < 0 || daysDiff > 1) {
+            throw new Error(`Primary article date was not within the recent 1-day window: ${item.title} (published: ${item.published || '미기재'})`);
+          }
         }
       } else {
-        const articleDate = extractDateFromPublished(item.published);
-        if (!articleDate) {
-          throw new Error(`Related article had no verifiable date: ${item.title}`);
-        }
-        const daysDiff = (new Date(date) - new Date(articleDate)) / (1000 * 60 * 60 * 24);
+        const daysDiff = (now - parsedPublished.date) / (1000 * 60 * 60 * 24);
         if (daysDiff < 0 || daysDiff > 7) {
           throw new Error(`Related article was outside the allowed date range: ${item.title} (published: ${item.published})`);
         }
