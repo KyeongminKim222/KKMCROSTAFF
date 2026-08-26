@@ -449,7 +449,7 @@ const synthesisPrompt = `
 - 최종 10건 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 6건 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 최대 4건만 선정한다.
 - 공식자료는 사실과 수치 검증에 적극 활용하되, 같은 사건의 언론기사가 있으면 독자가 맥락과 파급효과를 이해할 수 있는 언론기사를 대표 원문으로 우선 선정한다.
 - Gumloop 예시처럼 연합뉴스, 주요 경제지·금융 전문매체 및 Reuters·Bloomberg·FT·CNBC 등 신뢰도 높은 일반기사가 브리핑의 중심이 되어야 한다.
-- 최종 10건 중 최소 8건은 실행일(${date} KST) 당일에 게시된 기사여야 하며 window는 primary로 표시한다. - 우리금융 계열사 또는 공식 발표 중 오늘 게시된 기사를 도저히 찾을 수 없는 경우에 한해서만, 최근 7일 이내의 배경·참고 기사를 최대 2건까지 예외로 선택할 수 있으며 이때는 window를 반드시 related로 표시하고 게시 날짜를 정확히 적는다. - related로 표시하는 기사도 subsidiary_news라면 반드시 실제 우리금융 계열사 자체에 관한 기사여야 한다. - "오늘자 검증 가능한 기사 없음" 같은 placeholder 문구를 title이나 다른 필드에 넣지 마라. 그런 항목을 만들 수 없으면 조사 근거 안에서 실제로 존재하는 다른 기사로 대체하라.
+- 최종 10건 중 최소 8건은 실행 시점 기준 최근 36시간 이내에 게시된 기사여야 하며 window는 primary로 표시한다. published 필드에는 반드시 정확한 게시 시각(시:분 단위)을 KST 기준으로 적는다. - 우리금융 계열사 또는 공식 발표 중 오늘 게시된 기사를 도저히 찾을 수 없는 경우에 한해서만, 최근 7일 이내의 배경·참고 기사를 최대 2건까지 예외로 선택할 수 있으며 이때는 window를 반드시 related로 표시하고 게시 날짜를 정확히 적는다. - related로 표시하는 기사도 subsidiary_news라면 반드시 실제 우리금융 계열사 자체에 관한 기사여야 한다. - "오늘자 검증 가능한 기사 없음" 같은 placeholder 문구를 title이나 다른 필드에 넣지 마라. 그런 항목을 만들 수 없으면 조사 근거 안에서 실제로 존재하는 다른 기사로 대체하라.
 - 동일 사건과 동일 URL을 제거하고 대표 원문 하나만 남긴다.
 - critical, daily_news, subsidiary_news, additional_news 네 카테고리를 통틀어 같은 URL이나 같은 게시물 번호(seq, id 등)를 가진 기사를 두 번 이상 선택하지 마라. 카테고리를 넘나드는 중복도 동일 사건 중복으로 간주하고 반드시 제거하라.
 - 만약 특정 사건이 여러 카테고리에 모두 적합해 보이면, 그 사건은 가장 관련성이 높은 카테고리 하나에만 배치하고 다른 카테고리에는 조사 근거 안에서 완전히 다른 사건을 새로 찾아 채워라. url 필드를 빈 문자열이나 추정값으로 채우지 말고, 반드시 조사 근거에 있는 실제 URL만 사용하라.
@@ -569,13 +569,20 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
       if (candidateUrls.has(verifiedKey)) throw new Error(`Duplicate article URL: ${item.url}`);
       candidateUrls.add(verifiedKey);
     }
+    const now = new Date();
     for (const item of candidateNews) {
-      const articleDate = extractDateFromPublished(item.published);
+      const publishedAt = new Date(String(item.published || '').replace(/\s?KST$/i, '+09:00').replace(' ', 'T'));
+      const hasValidTimestamp = !Number.isNaN(publishedAt.getTime());
       if (item.window === 'primary') {
-        if (articleDate !== date) {
-          throw new Error(`Primary article was not dated today (${date}): ${item.title} (published: ${item.published || '미기재'})`);
+        if (!hasValidTimestamp) {
+          throw new Error(`Primary article had no verifiable timestamp: ${item.title} (published: ${item.published || '미기재'})`);
+        }
+        const hoursDiff = (now - publishedAt) / (1000 * 60 * 60);
+        if (hoursDiff < -3 || hoursDiff > 36) {
+          throw new Error(`Primary article was not within the recent 36 hour window: ${item.title} (published: ${item.published || '미기재'})`);
         }
       } else {
+        const articleDate = extractDateFromPublished(item.published);
         if (!articleDate) {
           throw new Error(`Related article had no verifiable date: ${item.title}`);
         }
