@@ -198,10 +198,10 @@ const schema = {
       maxItems: 4,
       items: { type: 'string' }
     },
-    critical: { type: 'array', minItems: 3, maxItems: 3, items: newsItem },
-    daily_news: { type: 'array', minItems: 3, maxItems: 3, items: newsItem },
-    subsidiary_news: { type: 'array', minItems: 3, maxItems: 3, items: newsItem },
-    additional_news: { type: 'array', minItems: 1, maxItems: 1, items: newsItem },
+    critical: { type: 'array', minItems: 0, maxItems: 3, items: newsItem },
+    daily_news: { type: 'array', minItems: 0, maxItems: 3, items: newsItem },
+    subsidiary_news: { type: 'array', minItems: 0, maxItems: 3, items: newsItem },
+    additional_news: { type: 'array', minItems: 0, maxItems: 1, items: newsItem },
     forward_looking_points: {
       type: 'array',
       maxItems: 4,
@@ -461,7 +461,7 @@ const synthesisPrompt = `
 5. 우리금융그룹과 계열사 직접 영향은 범주와 관계없이 상향
 
 최종 선정 규칙:
-- 정확히 10건을 선정한다: 크리티컬 3건, 데일리 금융·리스크 3건, 우리금융그룹·계열사 3건, CRO 관련성이 가장 높은 추가 이슈 1건.
+- 최소 7건, 최대 10건을 선정한다: 크리티컬 최대 3건, 데일리 금융·리스크 최대 3건, 우리금융그룹·계열사 최대 3건, CRO 관련성이 가장 높은 추가 이슈 최대 1건. - 특정 카테고리(특히 우리금융그룹·계열사, 추가 이슈)에 조건을 만족하는 오늘자 기사가 없으면 억지로 채우지 말고 해당 카테고리는 빈 배열로 남겨둔다. 전체 합계가 7건 이상이면 된다.
 - 우리금융그룹·계열사 3건(subsidiary_news)에는 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 동양생명, ABL생명 등 우리금융그룹 계열사 자체에 관한 기사만 선택한다. KB금융, 신한금융, 하나금융, NH농협금융, 한국금융지주 등 다른 금융지주·경쟁사 기사는 daily_news에는 배치할 수 있어도 subsidiary_news에는 절대 포함하지 마라.
 - 최종 10건 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 6건 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 최대 4건만 선정한다.
 - 공식자료는 사실과 수치 검증에 적극 활용하되, 같은 사건의 언론기사가 있으면 독자가 맥락과 파급효과를 이해할 수 있는 언론기사를 대표 원문으로 우선 선정한다.
@@ -569,8 +569,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     const candidate = parseStructuredOutput(synthesisBody, 'CRO quality-gate synthesis');
     const candidateNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news']
       .flatMap((key) => candidate[key] || []);
-    if (candidateNews.length !== 10) throw new Error(`Final briefing contained ${candidateNews.length} articles; exactly 10 are required.`);
-    const candidateUrls = new Set();
+    if (candidateNews.length < 7) throw new Error(`Final briefing contained only ${candidateNews.length} articles; at least 7 are required.`);
     for (const item of candidateNews) {
       let url;
       try {
@@ -622,8 +621,8 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
       }
     }
     const relatedCount = candidateNews.filter((item) => item.window !== 'primary').length;
-    if (relatedCount > 2) {
-      throw new Error(`Too many related (non-today) articles selected: ${relatedCount}. Limit is 2.`);
+    if (relatedCount > 4) {
+      throw new Error(`Too many related (non-today) articles selected: ${relatedCount}. Limit is 4.`);
     }
     for (const item of candidate.subsidiary_news || []) {
       if (!mentionsWooriSubsidiary(item)) {
@@ -632,7 +631,8 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     }
     candidateNews.forEach((item) => { item.source_type = isOfficialUrl(item.url) ? 'official' : 'media'; });
     const mediaCount = candidateNews.filter((item) => item.source_type === 'media').length;
-    if (mediaCount < 6) throw new Error(`CRO quality-gate synthesis selected only ${mediaCount} media articles; at least 6 are required.`);
+    const minimumMediaCount = Math.max(3, Math.ceil(candidateNews.length * 0.5));
+    if (mediaCount < minimumMediaCount) throw new Error(`CRO quality-gate synthesis selected only ${mediaCount} media articles; at least ${minimumMediaCount} are required.`);
     const qualityError = narrativeQualityError(candidate, candidateNews);
     if (qualityError) throw new Error(qualityError);
     briefing = candidate;
@@ -670,7 +670,7 @@ for (const item of allNews) {
   if (urls.has(verifiedKey)) throw new Error(`Duplicate article URL: ${item.url}`);
   urls.add(verifiedKey);
 }
-if (allNews.length !== 10) throw new Error(`Final briefing contained ${allNews.length} articles; exactly 10 are required.`);
+if (allNews.length < 7) throw new Error(`Final briefing contained only ${allNews.length} articles; at least 7 are required.`);
 briefing.critical.forEach((item) => { item.critical = true; });
 briefing.daily_news.forEach((item) => { item.critical = false; });
 briefing.subsidiary_news.forEach((item) => { item.critical = false; });
