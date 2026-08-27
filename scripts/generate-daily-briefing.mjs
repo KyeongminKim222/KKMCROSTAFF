@@ -646,7 +646,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     if (qualityError) throw new Error(qualityError);
     briefing = candidate;
     break;
- } catch (error) {
+  } catch (error) {
     synthesisError = error;
     synthesisFeedback = error.message;
     const badUrls = extractUrlsFromText(error.message);
@@ -664,8 +664,12 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
         }
       } catch {}
     });
+    for (const evidence of Object.values(researchEvidence)) {
+      if (!Array.isArray(evidence.source_urls)) continue;
+      evidence.source_urls = evidence.source_urls.filter((url) => !rejectedUrls.has(url));
+    }
     if (attempt < MAX_SYNTHESIS_ATTEMPTS) {
-      console.warn(`${error.message} Removed ${badUrls.length} bad URL(s) from the candidate pool. Retrying synthesis after TPM cooldown (${attempt}/${MAX_SYNTHESIS_ATTEMPTS}).`);
+      console.warn(`${error.message} Removed ${badUrls.length} bad URL(s) from the candidate pool (now permanently excluded from research evidence). Retrying synthesis after TPM cooldown (${attempt}/${MAX_SYNTHESIS_ATTEMPTS}).`);
       await coolDown('CRO quality-gate synthesis retry');
     }
   }
