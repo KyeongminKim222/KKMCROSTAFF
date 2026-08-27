@@ -408,6 +408,7 @@ const wooriAndPeersMedia = await researchStage(
   'Woori and peer media research',
   `한국 주요 통신사·경제지·금융 전문매체에서 우리금융그룹과 계열사, 국내 주요 금융 경쟁사에 관한 일반 언론기사를 조사하라.
 우리금융지주·우리은행·우리카드·우리금융캐피탈·우리종합금융·우리자산운용 관련 보도를 빠짐없이 찾고 직접 영향 사안은 중요도를 상향하라.
+우리은행의 해외지점 및 해외 현지법인(인도네시아, 베트남, 캄보디아 등) 관련 보도도 적극적으로 조사하라.
 KB·신한·하나·NH·IBK 및 주요 증권·보험·카드사의 자본, 건전성, 인수합병, 제재, 사고, 실적과 리스크 변화를 함께 점검하라.
 기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최대 14건 제시하라.`,
   koreanMediaDomains,
@@ -470,12 +471,12 @@ function buildSynthesisPrompt() {
 5. 우리금융그룹과 계열사 직접 영향은 범주와 관계없이 상향
 
 최종 선정 규칙:
-- 최소 7건, 최대 10건을 선정한다: 크리티컬 최대 3건, 데일리 금융·리스크 최대 3건, 우리금융그룹·계열사 최대 3건, CRO 관련성이 가장 높은 추가 이슈 최대 1건. - 특정 카테고리(특히 우리금융그룹·계열사, 추가 이슈)에 조건을 만족하는 오늘자 기사가 없으면 억지로 채우지 말고 해당 카테고리는 빈 배열로 남겨둔다. 전체 합계가 7건 이상이면 된다.
+- 최소 7건을 선정하되, 가능하면 10건(크리티컬 3건, 데일리 금융·리스크 3건, 우리금융그룹·계열사 3건, 추가 이슈 1건)을 채우는 것을 목표로 한다. - 크리티컬(critical)은 오늘자(primary) 조건을 만족하는 기사가 없으면 억지로 채우지 말고 빈 배열로 남겨둔다. - 데일리 금융·리스크(daily_news)는 오늘자 기사가 3건 미만이면, 최근 7일 이내의 금융권 관련 기사로 남은 자리를 채워 최대한 3건을 완성한다. 이 경우 window를 related로 표시하고 게시 날짜를 정확히 적는다. - 우리금융그룹·계열사(subsidiary_news)는 국내 계열사 기사가 3건 미만이면, 우리은행의 해외지점·해외 현지법인 관련 기사를 포함해 최근 7일 이내 기사로 남은 자리를 채워 최대한 3건을 완성한다. 이 경우도 window를 related로 표시한다. - 추가 이슈(additional_news)는 오늘자 조건을 만족하는 기사가 없으면 억지로 채우지 말고 빈 배열로 남겨둔다.
 - 우리금융그룹·계열사 3건(subsidiary_news)에는 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 동양생명, ABL생명 등 우리금융그룹 계열사 자체에 관한 기사만 선택한다. KB금융, 신한금융, 하나금융, NH농협금융, 한국금융지주 등 다른 금융지주·경쟁사 기사는 daily_news에는 배치할 수 있어도 subsidiary_news에는 절대 포함하지 마라.
 - 최종 10건 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 6건 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 최대 4건만 선정한다.
 - 공식자료는 사실과 수치 검증에 적극 활용하되, 같은 사건의 언론기사가 있으면 독자가 맥락과 파급효과를 이해할 수 있는 언론기사를 대표 원문으로 우선 선정한다.
 - Gumloop 예시처럼 연합뉴스, 주요 경제지·금융 전문매체 및 Reuters·Bloomberg·FT·CNBC 등 신뢰도 높은 일반기사가 브리핑의 중심이 되어야 한다.
-- 최종 10건 중 최소 8건은 실행 시점 기준 최근 36시간 이내에 게시된 기사여야 하며 window는 primary로 표시한다. published 필드에는 반드시 정확한 게시 시각(시:분 단위)을 KST 기준으로 적는다. - 우리금융 계열사 또는 공식 발표 중 오늘 게시된 기사를 도저히 찾을 수 없는 경우에 한해서만, 최근 7일 이내의 배경·참고 기사를 최대 4건까지 예외로 선택할 수 있으며 이때는 window를 반드시 related로 표시하고 게시 날짜를 정확히 적는다. - related로 표시하는 기사도 subsidiary_news라면 반드시 실제 우리금융 계열사 자체에 관한 기사여야 한다. - "오늘자 검증 가능한 기사 없음" 같은 placeholder 문구를 title이나 다른 필드에 넣지 마라. 그런 항목을 만들 수 없으면 조사 근거 안에서 실제로 존재하는 다른 기사로 대체하라.
+- critical 기사는 반드시 window를 primary로 표시하며, 실행 시점 기준 최근 36시간 이내에 게시된 기사만 사용한다. published 필드에는 반드시 정확한 게시 시각(시:분 단위)을 KST 기준으로 적는다. - daily_news와 subsidiary_news를 채우기 위해 related로 표시하는 기사는 최근 7일 이내여야 하며, 전체 기사 중 related는 최대 6건까지 허용한다. - related로 표시하는 기사도 subsidiary_news라면 반드시 실제 우리금융그룹 계열사(국내 계열사 또는 해외지점·해외 현지법인 포함) 자체에 관한 기사여야 한다. - "오늘자 검증 가능한 기사 없음" 같은 placeholder 문구를 title이나 다른 필드에 넣지 마라. 그런 항목을 만들 수 없으면 조사 근거 안에서 실제로 존재하는 다른 기사로 대체하거나, 해당 카테고리를 빈 배열로 남긴다.
 - 동일 사건과 동일 URL을 제거하고 대표 원문 하나만 남긴다.
 - critical, daily_news, subsidiary_news, additional_news 네 카테고리를 통틀어 같은 URL이나 같은 게시물 번호(seq, id 등)를 가진 기사를 두 번 이상 선택하지 마라. 카테고리를 넘나드는 중복도 동일 사건 중복으로 간주하고 반드시 제거하라.
 - 만약 특정 사건이 여러 카테고리에 모두 적합해 보이면, 그 사건은 가장 관련성이 높은 카테고리 하나에만 배치하고 다른 카테고리에는 조사 근거 안에서 완전히 다른 사건을 새로 찾아 채워라. url 필드를 빈 문자열이나 추정값으로 채우지 말고, 반드시 조사 근거에 있는 실제 URL만 사용하라.
@@ -632,8 +633,13 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
       }
     }
     const relatedCount = candidateNews.filter((item) => item.window !== 'primary').length;
-    if (relatedCount > 4) {
-      throw new Error(`Too many related (non-today) articles selected: ${relatedCount}. Limit is 4.`);
+    if (relatedCount > 6) {
+      throw new Error(`Too many related (non-today) articles selected: ${relatedCount}. Limit is 6.`);
+    }
+    for (const item of candidate.critical || []) {
+      if (item.window !== 'primary') {
+        throw new Error(`Critical article must be dated today (window=primary): ${item.title} URL: ${item.url}`);
+      }
     }
     for (const item of candidate.subsidiary_news || []) {
       if (!mentionsWooriSubsidiary(item)) {
