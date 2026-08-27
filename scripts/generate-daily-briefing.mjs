@@ -608,24 +608,24 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     for (const item of candidateNews) {
       const parsedPublished = parsePublishedKst(item.published);
       if (!parsedPublished.date) {
-        throw new Error(`Article had no verifiable date: ${item.title} (published: ${item.published || '미기재'})`);
+        throw new Error(`Article had no verifiable date: ${item.title} (published: ${item.published || '미기재'}) URL: ${item.url}`);
       }
       if (item.window === 'primary') {
         if (parsedPublished.hasTime) {
           const hoursDiff = (now - parsedPublished.date) / (1000 * 60 * 60);
           if (hoursDiff < -3 || hoursDiff > 36) {
-            throw new Error(`Primary article was not within the recent 36 hour window: ${item.title} (published: ${item.published || '미기재'})`);
+            throw new Error(`Primary article was not within the recent 36 hour window: ${item.title} (published: ${item.published || '미기재'}) URL: ${item.url}`);
           }
         } else {
           const daysDiff = (now - parsedPublished.date) / (1000 * 60 * 60 * 24);
           if (daysDiff < 0 || daysDiff > 1) {
-            throw new Error(`Primary article date was not within the recent 1-day window: ${item.title} (published: ${item.published || '미기재'})`);
+            throw new Error(`Primary article date was not within the recent 1-day window: ${item.title} (published: ${item.published || '미기재'}) URL: ${item.url}`);
           }
         }
       } else {
         const daysDiff = (now - parsedPublished.date) / (1000 * 60 * 60 * 24);
         if (daysDiff < 0 || daysDiff > 7) {
-          throw new Error(`Related article was outside the allowed date range: ${item.title} (published: ${item.published})`);
+          throw new Error(`Related article was outside the allowed date range: ${item.title} (published: ${item.published}) URL: ${item.url}`);
         }
       }
     }
@@ -635,7 +635,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     }
     for (const item of candidate.subsidiary_news || []) {
       if (!mentionsWooriSubsidiary(item)) {
-        throw new Error(`Subsidiary news item did not reference a Woori Financial Group subsidiary: ${item.title}`);
+        throw new Error(`Subsidiary news item did not reference a Woori Financial Group subsidiary: ${item.title} URL: ${item.url}`);
       }
     }
     candidateNews.forEach((item) => { item.source_type = isOfficialUrl(item.url) ? 'official' : 'media'; });
