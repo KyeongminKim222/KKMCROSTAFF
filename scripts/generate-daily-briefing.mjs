@@ -646,12 +646,26 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     if (qualityError) throw new Error(qualityError);
     briefing = candidate;
     break;
-  } catch (error) {
+ } catch (error) {
     synthesisError = error;
     synthesisFeedback = error.message;
-    extractUrlsFromText(error.message).forEach((url) => rejectedUrls.add(url));
+    const badUrls = extractUrlsFromText(error.message);
+    badUrls.forEach((url) => {
+      rejectedUrls.add(url);
+      try {
+        const canonicalKey = canonicalUrlKey(url);
+        researchedUrlByCanonical.delete(canonicalKey);
+        const pathKey = urlPathKey(url);
+        const remaining = (researchedUrlsByPath.get(pathKey) || []).filter((u) => u !== url);
+        if (remaining.length > 0) {
+          researchedUrlsByPath.set(pathKey, remaining);
+        } else {
+          researchedUrlsByPath.delete(pathKey);
+        }
+      } catch {}
+    });
     if (attempt < MAX_SYNTHESIS_ATTEMPTS) {
-      console.warn(`${error.message} Retrying synthesis after TPM cooldown (${attempt}/${MAX_SYNTHESIS_ATTEMPTS}).`);
+      console.warn(`${error.message} Removed ${badUrls.length} bad URL(s) from the candidate pool. Retrying synthesis after TPM cooldown (${attempt}/${MAX_SYNTHESIS_ATTEMPTS}).`);
       await coolDown('CRO quality-gate synthesis retry');
     }
   }
