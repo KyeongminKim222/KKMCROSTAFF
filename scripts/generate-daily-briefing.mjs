@@ -474,7 +474,7 @@ function buildSynthesisPrompt() {
 5. 우리금융그룹과 계열사 직접 영향은 범주와 관계없이 상향
 
 최종 선정 규칙:
-- critical(크리티컬)은 최소 3건 선정한다. 오늘 기준 가장 시급하고 중대한 이슈를 선정하되, 정말로 36시간 이내의 긴급 이슈가 3건에 못 미치면, 최근 24~36시간 내 기사 중 CRO 관점에서 중요도가 높은 기사를 critical로 승격시켜서라도 최소 3건을 채운다.
+- critical(크리티컬)은 최소 2건 선정한다. 오늘 기준 가장 시급하고 중대한 이슈를 선정하되, 정말로 36시간 이내의 긴급 이슈가 2건에 못 미치면, 최근 24~36시간 내 기사 중 CRO 관점에서 중요도가 높은 기사를 critical로 승격시켜서라도 최소 2건을 채운다.
 - daily_news(데일리 금융·리스크)는 최소 4건 선정한다. 오늘자(primary) 기사가 4건 미만이면, 최근 7일 이내의 금융권 관련 기사로 남은 자리를 채워 최소 4건을 완성한다. 이 경우 window를 related로 표시하고 게시 날짜를 정확히 적는다.
 - subsidiary_news(우리금융그룹·계열사)는 최소 4건 선정한다. 다음 우선순위로 채운다: (1) 국내 우리금융그룹 계열사 관련 오늘자 기사, (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사, (3) 그래도 4건이 안 되면 캄보디아·인도네시아·우리아메리카은행이 영업하는 지역의 금융권 일반 기사(금리, 환율, 은행 건전성, 규제 등)로 남은 자리를 채운다. (2), (3)에 해당하는 기사는 window를 related로 표시하고 게시 날짜를 정확히 적는다.
 - additional_news(추가 이슈)는 오늘자 조건을 만족하는 CRO 관련성 높은 기사가 있으면 최대 2건까지 선택하고, 없으면 억지로 채우지 말고 빈 배열로 남겨둔다.
@@ -588,8 +588,8 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     const candidate = parseStructuredOutput(synthesisBody, 'CRO quality-gate synthesis');
     const candidateNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news']
       .flatMap((key) => candidate[key] || []);
-    if ((candidate.critical || []).length < 3) {
-      throw new Error(`Critical (Priority Watch) contained only ${(candidate.critical || []).length} articles; at least 3 are required.`);
+    if ((candidate.critical || []).length < 2) {
+      throw new Error(`Critical (Priority Watch) contained only ${(candidate.critical || []).length} articles; at least 2 are required.`);
     }
     if ((candidate.daily_news || []).length < 4) {
       throw new Error(`Daily News contained only ${(candidate.daily_news || []).length} articles; at least 4 are required.`);
@@ -597,7 +597,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     if ((candidate.subsidiary_news || []).length < 4) {
       throw new Error(`Subsidiary Radar contained only ${(candidate.subsidiary_news || []).length} articles; at least 4 are required.`);
     }
-    if (candidateNews.length < 11) throw new Error(`Final briefing contained only ${candidateNews.length} articles; at least 11 are required.`);
+    if (candidateNews.length < 10) throw new Error(`Final briefing contained only ${candidateNews.length} articles; at least 10 are required.`);
     const candidateUrls = new Set();
     for (const item of candidateNews) {
       let url;
@@ -722,7 +722,7 @@ for (const item of allNews) {
   if (urls.has(verifiedKey)) throw new Error(`Duplicate article URL: ${item.url}`);
   urls.add(verifiedKey);
 }
-if (allNews.length < 11) throw new Error(`Final briefing contained only ${allNews.length} articles; at least 11 are required.`);
+if (allNews.length < 10) throw new Error(`Final briefing contained only ${allNews.length} articles; at least 10 are required.`);
 briefing.critical.forEach((item) => { item.critical = true; });
 briefing.daily_news.forEach((item) => { item.critical = false; });
 briefing.subsidiary_news.forEach((item) => { item.critical = false; });
