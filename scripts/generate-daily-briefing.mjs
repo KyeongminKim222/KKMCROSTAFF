@@ -573,7 +573,6 @@ function extractUrlsFromText(text) {
   return matches.map((url) => url.replace(/[).,]+$/, ''));
 }
 
-// 후보 안에서 중복 URL만 안전하게 제거하는 함수 (fallback 전용)
 function dedupeCandidateNews(candidate) {
   const seen = new Set();
   const cleaned = { ...candidate };
@@ -585,10 +584,10 @@ function dedupeCandidateNews(candidate) {
       try {
         normalizedKey = canonicalUrlKey(item.url);
       } catch {
-        continue; // URL이 아예 깨진 항목은 fallback에서 제외
+        continue;
       }
       if (seen.has(normalizedKey)) continue;
-      if (isLikelyListingUrl(item.url)) continue; // 목록/검색 페이지도 제외
+      if (isLikelyListingUrl(item.url)) continue;
       seen.add(normalizedKey);
       item.source_type = isOfficialUrl(item.url) ? 'official' : 'media';
       keptItems.push(item);
@@ -638,7 +637,6 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     continue;
   }
 
-  // 이번 시도의 원본 후보를 fallback 후보로도 기록해둔다 (검증 통과 여부와 무관하게)
   try {
     const dedupedFallback = dedupeCandidateNews(JSON.parse(JSON.stringify(candidate)));
     const fallbackCount = countNews(dedupedFallback);
@@ -646,8 +644,128 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
       bestFallbackCount = fallbackCount;
       bestFallbackCandidate = dedupedFallback;
     }
-  } 
+  } catch {}
 
+  try {
+    const candidateNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news']
+      .flatMap((key) => candidate[key] || []);
+    if ((candidate.critical || []).length < 1) {
+      throw new Error(`Critical (Priority Watch) contained 0 articles; at least 1 is required.`);
+    }
+    if (candidateNews.length < 7) throw new Error(`Final briefing contained only ${candidateNews.length} articles; at least 7 are required.`);
+    const candidateUrls = new Set();
+    for (const item of candidateNews) {
+      let url;
+      try {
+        url = new URL(item.url);
+      } catch {
+        throw new Error(`Article URL was missing or malformed for "${item.title || '제목 없음'}": ${JSON.stringify(item.url)}`);
+      }
+      if (!['http:', 'https:'].includes(url.protocol)) throw new Error(`Invalid article URL: ${item.url}`);
+      if (isLikelyListingUrl(item.url)) throw new Error(`Final briefing selected a listing/search page instead of an article: ${item.url}`);
+      const canonicalKey = canonicalUrlKey(item.url);
+      let researchedUrl = researchedUrlByCanonical.get(canonicalKey);
+      if (!researchedUrl) {
+        const pathMatches = researchedUrlsByPath.get(urlPathKey(item.url)) || [];
+        if (pathMatches.length === 1) researchedUrl = pathMatches[0];
+      }
+      if (!researchedUrl) {
+        console.warn(`Final URL was not present in the extracted source list; retaining the valid synthesized URL: ${item.url}`);
+      } else if (item.url !== researchedUrl) {
+        console.log(`Normalized researched URL: ${item.url} -> ${researchedUrl}`);
+        item.url = researchedUrl;
+      }
+      const verifiedKey = canonicalUrlKey(item.url);
+      if (candidateUrls.has(verifiedKey)) throw new Error(`Duplicate article URL: ${item.url}`);
+      candidateUrls.add(verifiedKey);
+    }
+    const now = new Date();
+    for (const item of candidateNews) {
+      const parsedPublished = parsePublishedKst(item.published);
+      if (!parsedPublished.date) {
+        throw new Error(`Article had no verifiable date: ${item.title} (published: ${item.published || '미기재'}) URL: ${item.url}`);
+      }
+      if (item.window === 'primary') {
+        if (parsedPublished.hasTime) {
+          const hoursDiff = (now - parsedPublished.date) / (1000 * 60 * 60);
+          if (hoursDiff < -3 || hoursDiff > 36) {
+            throw new Error(`Primary article was not within the recent 36 hour window: ${item.title} (published: ${item.published || '미기재'}) URL: ${item.url}`);
+          }
+        } else {
+          const daysDiff = (now - parsedPublished.date) / (1000 * 60 * 60 * 24);
+          if (daysDiff < 0 || daysDiff > 1) {
+            throw new Error(`Primary article date was not within the recent 1-day window: ${item.title} (published: ${item.published || '미기재'}) URL: ${item.url}`);
+          }
+        }
+      } else {
+        const daysDiff = (now - parsedPublished.date) / (1000 * 60 * 60 * 24);
+        if (daysDiff < 0 || daysDiff > 7) {
+          throw new Error(`Related article was outside the allowed date range: ${item.title} (published: ${item.published}) URL: ${item.url}`);
+        }
+      }
+    }
+    const relatedCount = candidateNews.filter((item) => item.window !== 'primary').length;
+    if (relatedCount > 8) {
+      throw new Error(`Too many related (non-today) articles selected: ${relatedCount}. Limit is 8.`);
+    }
+    for (const item of candidate.critical || []) {
+      if (item.window !== 'primary') {
+        throw new Error(`Critical article must be dated today (window=primary): ${item.title} URL: ${item.url}`);
+      }
+    }
+    for (const item of candidate.subsidiary_news || []) {
+      if (!mentionsWooriSubsidiary(item)) {
+        throw new Error(`Subsidiary news item did not reference a Woori Financial Group subsidiary or approved overseas market: ${item.title} URL: ${item.url}`);
+      }
+    }
+    candidateNews.forEach((item) => { item.source_type = isOfficialUrl(item.url) ? 'official' : 'media'; });
+    const mediaCount = candidateNews.filter((item) => item.source_type === 'media').length;
+    const minimumMediaCount = Math.max(3, Math.ceil(candidateNews.length * 0.5));
+    if (mediaCount < minimumMediaCount) throw new Error(`CRO quality-gate synthesis selected only ${mediaCount} media articles; at least ${minimumMediaCount} are required.`);
+    const qualityError = narrativeQualityError(candidate, candidateNews);
+    if (qualityError) throw new Error(qualityError);
+    briefing = candidate;
+    break;
+  } catch (error) {
+    synthesisError = error;
+    synthesisFeedback = error.message;
+    const badUrls = extractUrlsFromText(error.message);
+    badUrls.forEach((url) => {
+      rejectedUrls.add(url);
+      try {
+        const canonicalKey = canonicalUrlKey(url);
+        researchedUrlByCanonical.delete(canonicalKey);
+        const pathKey = urlPathKey(url);
+        const remaining = (researchedUrlsByPath.get(pathKey) || []).filter((u) => u !== url);
+        if (remaining.length > 0) {
+          researchedUrlsByPath.set(pathKey, remaining);
+        } else {
+          researchedUrlsByPath.delete(pathKey);
+        }
+      } catch {}
+    });
+    for (const evidence of Object.values(researchEvidence)) {
+      if (!Array.isArray(evidence.source_urls)) continue;
+      evidence.source_urls = evidence.source_urls.filter((url) => !rejectedUrls.has(url));
+    }
+    if (attempt < MAX_SYNTHESIS_ATTEMPTS) {
+      console.warn(`${error.message} Removed ${badUrls.length} bad URL(s) from the candidate pool (now permanently excluded from research evidence). Retrying synthesis after TPM cooldown (${attempt}/${MAX_SYNTHESIS_ATTEMPTS}).`);
+      await coolDown('CRO quality-gate synthesis retry');
+    }
+  }
+}
+
+if (!briefing) {
+  if (!bestFallbackCandidate || bestFallbackCount < 3) {
+    throw synthesisError || new Error('CRO quality-gate synthesis failed without a result.');
+  }
+  console.warn(`All ${MAX_SYNTHESIS_ATTEMPTS} attempts failed strict validation. Falling back to the best deduplicated candidate with ${bestFallbackCount} articles.`);
+  if (!bestFallbackCandidate.critical) bestFallbackCandidate.critical = [];
+  if (!bestFallbackCandidate.daily_news) bestFallbackCandidate.daily_news = [];
+  if (!bestFallbackCandidate.subsidiary_news) bestFallbackCandidate.subsidiary_news = [];
+  if (!bestFallbackCandidate.additional_news) bestFallbackCandidate.additional_news = [];
+  briefing = bestFallbackCandidate;
+}
 const allNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news'].flatMap((key) => briefing[key] || []);
 const urls = new Set();
 for (const item of allNews) {
