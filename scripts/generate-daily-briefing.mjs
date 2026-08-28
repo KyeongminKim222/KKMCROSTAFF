@@ -483,10 +483,10 @@ function buildSynthesisPrompt() {
 5. 우리금융그룹과 계열사 직접 영향은 범주와 관계없이 상향
 
 최종 선정 규칙:
-- critical(크리티컬)은 최소 2건 선정한다. 오늘 기준 가장 시급하고 중대한 이슈를 선정하되, 정말로 36시간 이내의 긴급 이슈가 2건에 못 미치면, 최근 24~36시간 내 기사 중 CRO 관점에서 중요도가 높은 기사를 critical로 승격시켜서라도 최소 2건을 채운다.
-- daily_news(데일리 금융·리스크)는 최소 4건 선정한다. 오늘자(primary) 기사가 4건 미만이면, 최근 7일 이내의 금융권 관련 기사로 남은 자리를 채워 최소 4건을 완성한다. 이 경우 window를 related로 표시하고 게시 날짜를 정확히 적는다.
-- subsidiary_news(우리금융그룹·계열사)는 최소 4건 선정한다. 다음 우선순위로 채운다: (1) 국내 우리금융그룹 계열사 관련 오늘자 기사, (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사, (3) 그래도 4건이 안 되면 캄보디아·인도네시아·우리아메리카은행이 영업하는 지역의 금융권 일반 기사(금리, 환율, 은행 건전성, 규제 등)로 남은 자리를 채운다. (2), (3)에 해당하는 기사는 window를 related로 표시하고 게시 날짜를 정확히 적는다.
-- additional_news(추가 이슈)는 오늘자 조건을 만족하는 CRO 관련성 높은 기사가 있으면 최대 2건까지 선택하고, 없으면 억지로 채우지 말고 빈 배열로 남겨둔다.
+- 전체 기사는 최소 10건을 목표로 선정한다. critical(크리티컬)은 최소 1건은 반드시 포함하고, 나머지는 daily_news, subsidiary_news, additional_news 사이에서 그날 확보된 조사 근거의 양과 질에 맞게 자유롭게 배분한다. 
+- 특정 카테고리에 오늘 조건을 만족하는 기사가 부족하면 억지로 채우지 말고, 다른 카테고리에서 조건을 만족하는 기사를 더 선정해서 전체 합계 10건을 채운다. 
+- subsidiary_news를 채울 때는 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사 관련 오늘자 기사, (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사, (3) 캄보디아·인도네시아·우리아메리카은행이 영업하는 지역의 금융권 일반 기사(금리, 환율, 은행 건전성, 규제 등). (2), (3)에 해당하는 기사는 window를 related로 표시하고 게시 날짜를 정확히 적는다. 
+- 조사 근거가 부족해서 전체 10건을 도저히 채울 수 없는 경우, 확보된 기사만으로 최소 7건 이상을 완성한다.
 - 우리금융그룹·계열사(subsidiary_news)에는 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 동양생명, ABL생명 등 국내 계열사 기사, 우리은행 해외지점·현지법인 기사, 또는 캄보디아·인도네시아·우리아메리카은행 지역 금융권 기사만 선택한다. KB금융, 신한금융, 하나금융, NH농협금융, 한국금융지주 등 다른 금융지주·경쟁사 기사는 daily_news에는 배치할 수 있어도 subsidiary_news에는 절대 포함하지 마라.
 - 전체 기사 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 60% 이상 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 나머지 비중으로 선정한다.
 - 공식자료는 사실과 수치 검증에 적극 활용하되, 같은 사건의 언론기사가 있으면 독자가 맥락과 파급효과를 이해할 수 있는 언론기사를 대표 원문으로 우선 선정한다.
@@ -597,17 +597,10 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     const candidate = parseStructuredOutput(synthesisBody, 'CRO quality-gate synthesis');
     const candidateNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news']
       .flatMap((key) => candidate[key] || []);
-    if ((candidate.critical || []).length < 2) {
-      throw new Error(`Critical (Priority Watch) contained only ${(candidate.critical || []).length} articles; at least 2 are required.`);
+    if ((candidate.critical || []).length < 1) {
+      throw new Error(`Critical (Priority Watch) contained 0 articles; at least 1 is required.`);
     }
-    if ((candidate.daily_news || []).length < 4) {
-      throw new Error(`Daily News contained only ${(candidate.daily_news || []).length} articles; at least 4 are required.`);
-    }
-    if ((candidate.subsidiary_news || []).length < 4) {
-      throw new Error(`Subsidiary Radar contained only ${(candidate.subsidiary_news || []).length} articles; at least 4 are required.`);
-    }
-    if (candidateNews.length < 10) throw new Error(`Final briefing contained only ${candidateNews.length} articles; at least 10 are required.`);
-    const candidateUrls = new Set();
+    if (candidateNews.length < 7) throw new Error(`Final briefing contained only ${candidateNews.length} articles; at least 7 are required.`);    const candidateUrls = new Set();
     for (const item of candidateNews) {
       let url;
       try {
@@ -731,7 +724,7 @@ for (const item of allNews) {
   if (urls.has(verifiedKey)) throw new Error(`Duplicate article URL: ${item.url}`);
   urls.add(verifiedKey);
 }
-if (allNews.length < 10) throw new Error(`Final briefing contained only ${allNews.length} articles; at least 10 are required.`);
+if (allNews.length < 7) throw new Error(`Final briefing contained only ${allNews.length} articles; at least 7 are required.`);
 briefing.critical.forEach((item) => { item.critical = true; });
 briefing.daily_news.forEach((item) => { item.critical = false; });
 briefing.subsidiary_news.forEach((item) => { item.critical = false; });
