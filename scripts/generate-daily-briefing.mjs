@@ -198,10 +198,10 @@ const schema = {
       maxItems: 4,
       items: { type: 'string' }
     },
-    critical: { type: 'array', minItems: 0, maxItems: 3, items: newsItem },
-    daily_news: { type: 'array', minItems: 0, maxItems: 3, items: newsItem },
-    subsidiary_news: { type: 'array', minItems: 0, maxItems: 3, items: newsItem },
-    additional_news: { type: 'array', minItems: 0, maxItems: 1, items: newsItem },
+    critical: { type: 'array', minItems: 0, maxItems: 4, items: newsItem },
+    daily_news: { type: 'array', minItems: 0, maxItems: 5, items: newsItem },
+    subsidiary_news: { type: 'array', minItems: 0, maxItems: 5, items: newsItem },
+    additional_news: { type: 'array', minItems: 0, maxItems: 2, items: newsItem },
     forward_looking_points: {
       type: 'array',
       maxItems: 4,
@@ -287,7 +287,9 @@ const officialDomains = [
 const wooriSubsidiaryKeywords = [
   '우리금융', '우리은행', '우리카드', '우리금융캐피탈', '우리종합금융',
   '우리자산운용', '우리에프아이에스', '우리금융저축은행', '우리글로벌자산운용',
-  '동양생명', 'ABL생명', '우리금융지주'
+  '동양생명', 'ABL생명', '우리금융지주',
+  '우리아메리카', 'Woori America', '우리소다라', 'Woori Saudara', 'Bank Woori Saudara',
+  '캄보디아', 'Cambodia', '인도네시아', 'Indonesia'
 ];
 
 function mentionsWooriSubsidiary(item) {
@@ -408,7 +410,8 @@ const wooriAndPeersMedia = await researchStage(
   'Woori and peer media research',
   `한국 주요 통신사·경제지·금융 전문매체에서 우리금융그룹과 계열사, 국내 주요 금융 경쟁사에 관한 일반 언론기사를 조사하라.
 우리금융지주·우리은행·우리카드·우리금융캐피탈·우리종합금융·우리자산운용 관련 보도를 빠짐없이 찾고 직접 영향 사안은 중요도를 상향하라.
-우리은행의 해외지점 및 해외 현지법인(인도네시아, 베트남, 캄보디아 등) 관련 보도도 적극적으로 조사하라.
+우리은행의 해외지점 및 해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 보도도 적극적으로 조사하라.
+우리은행 해외법인 관련 직접 보도를 찾기 어려운 경우, 캄보디아·인도네시아·우리아메리카은행이 영업하는 지역의 금융권 일반 동향(금리, 환율, 은행 건전성, 규제 변화 등) 기사도 후보로 조사하라.
 KB·신한·하나·NH·IBK 및 주요 증권·보험·카드사의 자본, 건전성, 인수합병, 제재, 사고, 실적과 리스크 변화를 함께 점검하라.
 기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최대 14건 제시하라.`,
   koreanMediaDomains,
@@ -471,12 +474,17 @@ function buildSynthesisPrompt() {
 5. 우리금융그룹과 계열사 직접 영향은 범주와 관계없이 상향
 
 최종 선정 규칙:
-- 최소 7건을 선정하되, 가능하면 10건(크리티컬 3건, 데일리 금융·리스크 3건, 우리금융그룹·계열사 3건, 추가 이슈 1건)을 채우는 것을 목표로 한다. - 크리티컬(critical)은 오늘자(primary) 조건을 만족하는 기사가 없으면 억지로 채우지 말고 빈 배열로 남겨둔다. - 데일리 금융·리스크(daily_news)는 오늘자 기사가 3건 미만이면, 최근 7일 이내의 금융권 관련 기사로 남은 자리를 채워 최대한 3건을 완성한다. 이 경우 window를 related로 표시하고 게시 날짜를 정확히 적는다. - 우리금융그룹·계열사(subsidiary_news)는 국내 계열사 기사가 3건 미만이면, 우리은행의 해외지점·해외 현지법인 관련 기사를 포함해 최근 7일 이내 기사로 남은 자리를 채워 최대한 3건을 완성한다. 이 경우도 window를 related로 표시한다. - 추가 이슈(additional_news)는 오늘자 조건을 만족하는 기사가 없으면 억지로 채우지 말고 빈 배열로 남겨둔다.
-- 우리금융그룹·계열사 3건(subsidiary_news)에는 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 동양생명, ABL생명 등 우리금융그룹 계열사 자체에 관한 기사만 선택한다. KB금융, 신한금융, 하나금융, NH농협금융, 한국금융지주 등 다른 금융지주·경쟁사 기사는 daily_news에는 배치할 수 있어도 subsidiary_news에는 절대 포함하지 마라.
-- 최종 10건 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 6건 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 최대 4건만 선정한다.
+- critical(크리티컬)은 최소 3건 선정한다. 오늘 기준 가장 시급하고 중대한 이슈를 선정하되, 정말로 36시간 이내의 긴급 이슈가 3건에 못 미치면, 최근 24~36시간 내 기사 중 CRO 관점에서 중요도가 높은 기사를 critical로 승격시켜서라도 최소 3건을 채운다.
+- daily_news(데일리 금융·리스크)는 최소 4건 선정한다. 오늘자(primary) 기사가 4건 미만이면, 최근 7일 이내의 금융권 관련 기사로 남은 자리를 채워 최소 4건을 완성한다. 이 경우 window를 related로 표시하고 게시 날짜를 정확히 적는다.
+- subsidiary_news(우리금융그룹·계열사)는 최소 4건 선정한다. 다음 우선순위로 채운다: (1) 국내 우리금융그룹 계열사 관련 오늘자 기사, (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사, (3) 그래도 4건이 안 되면 캄보디아·인도네시아·우리아메리카은행이 영업하는 지역의 금융권 일반 기사(금리, 환율, 은행 건전성, 규제 등)로 남은 자리를 채운다. (2), (3)에 해당하는 기사는 window를 related로 표시하고 게시 날짜를 정확히 적는다.
+- additional_news(추가 이슈)는 오늘자 조건을 만족하는 CRO 관련성 높은 기사가 있으면 최대 2건까지 선택하고, 없으면 억지로 채우지 말고 빈 배열로 남겨둔다.
+- 우리금융그룹·계열사(subsidiary_news)에는 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 동양생명, ABL생명 등 국내 계열사 기사, 우리은행 해외지점·현지법인 기사, 또는 캄보디아·인도네시아·우리아메리카은행 지역 금융권 기사만 선택한다. KB금융, 신한금융, 하나금융, NH농협금융, 한국금융지주 등 다른 금융지주·경쟁사 기사는 daily_news에는 배치할 수 있어도 subsidiary_news에는 절대 포함하지 마라.
+- 전체 기사 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 60% 이상 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 나머지 비중으로 선정한다.
 - 공식자료는 사실과 수치 검증에 적극 활용하되, 같은 사건의 언론기사가 있으면 독자가 맥락과 파급효과를 이해할 수 있는 언론기사를 대표 원문으로 우선 선정한다.
 - Gumloop 예시처럼 연합뉴스, 주요 경제지·금융 전문매체 및 Reuters·Bloomberg·FT·CNBC 등 신뢰도 높은 일반기사가 브리핑의 중심이 되어야 한다.
-- critical 기사는 반드시 window를 primary로 표시하며, 실행 시점 기준 최근 36시간 이내에 게시된 기사만 사용한다. published 필드에는 반드시 정확한 게시 시각(시:분 단위)을 KST 기준으로 적는다. - daily_news와 subsidiary_news를 채우기 위해 related로 표시하는 기사는 최근 7일 이내여야 하며, 전체 기사 중 related는 최대 6건까지 허용한다. - related로 표시하는 기사도 subsidiary_news라면 반드시 실제 우리금융그룹 계열사(국내 계열사 또는 해외지점·해외 현지법인 포함) 자체에 관한 기사여야 한다. - "오늘자 검증 가능한 기사 없음" 같은 placeholder 문구를 title이나 다른 필드에 넣지 마라. 그런 항목을 만들 수 없으면 조사 근거 안에서 실제로 존재하는 다른 기사로 대체하거나, 해당 카테고리를 빈 배열로 남긴다.
+- critical 기사는 반드시 window를 primary로 표시하며, 실행 시점 기준 최근 36시간 이내에 게시된 기사만 사용한다. published 필드에는 반드시 정확한 게시 시각(시:분 단위)을 KST 기준으로 적는다.
+- daily_news와 subsidiary_news를 채우기 위해 related로 표시하는 기사는 최근 7일 이내여야 하며, 전체 기사 중 related는 최대 8건까지 허용한다.
+- "오늘자 검증 가능한 기사 없음" 같은 placeholder 문구를 title이나 다른 필드에 넣지 마라. 그런 항목을 만들 수 없으면 조사 근거 안에서 실제로 존재하는 다른 기사로 대체하거나, additional_news에 한해서만 해당 카테고리를 빈 배열로 남긴다.
 - 동일 사건과 동일 URL을 제거하고 대표 원문 하나만 남긴다.
 - critical, daily_news, subsidiary_news, additional_news 네 카테고리를 통틀어 같은 URL이나 같은 게시물 번호(seq, id 등)를 가진 기사를 두 번 이상 선택하지 마라. 카테고리를 넘나드는 중복도 동일 사건 중복으로 간주하고 반드시 제거하라.
 - 만약 특정 사건이 여러 카테고리에 모두 적합해 보이면, 그 사건은 가장 관련성이 높은 카테고리 하나에만 배치하고 다른 카테고리에는 조사 근거 안에서 완전히 다른 사건을 새로 찾아 채워라. url 필드를 빈 문자열이나 추정값으로 채우지 말고, 반드시 조사 근거에 있는 실제 URL만 사용하라.
@@ -491,7 +499,7 @@ CRO 품질 게이트:
 - 영향 전파 속도, 영향 범위, 대응 가능 시간, 규제기관 관심으로 긴급도를 판단한다.
 - 기사 간 연결고리, 리스크 전이 경로, 오늘 확인할 지표·질문, 단기 모니터링 포인트를 도출한다.
 - 모든 문장은 예외 없이 정중한 합니다체를 사용한다. '한다·이다·있다·된다·필요하다·전망된다' 같은 해라체 종결은 금지하고 '합니다·입니다·있습니다·됩니다·필요합니다·전망됩니다'로 쓴다.
-- executive_judgment_bullets는 Gumloop 예시처럼 3~4개로 작성하고, 각 항목은 '확인된 변화 → 핵심 수치·맥락 → 그룹 리스크 판단'을 2문장으로 설명한다. executive_judgment에는 이 판단을 충분한 문단으로 종합한다.
+- executive_judgment_bullets는 Gumloop 예시처럼 3~4개로 작성한다. 각 항목은 (1) 무슨 변화가 확인되었는지 (2) 그 핵심 수치·맥락은 무엇인지 (3) 그룹 리스크 관점에서 어떤 의미인지를 자연스럽게 이어지는 2문장의 완결된 문장으로 서술한다. "확인된 변화는", "핵심 수치는" 같은 정형화된 라벨 단어를 문장 맨 앞에 그대로 반복해서 쓰지 말고, 자연스러운 문장으로 풀어서 작성한다. executive_judgment에는 이 판단을 충분한 문단으로 종합한다.
 - 각 기사 summary는 3~5문장으로 작성한다. 첫 문장에서 매체명과 게시일을 밝히고, 이후 핵심 수치·당사자·발생 경위·현재 상태를 원문 범위 안에서 구체적으로 설명한다. 단순 헤드라인 재진술이나 2문장 요약은 금지한다.
 - why_woori_cro는 2~3문장으로 작성한다. 우리은행 또는 관련 계열사에 미치는 자본·유동성·신용·시장·운영·준법·평판·전략 영향과 30~90일 의사결정 포인트를 구체적으로 연결한다.
 - watchpoints는 기사마다 2~3개를 제시한다. 기관 발표 일정, 비율·스프레드·연체율·충당금·한도 등 실제로 확인할 지표나 질문으로 작성한다.
@@ -580,7 +588,16 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     const candidate = parseStructuredOutput(synthesisBody, 'CRO quality-gate synthesis');
     const candidateNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news']
       .flatMap((key) => candidate[key] || []);
-    if (candidateNews.length < 7) throw new Error(`Final briefing contained only ${candidateNews.length} articles; at least 7 are required.`);
+    if ((candidate.critical || []).length < 3) {
+      throw new Error(`Critical (Priority Watch) contained only ${(candidate.critical || []).length} articles; at least 3 are required.`);
+    }
+    if ((candidate.daily_news || []).length < 4) {
+      throw new Error(`Daily News contained only ${(candidate.daily_news || []).length} articles; at least 4 are required.`);
+    }
+    if ((candidate.subsidiary_news || []).length < 4) {
+      throw new Error(`Subsidiary Radar contained only ${(candidate.subsidiary_news || []).length} articles; at least 4 are required.`);
+    }
+    if (candidateNews.length < 11) throw new Error(`Final briefing contained only ${candidateNews.length} articles; at least 11 are required.`);
     const candidateUrls = new Set();
     for (const item of candidateNews) {
       let url;
@@ -633,8 +650,8 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
       }
     }
     const relatedCount = candidateNews.filter((item) => item.window !== 'primary').length;
-    if (relatedCount > 6) {
-      throw new Error(`Too many related (non-today) articles selected: ${relatedCount}. Limit is 6.`);
+    if (relatedCount > 8) {
+      throw new Error(`Too many related (non-today) articles selected: ${relatedCount}. Limit is 8.`);
     }
     for (const item of candidate.critical || []) {
       if (item.window !== 'primary') {
@@ -643,7 +660,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     }
     for (const item of candidate.subsidiary_news || []) {
       if (!mentionsWooriSubsidiary(item)) {
-        throw new Error(`Subsidiary news item did not reference a Woori Financial Group subsidiary: ${item.title} URL: ${item.url}`);
+        throw new Error(`Subsidiary news item did not reference a Woori Financial Group subsidiary or approved overseas market: ${item.title} URL: ${item.url}`);
       }
     }
     candidateNews.forEach((item) => { item.source_type = isOfficialUrl(item.url) ? 'official' : 'media'; });
@@ -705,7 +722,7 @@ for (const item of allNews) {
   if (urls.has(verifiedKey)) throw new Error(`Duplicate article URL: ${item.url}`);
   urls.add(verifiedKey);
 }
-if (allNews.length < 7) throw new Error(`Final briefing contained only ${allNews.length} articles; at least 7 are required.`);
+if (allNews.length < 11) throw new Error(`Final briefing contained only ${allNews.length} articles; at least 11 are required.`);
 briefing.critical.forEach((item) => { item.critical = true; });
 briefing.daily_news.forEach((item) => { item.critical = false; });
 briefing.subsidiary_news.forEach((item) => { item.critical = false; });
@@ -727,4 +744,4 @@ briefing.meta = {
 briefing.insights.as_of = `${date} KST`;
 
 await writeFile(outputPath, `${JSON.stringify(briefing, null, 2)}\n`, 'utf8');
-console.log(`Generated ${allNews.length} unique briefing articles for ${date}.`);
+console.log(`Generated ${allNews.length} unique briefing articles for ${date}.`); 
