@@ -114,6 +114,15 @@ async function requestOpenAi(label, requestBody, maxAttempts = 3) {
         body: JSON.stringify(requestBody),
         signal: controller.signal
       });
+    } catch (fetchError) {
+      clearTimeout(timeout);
+      if (attempt === maxAttempts) {
+        throw new Error(`${label} timed out or failed to connect after ${maxAttempts} attempts: ${fetchError.message}`);
+      }
+      const delay = Math.min(60_000, 15_000 * attempt);
+      console.warn(`${label} request timed out or failed to connect (${fetchError.message}). Retrying in ${delay}ms (${attempt}/${maxAttempts}).`);
+      await sleep(delay);
+      continue;
     } finally {
       clearTimeout(timeout);
     }
