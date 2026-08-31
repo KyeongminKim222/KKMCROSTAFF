@@ -576,6 +576,7 @@ function extractUrlsFromText(text) {
 function dedupeCandidateNews(candidate) {
   const seen = new Set();
   const cleaned = { ...candidate };
+  const now = new Date();
   for (const key of ['critical', 'daily_news', 'subsidiary_news', 'additional_news']) {
     const items = candidate[key] || [];
     const keptItems = [];
@@ -588,6 +589,10 @@ function dedupeCandidateNews(candidate) {
       }
       if (seen.has(normalizedKey)) continue;
       if (isLikelyListingUrl(item.url)) continue;
+      const parsedPublished = parsePublishedKst(item.published);
+      if (!parsedPublished.date) continue; // 날짜를 확인할 수 없는 기사는 fallback에서도 제외
+      const daysDiff = (now - parsedPublished.date) / (1000 * 60 * 60 * 24);
+      if (daysDiff < -0.2 || daysDiff > 7) continue; // 7일보다 오래된 기사는 fallback에서도 제외
       seen.add(normalizedKey);
       item.source_type = isOfficialUrl(item.url) ? 'official' : 'media';
       keptItems.push(item);
