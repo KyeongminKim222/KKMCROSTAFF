@@ -124,9 +124,9 @@ async function coolDown(label) {
     : 75_000;
   console.log(`${label} complete. Cooling down OpenAI TPM for ${milliseconds / 1000} seconds.`);
   
-  // Implemented standard asynchronous delay using the configuration timer
+  // 대기(쿨다운)를 실제로 수행하는 정상적인 비동기 코드입니다.
   await new Promise((resolve) => setTimeout(resolve, milliseconds));
-} // <-- Correctly closed the function scope here
+}
 
 const datePattern = new RegExp('(\\d{4})-(\\d{2})-(\\d{2})');
 
