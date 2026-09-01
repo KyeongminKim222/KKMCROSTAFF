@@ -187,6 +187,37 @@ function sourceUrlQuality(rawUrl) {
     let score = 0;
     if (!isLikelyListingUrl(rawUrl)) score += 100;
     if (digitRunPattern.test(url.pathname)) score += 20;
+    score -= [...url.searchParams.keys()].filter((key) => key.toLowerCase().startsWith('utm_')).length * 5;
+    score -= url.search.length / 100;
+    return score;
+  } catch {
+    return -1000;
+  }
+}
+
+async function researchStage(label, scope, allowedDomains, minimumSources = 4) {
+  let best = { narrative: '', source_urls: [] };
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const body = await requestOpenAi(label, {
+      model,
+      input: `당신은 CRO STAFF의 조사 담당자다.\n\n조사 범위:\n${scope}\n\n공통 조사 규칙:\n${commonResearchRules}`,
+      tools: [{
+        type: 'web_search',
+        search_context_size: 'medium',
+        filters: { allowed_domains: allowedDomains },
+        user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' }
+      }],
+      max_tool_calls: 2,
+      include: ['web_search_call.action.sources'],
+      store: false,
+      reasoning: { effort: 'low' },
+      text: { verbosity: 'medium' },
+      max_output_tokens: 4500
+    });
+    const narrative = extractOutputText(body);
+    const sourceUrls = extractSourceUrls(body);
+    if (narrative && sourceUrls.length > best.source_urls.length) best = { narrative, source_urls: sourceUrls };
+    if (narrative && sourceUrls.length >= minimumSources) {
       console.log(`${label} collected ${sourceUrls.length} verified source URLs.`);
       return { narrative, source_urls: sourceUrls };
     }
