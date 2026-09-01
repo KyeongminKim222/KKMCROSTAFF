@@ -222,29 +222,27 @@ async function researchStage(label, scope, allowedDomains, minimumSources = 4) {
     const narrative = extractOutputText(body);
     const sourceUrls = extractSourceUrls(body);
     
+    // Track the best result found across attempts
     if (narrative && sourceUrls.length > best.source_urls.length) {
       best = { narrative, source_urls: sourceUrls };
     }
-    if (narrative && sourceUrls.length >= minimumSources) {
-      break;
-    }
-  }
-  return best;
-} best.source_urls.length) best = { narrative, source_urls: sourceUrls };
+    
+    // If we meet or exceed minimum sources, return the successful result immediately
     if (narrative && sourceUrls.length >= minimumSources) {
       console.log(`${label} collected ${sourceUrls.length} verified source URLs.`);
       return { narrative, source_urls: sourceUrls };
     }
+    
+    // Cooldown and retry if it's only the first attempt
     if (attempt < 2) {
       console.warn(`${label} returned fewer than ${minimumSources} cited sources. Retrying after TPM cooldown.`);
       await coolDown(`${label} empty-source retry`);
     }
-  }
+  } // Closes the for loop
+  
   console.warn(`${label} returned only ${best.source_urls.length} cited sources; continuing with verified sources from other stages.`);
   return best;
 }
-
-const domesticMedia = await researchStage(
   'Korean financial media research',
   `한국 주요 통신사·경제지·금융 전문매체 및 네이버뉴스의 일반 언론기사를 조사하라.
 금리·환율·유동성·부동산 PF·가계/기업 신용·자본규제·소비자보호·사이버·운영리스크와 금융회사 사건을 폭넓게 점검하라.
