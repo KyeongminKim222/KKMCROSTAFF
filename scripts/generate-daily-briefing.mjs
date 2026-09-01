@@ -710,9 +710,33 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
         console.log(`Normalized researched URL: ${item.url} -> ${researchedUrl}`);
         item.url = researchedUrl;
       }
-      const verifiedKey = canonicalUrlKey(item.url);
-        throw new Error(`Critical article must be dated today (window=primary): ${item.title} URL: ${item.url}`);
-      }
+ const verifiedKey = canonicalUrlKey(item.url);
+if (candidateUrls.has(verifiedKey)) {
+  throw new Error(`Duplicate article URL in final briefing: ${item.url}`);
+}
+candidateUrls.add(verifiedKey);
+
+const published = parsePublishedKst(item.published);
+if (!published.date) {
+  throw new Error(`Article published date was missing or invalid: ${item.title} URL: ${item.url}`);
+}
+
+const ageHours = (Date.now() - published.date.getTime()) / (1000 * 60 * 60);
+if (ageHours < -12 || ageHours > 168) {
+  throw new Error(`Article was outside the permitted 7-day window: ${item.title} URL: ${item.url}`);
+}
+
+if (item.window === 'primary' && ageHours > 36) {
+  throw new Error(`Primary article was older than 36 hours: ${item.title} URL: ${item.url}`);
+}
+
+if (item.critical === true && item.window !== 'primary') {
+  throw new Error(`Critical article must use window=primary: ${item.title} URL: ${item.url}`);
+}
+
+if (item.critical === true && ageHours > 36) {
+  throw new Error(`Critical article must be dated today (window=primary): ${item.title} URL: ${item.url}`);
+}
     }
     for (const item of candidate.subsidiary_news || []) {
       if (!mentionsWooriSubsidiary(item)) {
