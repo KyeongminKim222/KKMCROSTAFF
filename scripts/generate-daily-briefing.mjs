@@ -67,7 +67,7 @@ url.searchParams.delete(key);
 }
 }
 url.searchParams.sort();
-const pathname = url.pathname.length > 1 ? url.pathname.replace(//+$/, '') : url.pathname;
+const pathname = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, '') : url.pathname;
 const query = url.searchParams.toString();
 return ${url.protocol}//${url.hostname}${url.port ? :${url.port}: ''}${pathname}${query ??${query} : ''};
 }
