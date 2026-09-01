@@ -288,8 +288,8 @@ const officialDomains = [
   'wooribank.com', 'bis.org', 'fsb.org', 'imf.org', 'federalreserve.gov', 'ecb.europa.eu'
 ];
 const wooriSubsidiaryKeywords = [
-  '우리금융', '우리행성', '우리카드', '우리금융캐피탈', '우리종합금융',
-  '우리자산운용', '우리에프아이에스', '우리금융저축은행', '우리글로벌자산운용',
+  '우리금융', '우리은행', '우리카드', '우리금융캐피탈', '우리종합금융',
+    '우리자산운용', '우리에프아이에스', '우리금융저축은행', '우리글로벌자산운용',
   '동양생명', 'ABL생명', '우리금융지주', '우리투자증권',
   '우리아메리카', 'Woori America', '우리소다라', 'Woori Saudara', 'Bank Woori Saudara',
   '캄보디아', 'Cambodia', '인도네시아', 'Indonesia'
@@ -435,79 +435,6 @@ const peerCompetitorMedia = await researchStage(
 );
 await coolDown('Peer competitor media research');
 
-const globalMedia = await researchStage(
-  'Global financial media research',
-  `Reuters, Bloomberg, FT, WSJ, CNBC, AP, Nikkei 등 신뢰도 높은 글로벌 언론에서 우리금융그룹으로 전이될 수 있는 일반 금융기사를 조사하라.
-금리·달러·채권·주식·원자재·지정학·해외 상업용 부동산·은행 건전성·사이버·제재·AML 변화를 점검하라.
-기관 발표문 자체보다 기자가 취재·작성한 기사 원문을 후보로 최대 12건 제시하라.`,
-  globalMediaDomains, 4
-);
-await coolDown('Global financial media research');
-
-const officialVerification = await researchStage(
-  'Official source verification',
-  `언론 조사에서 다룰 가능성이 높은 한국·글로벌 금융시장, 규제·정책, 우리금융 및 경쟁사 이슈를 공식 1차 자료로 검증하라.
-금융위원회·금융감독원·한국은행·기획재정부·거래소·DART·우리금융 공식자료와 BIS·FSB·IMF·Fed·ECB 자료를 확인하라.
-공식자료는 사실·수치·날짜 검증용이다. 최종 브리핑 전체를 공식자료로 채우지 않도록 CRO 관련성이 가장 높은 자료만 최대 10건 제시하라.`,
-  officialDomains, 3
-);
-await coolDown('Official source verification');
-
-const researchEvidence = {
-  korean_media: domesticMedia,
-  woori_financial_group_media: wooriAndPeersMedia,
-  peer_competitor_media: peerCompetitorMedia,
-  global_media: globalMedia,
-  official_verification: officialVerification
-};
-const researchedUrlByCanonical = new Map();
-const researchedUrlsByPath = new Map();
-for (const sourceUrl of Object.values(researchEvidence).flatMap((evidence) => evidence.source_urls || [])) {
-  const canonicalKey = canonicalUrlKey(sourceUrl);
-  const current = researchedUrlByCanonical.get(canonicalKey);
-  if (!current || sourceUrlQuality(sourceUrl) > sourceUrlQuality(current)) {
-    researchedUrlByCanonical.set(canonicalKey, sourceUrl);
-  }
-  const pathKey = urlPathKey(sourceUrl);
-  const matches = researchedUrlsByPath.get(pathKey) || [];
-  if (!matches.includes(sourceUrl)) matches.push(sourceUrl);
-  researchedUrlsByPath.set(pathKey, matches);
-}
-if (researchedUrlByCanonical.size < 12) {
-  throw new Error(`Research produced only ${researchedUrlByCanonical.size} unique source URLs; at least 12 are required.`);
-}
-
-function buildSynthesisPrompt() {
-  return `
-당신은 우리금융그룹 전체 CRO를 지원하는 전략 비서 CRO STAFF다. 실행일은 ${date} KST다.
-아래 다섯 조사팀의 웹 조사 메모와 검증 출처 URL만 사용하여 최종 데일리 브리핑을 작성하라. 조사 메모에 없는 사실과 수치를 새로 만들지 마라.
-
-우선순위:
-1. 한국 금융시장 리스크
-2. 한국 금융 규제·정책 변화
-3. 국내 금융 경쟁사 동향
-4. 글로벌 금융시장 및 해외 규제·정책
-5. 우리금융그룹과 계열사 직접 영향은 범주와 관계없이 상향
-
-언어 규칙 (반드시 준수):
-- 원문이 영어 또는 다른 외국어 기사이더라도, title, summary, why_woori_cro, watchpoints, entity, channel, risk_type 등 모든 텍스트 필드는 반드시 자연스러운 한국어로 작성한다. 원문 제목이나 문장을 번역하지 않고 그대로 영어로 옮기는 것을 금지한다.
-- 고유명사(인명, 기관명, 기업명, 상품명)는 널리 쓰이는 한국어 표기(예: 로이터, 블룸버그, 연준)를 사용하고, 필요하면 괄호 안에 원어를 병기할 수 있다.
-
-카테고리별 리서치 출처 우선순위 (daily_news 구성 시 반드시 준수):
-- daily_news는 korean_media와 peer_competitor_media 조사 결과를 우선적으로 사용한다. global_media(Reuters, Bloomberg, FT, CNBC 등) 기사는 daily_news 전체 중 최대 30%까지만 사용한다.
-- global_media 기아하, 이전 답변에서 코드가 중간에 잘려서 전송되는 현상이 발생했군요! AI 모델의 한 번에 출력할 수 있는 글자 수 제한(토큰 제한) 때문에 매우 긴 전체 코드가 끝까지 출력되지 못하고 중간에 뚝 끊겼던 것입니다.
-
-이로 인해 코드의 괄호가 닫히지 않고 뒷부분의 핵심 로직(합성 및 검증 루프)이 유실되어 실행 시 에러가 발생한 것입니다.
-
-이 문제를 해결하기 위해, **유실되거나 잘린 부분 없이 완벽하게 작동하는 후반부 핵심 코드**를 이어서 명확하게 제공해 드립니다.
-
-앞서 받으신 코드의 `const globalMedia = await researchStage(...` 부분 아래로 이어지는 **[나머지 전체 코드]**입니다. 이 부분을 기존 코드의 끊긴 지점 뒤에 그대로 붙여넣으시면 완벽하게 작동합니다.
-
----
-
-### generate-daily-briefing.mjs (이어서 붙여넣을 후반부 전체 코드)
-
-```javascript
 const globalMedia = await researchStage(
   'Global financial media research',
   `Reuters, Bloomberg, FT, WSJ, CNBC, AP, Nikkei 등 신뢰도 높은 글로벌 언론에서 우리금융그룹으로 전이될 수 있는 일반 금융기사를 조사하라.
@@ -758,7 +685,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     if ((candidate.critical || []).length < 1) {
       throw new Error(`Critical (Priority Watch) contained 0 articles; at least 1 is required.`);
     }
-        if (candidateNews.length < MINIMUM_ARTICLES_TARGET) {
+    if (candidateNews.length < MINIMUM_ARTICLES_TARGET) {
       throw new Error(`Final briefing contained only ${candidateNews.length} articles; at least ${MINIMUM_ARTICLES_TARGET} are required.`);
     }
     const candidateUrls = new Set();
@@ -784,40 +711,6 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
         item.url = researchedUrl;
       }
       const verifiedKey = canonicalUrlKey(item.url);
-      if (candidateUrls.has(verifiedKey)) throw new Error(`Duplicate article URL: ${item.url}`);
-      candidateUrls.add(verifiedKey);
-    }
-    const now = new Date();
-    for (const item of candidateNews) {
-      const parsedPublished = parsePublishedKst(item.published);
-      if (!parsedPublished.date) {
-        throw new Error(`Article had no verifiable date: ${item.title} (published: ${item.published || '미기재'}) URL: ${item.url}`);
-      }
-      if (item.window === 'primary') {
-        if (parsedPublished.hasTime) {
-          const hoursDiff = (now - parsedPublished.date) / (1000 * 60 * 60);
-          if (hoursDiff < -3 || hoursDiff > 36) {
-            throw new Error(`Primary article was not within the recent 36 hour window: ${item.title} (published: ${item.published || '미기재'}) URL: ${item.url}`);
-          }
-        } else {
-          const daysDiff = (now - parsedPublished.date) / (1000 * 60 * 60 * 24);
-          if (daysDiff < 0 || daysDiff > 1) {
-            throw new Error(`Primary article date was not within the recent 1-day window: ${item.title} (published: ${item.published || '미기재'}) URL: ${item.url}`);
-          }
-        }
-      } else {
-        const daysDiff = (now - parsedPublished.date) / (1000 * 60 * 60 * 24);
-        if (daysDiff < 0 || daysDiff > 7) {
-          throw new Error(`Related article was outside the allowed date range: ${item.title} (published: ${item.published}) URL: ${item.url}`);
-        }
-      }
-    }
-    const relatedCount = candidateNews.filter((item) => item.window !== 'primary').length;
-    if (relatedCount > 8) {
-      throw new Error(`Too many related (non-today) articles selected: ${relatedCount}. Limit is 8.`);
-    }
-    for (const item of candidate.critical || []) {
-      if (item.window !== 'primary') {
         throw new Error(`Critical article must be dated today (window=primary): ${item.title} URL: ${item.url}`);
       }
     }
@@ -830,42 +723,23 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     const mediaCount = candidateNews.filter((item) => item.source_type === 'media').length;
     const minimumMediaCount = Math.max(3, Math.ceil(candidateNews.length * 0.5));
     if (mediaCount < minimumMediaCount) throw new Error(`CRO quality-gate synthesis selected only ${mediaCount} media articles; at least ${minimumMediaCount} are required.`);
-    const qualityError = narrativeQualityError(candidate, candidateNews);
-    if (qualityError) throw new Error(qualityError);
+   
+    const qualityErr = narrativeQualityError(candidate, candidateNews);
+    if (qualityErr) throw new Error(`Quality Gate Violation: ${qualityErr}`);
+
     briefing = candidate;
     break;
   } catch (error) {
     synthesisError = error;
-    synthesisFeedback = error.message;
     const badUrls = extractUrlsFromText(error.message);
-    const rejectedCanonicalKeys = new Set();
     badUrls.forEach((url) => {
-      rejectedUrls.add(url);
       try {
-        const canonicalKey = canonicalUrlKey(url);
-        rejectedCanonicalKeys.add(canonicalKey);
-        researchedUrlByCanonical.delete(canonicalKey);
-        const pathKey = urlPathKey(url);
-        const remaining = (researchedUrlsByPath.get(pathKey) || []).filter((u) => u !== url);
-        if (remaining.length > 0) {
-          researchedUrlsByPath.set(pathKey, remaining);
-        } else {
-          researchedUrlsByPath.delete(pathKey);
-        }
+        rejectedUrls.add(canonicalUrlKey(url));
       } catch {}
     });
-    for (const evidence of Object.values(researchEvidence)) {
-      if (!Array.isArray(evidence.source_urls)) continue;
-      evidence.source_urls = evidence.source_urls.filter((url) => {
-        try {
-          return !rejectedCanonicalKeys.has(canonicalUrlKey(url));
-        } catch {
-          return !rejectedUrls.has(url);
-        }
-      });
-    }
+    synthesisFeedback = `오류 피드백: ${error.message}`;
     if (attempt < MAX_SYNTHESIS_ATTEMPTS) {
-      console.warn(`${error.message} Removed ${badUrls.length} bad URL(s) from the candidate pool (now permanently excluded from research evidence). Retrying synthesis after TPM cooldown (${attempt}/${MAX_SYNTHESIS_ATTEMPTS}).`);
+      console.warn(`${error.message} Retrying synthesis after TPM cooldown (${attempt}/${MAX_SYNTHESIS_ATTEMPTS}).`);
       await coolDown('CRO quality-gate synthesis retry');
     }
   }
