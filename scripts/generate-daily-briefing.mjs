@@ -123,8 +123,13 @@ async function coolDown(label) {
     ? cooldownMilliseconds
     : 75_000;
   console.log(`${label} complete. Cooling down OpenAI TPM for ${milliseconds / 1000} seconds.`);
-    console.log(`Briefing for ${date} already exists. Skipping duplicate run.`);
+  
+  // Implemented standard asynchronous delay using the configuration timer
+  await new Promise((resolve) => setTimeout(resolve, milliseconds));
+} // <-- Correctly closed the function scope here
+
 const datePattern = new RegExp('(\\d{4})-(\\d{2})-(\\d{2})');
+
 const timePattern = new RegExp('(\\d{2}):(\\d{2})');
 
 function parsePublishedKst(publishedText) {
@@ -216,7 +221,16 @@ async function researchStage(label, scope, allowedDomains, minimumSources = 4) {
     });
     const narrative = extractOutputText(body);
     const sourceUrls = extractSourceUrls(body);
-    if (narrative && sourceUrls.length > best.source_urls.length) best = { narrative, source_urls: sourceUrls };
+    
+    if (narrative && sourceUrls.length > best.source_urls.length) {
+      best = { narrative, source_urls: sourceUrls };
+    }
+    if (narrative && sourceUrls.length >= minimumSources) {
+      break;
+    }
+  }
+  return best;
+} best.source_urls.length) best = { narrative, source_urls: sourceUrls };
     if (narrative && sourceUrls.length >= minimumSources) {
       console.log(`${label} collected ${sourceUrls.length} verified source URLs.`);
       return { narrative, source_urls: sourceUrls };
