@@ -2,8 +2,6 @@ import { readFile, writeFile } from 'node:fs/promises';
 
 const apiKey = process.env.OPENAI_API_KEY || '';
 const model = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
-const researchModel = process.env.OPENAI_RESEARCH_MODEL || 'gpt-5.4-mini';
-const synthesisModel = process.env.OPENAI_SYNTHESIS_MODEL || 'gpt-5.4-mini';
 const cooldownMilliseconds = Number(process.env.OPENAI_COOLDOWN_MS || 75_000);
 const outputPath = new URL('../public/briefing.json', import.meta.url);
 
@@ -209,10 +207,10 @@ const schema = {
       maxItems: 4,
       items: { type: 'string' }
     },
-    critical: { type: 'array', minItems: 1, maxItems: 4, items: newsItem },
-    daily_news: { type: 'array', minItems: 4, maxItems: 6, items: newsItem },
-    subsidiary_news: { type: 'array', minItems: 3, maxItems: 6, items: newsItem },
-    additional_news: { type: 'array', minItems: 2, maxItems: 3, items: newsItem },
+    critical: { type: 'array', minItems: 0, maxItems: 4, items: newsItem },
+    daily_news: { type: 'array', minItems: 0, maxItems: 5, items: newsItem },
+    subsidiary_news: { type: 'array', minItems: 0, maxItems: 5, items: newsItem },
+    additional_news: { type: 'array', minItems: 0, maxItems: 2, items: newsItem },
     forward_looking_points: {
       type: 'array',
       maxItems: 4,
@@ -296,12 +294,11 @@ URL은 실제 검색으로 확인한 개별 기사 또는 개별 공식 발표�
 게시 일시는 KST 기준으로 적고 확인할 수 없으면 '게시 시각 미확인'이라고 명시하라.
 확인된 사실과 CRO 관점의 분석을 구분하고, 수치·날짜·기관명·기업명을 검증하라.
 자본·유동성·신용·시장·운영·사이버·법무/준법·평판·전략 리스크 영향을 평가하라.
-특히 BIS 비율, NPL, 가계부채, 부동산 PF, 유동성 리스크, AML/KYC, 스트레스테스트, 자산건전성, 신용리스크, 시장리스크, 운영리스크, NIM(이자감응마진), 여신손실비용, 건전성분류, 자본충실도, 레버리지, LCR(유동성커버리지비율) 등 CRO 핵심 지표와 리스크 유형을 적극적으로 점검하라.
 신뢰할 만한 후보가 부족하면 숫자를 채우지 말고 조사 메모에 이유를 적어라.
 primary 후보가 부족하면 맥락 이해에 직접 필요한 최근 7일 이내 유관·배경 자료를 추가 조사하되 반드시 related라고 표시하고 날짜를 명확히 적어라.
 이전 브리핑에 이미 사용된 URL은 후보에서 절대 제외하라: ${JSON.stringify([...previousCanonicalUrls])}
 이전 브리핑 제목은 중대한 신규 사실이 있을 때만 다시 후보에 포함하라: ${JSON.stringify(previousTitles)}
-이전 브리핑의 사건·주제와 사실상 같은 경우에는 URL과 언론사가 달라도 후보에서 제외하라. 예를 들어 같은 기업의 같은 제재·사고·실적·자본조달·정책 발표·통계 발표를 다른 매체가 보도한 기사는 새로운 기사로 보지 마라. 이전 브리핑 주제 참고 자료: ${JSON.stringify(previousTopics)}
+이전 브리핑의 사건·주제와 사실상 같은 경우에는 URL과 언론사가 달라도 후보에서 제외하라. 예를 들어 같은 기업의 같은 제재·사고·실적·자본조달·정책발표·통계발표를 다른 매체가 보도한 기사는 새로운 기사로 보지 마라. 이전 브리핑 주제 참고 자료: ${JSON.stringify(previousTopics)}
 각 후보에 제목, 매체·기관, 게시 일시, 직접 URL, 확인된 사실, 우리금융 CRO 중요성, 리스크 유형, 긴급도, 근거 신뢰도와 확인할 질문을 포함하라.
 모든 한국어 서술은 임원 보고서에 맞는 정중한 합니다체로 작성하라. 문장을 '한다·이다·있다·된다·필요하다'로 끝내지 말고 '합니다·입니다·있습니다·됩니다·필요합니다'로 끝내라.
 반드시 웹 검색을 수행하고, 모든 후보 옆에 실제 검색 출처를 인라인 인용으로 붙여라. 이 조사 단계에서는 JSON을 만들지 말고 읽기 쉬운 한국어 조사 메모로 답하라.
@@ -329,17 +326,8 @@ const wooriSubsidiaryKeywords = [
   '우리금융', '우리금융지주', '우리은행', '우리카드', '우리금융캐피탈',
   '우리종합금융', '우리자산운용', '우리금융저축은행', '우리투자증권',
   '우리에프아이에스', '우리글로벌자산운용', '동양생명', 'ABL생명',
-  '우리아메리카', 'Woori America', '우리아메리카은행', 'Woori America Bank',
-  '우리소다라', 'Woori Saudara', 'Bank Woori Saudara',
-  '캄보디아', 'Cambodia', '인도네시아', 'Indonesia',
-  '우리금융캄보디아', 'Woori Finance Cambodia', 'WB Finance',
-  '우리은행 런던지점', 'Woori Bank London',
-  '우리은행 뉴욕지점', 'Woori Bank New York',
-  '우리은행 도쿄지점', 'Woori Bank Tokyo',
-  '우리은행 홍콩지점', 'Woori Bank Hong Kong',
-  '우리은행 싱가포르지점', 'Woori Bank Singapore',
-  '우리은행 두바이지점', 'Woori Bank Dubai',
-  '우리은행 중국', 'Woori Bank China'
+  '우리아메리카', 'Woori America', '우리소다라', 'Woori Saudara', 'Bank Woori Saudara',
+  '캄보디아', 'Cambodia', '인도네시아', 'Indonesia'
 ];
 
 function mentionsWooriSubsidiary(item) {
@@ -415,20 +403,20 @@ async function researchStage(label, scope, allowedDomains, minimumSources = 4) {
   let best = { narrative: '', source_urls: [] };
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const body = await requestOpenAi(label, {
-      model: researchModel,
+      model,
       input: `당신은 CRO STAFF의 조사 담당자다.\n\n조사 범위:\n${scope}\n\n공통 조사 규칙:\n${commonResearchRules}`,
       tools: [{
         type: 'web_search',
-        search_context_size: 'high',
+        search_context_size: 'medium',
         filters: { allowed_domains: allowedDomains },
         user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' }
       }],
-      max_tool_calls: 3,
+      max_tool_calls: 2,
       include: ['web_search_call.action.sources'],
       store: false,
-      reasoning: { effort: 'medium' },
+      reasoning: { effort: 'low' },
       text: { verbosity: 'medium' },
-      max_output_tokens: 8000
+      max_output_tokens: 4500
     });
     const narrative = extractOutputText(body);
     const sourceUrls = extractSourceUrls(body);
@@ -460,7 +448,7 @@ const wooriMedia = await researchStage(
   'Woori Financial Group media research',
   `한국 주요 통신사·경제지·금융 전문매체에서 우리금융그룹 및 계열사에 관한 일반 언론기사를 전용으로 조사하라.
 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 동양생명, ABL생명 관련 보도를 빠짐없이 점검하라.
-우리은행 해외지점(런던, 뉴욕, 도쿄, 홍콩, 싱가포르, 두바이 등) 및 해외 현지법인(우리아메리카은행, 우리금융캄보디아, Bank Woori Saudara, 우리은행 중국법인 등) 관련 기사와 해당 지역 금융권 이슈도 적극적으로 조사하라.
+우리은행 해외지점 및 해외 현지법인인 우리아메리카은행, 우리소다라 등과 캄보디아·인도네시아 금융권 이슈도 적극적으로 조사하라.
 해외법인 직접 보도가 부족한 경우에는 해당 지역의 금리, 환율, 은행 건전성, 금융규제, 소비자보호, 사이버, AML 관련 일반 금융권 기사를 후보로 조사하되 related 여부와 연결 근거를 명확히 적어라.
 기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최대 14건 제시하라.`,
   koreanMediaDomains,
@@ -483,18 +471,28 @@ const globalMedia = await researchStage(
   'Global financial media research',
   `Reuters, Bloomberg, FT, WSJ, CNBC, AP, Nikkei 등 신뢰도 높은 글로벌 언론에서 우리금융그룹으로 전이될 수 있는 일반 금융기사를 조사하라.
 금리·달러·채권·주식·원자재·지정학·해외 상업용 부동산·은행 건전성·사이버·제재·AML 변화를 점검하라.
-우리금융그룹 해외지점(런던, 뉴욕, 도쿄, 홍콩, 싱가포르, 두바이 등) 및 해외 현지법인(우리아메리카은행, 우리금융캄보디아, Bank Woori Saudara, 우리은행 중국법인 등) 관련 글로벌 뉴스도 적극적으로 조사하라. 특정 국가에 국한되지 않고 전 세계 어디서든 우리금융 해외법인 관련 기사가 검색되면 후보에 포함하라.
 기관 발표문 자체보다 기자가 취재·작성한 기사 원문을 후보로 최대 12건 제시하라.`,
   globalMediaDomains,
   4
 );
 await coolDown('Global financial media research');
 
+const officialVerification = await researchStage(
+  'Official source verification',
+  `언론 조사에서 다룰 가능성이 높은 한국·글로벌 금융시장, 규제·정책, 우리금융 및 경쟁사 이슈를 공식 1차 자료로 검증하라.
+금융위원회·금융감독원·한국은행·기획재정부·거래소·DART·우리금융 공식자료와 BIS·FSB·IMF·Fed·ECB 자료를 확인하라.
+공식자료는 사실·수치·날짜 검증용이다. 최종 브리핑 전체를 공식자료로 채우지 않도록 CRO 관련성이 가장 높은 자료만 최대 10건 제시하라.`,
+  officialDomains,
+  3
+);
+await coolDown('Official source verification');
+
 const researchEvidence = {
   korean_media: domesticMedia,
   woori_media: wooriMedia,
   peer_media: peerMedia,
-  global_media: globalMedia
+  global_media: globalMedia,
+  official_verification: officialVerification
 };
 const researchedUrlByCanonical = new Map();
 const researchedUrlsByPath = new Map();
@@ -510,45 +508,23 @@ for (const sourceUrl of Object.values(researchEvidence).flatMap((evidence) => ev
   researchedUrlsByPath.set(pathKey, matches);
 }
 if (researchedUrlByCanonical.size < 10) {
-  console.warn(`Only ${researchedUrlByCanonical.size} unique source URLs collected. Running supplementary research.`);
-  const supplementaryMedia = await researchStage(
-    'Supplementary financial risk research',
-    `한국 금융시장 리스크, 금융 규제, 자본시장, 부동산 PF, 가계신용, 자본건전성, 유동성, AML/KYC, 스트레스테스트 관련 최근 24시간 금융 기사를 추가로 조사하라. BIS 비율, NPL, 자본충실도, 레버리지, LCR, NIM 등 CRO 핵심 지표 관련 기사도 적극적으로 후보에 포함하라.`,
-    [...koreanMediaDomains, ...globalMediaDomains],
-    4
-  );
-  await coolDown('Supplementary financial risk research');
-  researchEvidence.supplementary_media = supplementaryMedia;
-  for (const sourceUrl of supplementaryMedia.source_urls || []) {
-    const canonicalKey = canonicalUrlKey(sourceUrl);
-    const current = researchedUrlByCanonical.get(canonicalKey);
-    if (!current || sourceUrlQuality(sourceUrl) > sourceUrlQuality(current)) {
-      researchedUrlByCanonical.set(canonicalKey, sourceUrl);
-    }
-    const pathKey = urlPathKey(sourceUrl);
-    const matches = researchedUrlsByPath.get(pathKey) || [];
-    if (!matches.includes(sourceUrl)) matches.push(sourceUrl);
-    researchedUrlsByPath.set(pathKey, matches);
-  }
-  if (researchedUrlByCanonical.size < 10) {
-    throw new Error(`Research produced only ${researchedUrlByCanonical.size} unique source URLs; at least 10 are required.`);
-  }
+  throw new Error(`Research produced only ${researchedUrlByCanonical.size} unique source URLs; at least 10 are required.`);
 }
 function buildSynthesisPrompt() {
   return `
 당신은 우리금융그룹 전체 CRO를 지원하는 전략 비서 CRO STAFF다. 실행일은 ${date} KST다.
 아래 네 조사팀의 웹 조사 메모와 검증 출처 URL만 사용하여 최종 데일리 브리핑을 작성하라. 조사 메모에 없는 사실과 수치를 새로 만들지 마라.
 
-우선순위: 1. 한국 금융시장 리스크 2. 한국 금융 규제·정책 변화 3. 국내 금융 경쟁사 동향 4. 글로벌 금융시장 및 해외 규제·정책 5. 우리금융그룹과 계열사 직접 영향은 범주와 관계없이 상향
-언어 규칙 (반드시 준수): - 원문이 영어 또는 다른 외국어 기사이더라도, title, summary, why_woori_cro, watchpoints, entity, channel, risk_type 등 모든 텍스트 필드는 반드시 자연스러운 한국어로 작성한다. 원문 제목이나 문장을 번역하지 않고 그대로 영어로 옮기는 것을 금지한다. - 고유명사(인명, 기관명, 기업명, 상품명)는 널리 쓰이는 한국어 표기(예: 로이터, 블룸버그, 연준)를 사용하고, 필요하면 괄호 안에 원어를 병기할 수 있다.
-카테고리별 리서치 출처 우선순위 (daily_news 구성 시 반드시 준수): - daily_news는 korean_media와 peer_media 조사 결과를 우선적으로 사용한다. 우리금융그룹 및 계열사 직접 영향 기사는 woori_media 조사 결과를 우선 사용하되 subsidiary_news 배치를 먼저 검토한다. global_media(Reuters, Bloomberg, FT, CNBC 등) 기사는 원칙적으로 daily_news 전체의 약 30% 이내로 제한한다. 단, korean_media나 peer_media 조사 결과가 부족하여 daily_news 최소 개수를 채울 수 없는 경우에는 global_media 기사로 채울 수 있다. - global_media 기사는 한국 금융시장이나 우리금융그룹에 직접적인 영향이 있는 경우에만 선택하고, 단순 해외 시황 소개성 기사는 선택하지 않는다.
+우선순위: 1. 한국 금융시장 리스크 2. 한국 금융 규제·정책 변화 3. 국내 금융 경쟁사 동향 4. 글로벌 금융시장 및 해외 규제·정책 5. 우리금융그룹과 계열사 직접 영향은 범주와 관계없이 상향 
+언어 규칙 (반드시 준수): - 원문이 영어 또는 다른 외국어 기사이더라도, title, summary, why_woori_cro, watchpoints, entity, channel, risk_type 등 모든 텍스트 필드는 반드시 자연스러운 한국어로 작성한다. 원문 제목이나 문장을 번역하지 않고 그대로 영어로 옮기는 것을 금지한다. - 고유명사(인명, 기관명, 기업명, 상품명)는 널리 쓰이는 한국어 표기(예: 로이터, 블룸버그, 연준)를 사용하고, 필요하면 괄호 안에 원어를 병기할 수 있다. 
+카테고리별 리서치 출처 우선순위 (daily_news 구성 시 반드시 준수): - daily_news는 korean_media와 peer_media 조사 결과를 우선적으로 사용한다. 우리금융그룹 및 계열사 직접 영향 기사는 woori_media 조사 결과를 우선 사용하되 subsidiary_news 배치를 먼저 검토한다. global_media(Reuters, Bloomberg, FT, CNBC 등) 기사는 daily_news 전체의 약 30% 이내로 제한한다. - global_media 기사는 한국 금융시장이나 우리금융그룹에 직접적인 영향이 있는 경우에만 선택하고, 단순 해외 시황 소개성 기사는 선택하지 않는다.
 
 최종 선정 규칙:
-- 전체 기사는 최소 10건을 목표로 선정한다. critical(크리티컬)은 최소 1건은 반드시 포함하고, 나머지는 daily_news, subsidiary_news, additional_news 사이에서 그날 확보된 조사 근거의 양과 질에 맞게 자유롭게 배분한다.
-- 특정 카테고리에 오늘 조건을 만족하는 기사가 부족하면 억지로 채우지 말고, 다른 카테고리에서 조건을 만족하는 기사를 더 선정해서 전체 합계 10건을 채운다.
-- subsidiary_news를 채울 때는 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사 관련 오늘자 기사, (2) 우리은행 해외지점(런던, 뉴욕, 도쿄, 홍콩, 싱가포르, 두바이 등)·해외 현지법인(우리아메리카은행, 우리금융캄보디아, Bank Woori Saudara, 우리은행 중국법인 등) 관련 기사, (3) 해당 지역의 금융권 일반 기사(금리, 환율, 은행 건전성, 규제 등). (2), (3)에 해당하는 기사는 window를 related로 표시하고 게시 날짜를 정확히 적는다.
+- 전체 기사는 최소 10건을 목표로 선정한다. critical(크리티컬)은 최소 1건은 반드시 포함하고, 나머지는 daily_news, subsidiary_news, additional_news 사이에서 그날 확보된 조사 근거의 양과 질에 맞게 자유롭게 배분한다. 
+- 특정 카테고리에 오늘 조건을 만족하는 기사가 부족하면 억지로 채우지 말고, 다른 카테고리에서 조건을 만족하는 기사를 더 선정해서 전체 합계 10건을 채운다. 
+- subsidiary_news를 채울 때는 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사 관련 오늘자 기사, (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사, (3) 캄보디아·인도네시아·우리아메리카은행이 영업하는 지역의 금융권 일반 기사(금리, 환율, 은행 건전성, 규제 등). (2), (3)에 해당하는 기사는 window를 related로 표시하고 게시 날짜를 정확히 적는다. 
 - 조사 근거가 부족해서 전체 10건을 도저히 채울 수 없는 경우, 확보된 기사만으로 최소 7건 이상을 완성한다.
-- 우리금융그룹·계열사(subsidiary_news)에는 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 동양생명, ABL생명 등 국내 계열사 기사, 우리은행 해외지점(런던, 뉴욕, 도쿄, 홍콩, 싱가포르, 두바이 등)·해외 현지법인(우리아메리카은행, 우리금융캄보디아, Bank Woori Saudara, 우리은행 중국법인 등) 기사, 또는 해당 해외법인 소재 지역의 금융권 기사만 선택한다. KB금융, 신한금융, 하나금융, NH농협금융, 한국금융지주 등 다른 금융지주·경쟁사 기사는 daily_news에는 배치할 수 있어도 subsidiary_news에는 절대 포함하지 마라.
+- 우리금융그룹·계열사(subsidiary_news)에는 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 동양생명, ABL생명 등 국내 계열사 기사, 우리은행 해외지점·현지법인 기사, 또는 캄보디아·인도네시아·우리아메리카은행 지역 금융권 기사만 선택한다. KB금융, 신한금융, 하나금융, NH농협금융, 한국금융지주 등 다른 금융지주·경쟁사 기사는 daily_news에는 배치할 수 있어도 subsidiary_news에는 절대 포함하지 마라.
 - 전체 기사 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 60% 이상 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 나머지 비중으로 선정한다.
 - 공식자료는 사실과 수치 검증에 적극 활용하되, 같은 사건의 언론기사가 있으면 독자가 맥락과 파급효과를 이해할 수 있는 언론기사를 대표 원문으로 우선 선정한다.
 - Gumloop 예시처럼 연합뉴스, 주요 경제지·금융 전문매체 및 Reuters·Bloomberg·FT·CNBC 등 신뢰도 높은 일반기사가 브리핑의 중심이 되어야 한다.
@@ -676,10 +652,10 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     ? `\n\n다음 URL은 이전 시도에서 이미 실패했으므로 이번 시도에서 절대 다시 선택하지 마라. 대신 조사 근거 안에 있는 완전히 다른 URL을 선택하라:\n${[...rejectedUrls].join('\n')}`
     : '';
   const synthesisBody = await requestOpenAi('CRO quality-gate synthesis', {
-    model: synthesisModel,
+    model,
     input: `${buildSynthesisPrompt()}${synthesisFeedback ? `\n\n이전 시도 품질 오류:\n${synthesisFeedback}\n이 오류를 모두 고쳐 완전히 새로 선정하라.` : ''}${bannedUrlsText}`,
     store: false,
-    reasoning: { effort: 'medium' },
+    reasoning: { effort: 'low' },
     text: {
       verbosity: 'medium',
       format: {
@@ -719,8 +695,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     if ((candidate.critical || []).length < 1) {
       throw new Error(`Critical (Priority Watch) contained 0 articles; at least 1 is required.`);
     }
-    const minimumRequired = attempt <= 5 ? 10 : 7;
-    if (candidateNews.length < minimumRequired) throw new Error(`Final briefing contained only ${candidateNews.length} articles; at least ${minimumRequired} are required.`);
+    if (candidateNews.length < 10) throw new Error(`Final briefing contained only ${candidateNews.length} articles; at least 10 are required.`);
     const candidateUrls = new Set();
     for (const item of candidateNews) {
       let url;
@@ -835,7 +810,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
 }
 
 if (!briefing) {
-  if (!bestFallbackCandidate || bestFallbackCount < 7 || (bestFallbackCandidate.critical || []).length < 1) {
+  if (!bestFallbackCandidate || bestFallbackCount < 3 || (bestFallbackCandidate.critical || []).length < 1) {
     throw synthesisError || new Error('CRO quality-gate synthesis failed without a result.');
   }
   console.warn(`All ${MAX_SYNTHESIS_ATTEMPTS} attempts failed strict validation. Falling back to the best deduplicated candidate with ${bestFallbackCount} articles.`);
@@ -866,7 +841,7 @@ for (const item of allNews) {
   if (previousCanonicalUrls.has(verifiedKey)) {
     throw new Error(`Final briefing reused an article URL from the previous briefing: ${item.url}`);
   }
-  if (urls.has(verifiedKey)) { console.warn(`Duplicate article URL after normalization, removing: ${item.url}`); continue; }
+  if (urls.has(verifiedKey)) throw new Error(`Duplicate article URL: ${item.url}`);
   urls.add(verifiedKey);
 }
 if (allNews.length < 3) throw new Error(`Fallback briefing contained only ${allNews.length} articles; at least 3 are required.`);
@@ -882,7 +857,7 @@ briefing.meta = {
   briefing_date: date,
   generated_at: new Date().toISOString(),
   primary_window: '실행 시점 기준 최근 24시간 (KST), 부족분은 날짜가 표시된 최근 7일 유관·배경 자료',
-  research_method: '4 media research stages + independent CRO quality-gate synthesis',
+  research_method: '4 media research stages + separate official-source verification + independent CRO quality-gate synthesis',
   source_mix: {
     media: allNews.filter((item) => item.source_type === 'media').length,
     official: allNews.filter((item) => item.source_type === 'official').length
@@ -891,4 +866,4 @@ briefing.meta = {
 briefing.insights.as_of = `${date} KST`;
 
 await writeFile(outputPath, `${JSON.stringify(briefing, null, 2)}\n`, 'utf8');
-console.log(`Generated ${allNews.length} unique briefing articles for ${date}.`);
+console.log(`Generated ${allNews.length} unique briefing articles for ${date}.`); 
