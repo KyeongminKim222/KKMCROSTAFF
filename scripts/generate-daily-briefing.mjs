@@ -210,9 +210,9 @@ const schema = {
       items: { type: 'string' }
     },
     critical: { type: 'array', minItems: 1, maxItems: 4, items: newsItem },
-    daily_news: { type: 'array', minItems: 3, maxItems: 5, items: newsItem },
-    subsidiary_news: { type: 'array', minItems: 2, maxItems: 5, items: newsItem },
-    additional_news: { type: 'array', minItems: 1, maxItems: 2, items: newsItem },
+    daily_news: { type: 'array', minItems: 4, maxItems: 6, items: newsItem },
+    subsidiary_news: { type: 'array', minItems: 3, maxItems: 6, items: newsItem },
+    additional_news: { type: 'array', minItems: 2, maxItems: 3, items: newsItem },
     forward_looking_points: {
       type: 'array',
       maxItems: 4,
@@ -541,7 +541,7 @@ function buildSynthesisPrompt() {
 
 우선순위: 1. 한국 금융시장 리스크 2. 한국 금융 규제·정책 변화 3. 국내 금융 경쟁사 동향 4. 글로벌 금융시장 및 해외 규제·정책 5. 우리금융그룹과 계열사 직접 영향은 범주와 관계없이 상향
 언어 규칙 (반드시 준수): - 원문이 영어 또는 다른 외국어 기사이더라도, title, summary, why_woori_cro, watchpoints, entity, channel, risk_type 등 모든 텍스트 필드는 반드시 자연스러운 한국어로 작성한다. 원문 제목이나 문장을 번역하지 않고 그대로 영어로 옮기는 것을 금지한다. - 고유명사(인명, 기관명, 기업명, 상품명)는 널리 쓰이는 한국어 표기(예: 로이터, 블룸버그, 연준)를 사용하고, 필요하면 괄호 안에 원어를 병기할 수 있다.
-카테고리별 리서치 출처 우선순위 (daily_news 구성 시 반드시 준수): - daily_news는 korean_media와 peer_media 조사 결과를 우선적으로 사용한다. 우리금융그룹 및 계열사 직접 영향 기사는 woori_media 조사 결과를 우선 사용하되 subsidiary_news 배치를 먼저 검토한다. global_media(Reuters, Bloomberg, FT, CNBC 등) 기사는 daily_news 전체의 약 30% 이내로 제한한다. - global_media 기사는 한국 금융시장이나 우리금융그룹에 직접적인 영향이 있는 경우에만 선택하고, 단순 해외 시황 소개성 기사는 선택하지 않는다.
+카테고리별 리서치 출처 우선순위 (daily_news 구성 시 반드시 준수): - daily_news는 korean_media와 peer_media 조사 결과를 우선적으로 사용한다. 우리금융그룹 및 계열사 직접 영향 기사는 woori_media 조사 결과를 우선 사용하되 subsidiary_news 배치를 먼저 검토한다. global_media(Reuters, Bloomberg, FT, CNBC 등) 기사는 원칙적으로 daily_news 전체의 약 30% 이내로 제한한다. 단, korean_media나 peer_media 조사 결과가 부족하여 daily_news 최소 개수를 채울 수 없는 경우에는 global_media 기사로 채울 수 있다. - global_media 기사는 한국 금융시장이나 우리금융그룹에 직접적인 영향이 있는 경우에만 선택하고, 단순 해외 시황 소개성 기사는 선택하지 않는다.
 
 최종 선정 규칙:
 - 전체 기사는 최소 10건을 목표로 선정한다. critical(크리티컬)은 최소 1건은 반드시 포함하고, 나머지는 daily_news, subsidiary_news, additional_news 사이에서 그날 확보된 조사 근거의 양과 질에 맞게 자유롭게 배분한다.
@@ -866,7 +866,7 @@ for (const item of allNews) {
   if (previousCanonicalUrls.has(verifiedKey)) {
     throw new Error(`Final briefing reused an article URL from the previous briefing: ${item.url}`);
   }
-  if (urls.has(verifiedKey)) throw new Error(`Duplicate article URL: ${item.url}`);
+  if (urls.has(verifiedKey)) { console.warn(`Duplicate article URL after normalization, removing: ${item.url}`); continue; }
   urls.add(verifiedKey);
 }
 if (allNews.length < 3) throw new Error(`Fallback briefing contained only ${allNews.length} articles; at least 3 are required.`);
