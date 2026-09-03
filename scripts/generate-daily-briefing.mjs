@@ -3,7 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 const apiKey = process.env.OPENAI_API_KEY || '';
 const model = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
 const researchModel = process.env.OPENAI_RESEARCH_MODEL || 'gpt-5.4-mini';
-const synthesisModel = process.env.OPENAI_SYNTHESIS_MODEL || 'gpt-5.4';
+const synthesisModel = process.env.OPENAI_SYNTHESIS_MODEL || 'gpt-5.4-mini';
 const cooldownMilliseconds = Number(process.env.OPENAI_COOLDOWN_MS || 75_000);
 const outputPath = new URL('../public/briefing.json', import.meta.url);
 
@@ -423,7 +423,7 @@ async function researchStage(label, scope, allowedDomains, minimumSources = 4) {
         filters: { allowed_domains: allowedDomains },
         user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' }
       }],
-      max_tool_calls: 5,
+      max_tool_calls: 3,
       include: ['web_search_call.action.sources'],
       store: false,
       reasoning: { effort: 'medium' },
@@ -679,7 +679,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     model: synthesisModel,
     input: `${buildSynthesisPrompt()}${synthesisFeedback ? `\n\n이전 시도 품질 오류:\n${synthesisFeedback}\n이 오류를 모두 고쳐 완전히 새로 선정하라.` : ''}${bannedUrlsText}`,
     store: false,
-    reasoning: { effort: 'high' },
+    reasoning: { effort: 'medium' },
     text: {
       verbosity: 'medium',
       format: {
