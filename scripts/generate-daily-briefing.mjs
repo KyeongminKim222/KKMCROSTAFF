@@ -207,9 +207,9 @@ const schema = {
       maxItems: 4,
       items: { type: 'string' }
     },
-    critical: { type: 'array', minItems: 0, maxItems: 4, items: newsItem },
-    daily_news: { type: 'array', minItems: 0, maxItems: 5, items: newsItem },
-    subsidiary_news: { type: 'array', minItems: 0, maxItems: 5, items: newsItem },
+    critical: { type: 'array', minItems: 3, maxItems: 4, items: newsItem },
+    daily_news: { type: 'array', minItems: 5, maxItems: 6, items: newsItem },
+    subsidiary_news: { type: 'array', minItems: 2, maxItems: 6, items: newsItem },
     additional_news: { type: 'array', minItems: 0, maxItems: 2, items: newsItem },
     forward_looking_points: {
       type: 'array',
@@ -300,6 +300,7 @@ primary 후보가 부족하면 맥락 이해에 직접 필요한 최근 7일 이
 이전 브리핑 제목은 중대한 신규 사실이 있을 때만 다시 후보에 포함하라: ${JSON.stringify(previousTitles)}
 이전 브리핑의 사건·주제와 사실상 같은 경우에는 URL과 언론사가 달라도 후보에서 제외하라. 예를 들어 같은 기업의 같은 제재·사고·실적·자본조달·정책발표·통계발표를 다른 매체가 보도한 기사는 새로운 기사로 보지 마라. 이전 브리핑 주제 참고 자료: ${JSON.stringify(previousTopics)}
 각 후보에 제목, 매체·기관, 게시 일시, 직접 URL, 확인된 사실, 우리금융 CRO 중요성, 리스크 유형, 긴급도, 근거 신뢰도와 확인할 질문을 포함하라.
+각 후보에 제목, 매체·기관, 게시 일시, 직접 URL, 확인된 사실, 우리금융 CRO 중요성, 리스크 유형, 긴급도, 근거 신뢰도와 확인할 질문을 포함하라. 제목은 원문 기사의 실제 헤드라인을 그대로 가져와라. "이데일리 금융권 기사입니다" 같이 매체명과 카테고리만 조합한 문장을 제목으로 만들지 마라. 반드시 원문에 있는 구체적인 기사 제목을 사용하라.
 모든 한국어 서술은 임원 보고서에 맞는 정중한 합니다체로 작성하라. 문장을 '한다·이다·있다·된다·필요하다'로 끝내지 말고 '합니다·입니다·있습니다·됩니다·필요합니다'로 끝내라.
 반드시 웹 검색을 수행하고, 모든 후보 옆에 실제 검색 출처를 인라인 인용으로 붙여라. 이 조사 단계에서는 JSON을 만들지 말고 읽기 쉬운 한국어 조사 메모로 답하라. 다음 기사는 CRO 리스크 브리핑 후보에서 절대 제외하라: 내부 교육·세미나·행사, 후원·CSR·봉사활동, 인사 발령·조직 개편(리스크 사고와 무관한 것), 홍보성 기사, 체육대회·채용박람회·시상식, 단순 통계 발표(리스크 영향 분석이 없는 것), 일반 행정 공지. 이 기사들은 숫자를 채우기 위해 끼워 넣지 마라. 오직 자본·유동성·신용·시장·운영·사이버·법무·평판·전략 리스크에 직접적 영향이 있는 기사만 후보로 삼아라.
 `;
@@ -522,7 +523,7 @@ function buildSynthesisPrompt() {
 최종 선정 규칙:
 - 전체 기사는 최소 10건을 목표로 선정한다. critical(크리티컬)은 최소 1건은 반드시 포함하고, 나머지는 daily_news, subsidiary_news, additional_news 사이에서 그날 확보된 조사 근거의 양과 질에 맞게 자유롭게 배분한다. 
 - 특정 카테고리에 오늘 조건을 만족하는 기사가 부족하면 억지로 채우지 말고, 다른 카테고리에서 조건을 만족하는 기사를 더 선정해서 전체 합계 10건을 채운다. 
-- subsidiary_news를 채울 때는 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사 관련 오늘자 기사, (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사, (3) 캄보디아·인도네시아·우리아메리카은행이 영업하는 지역의 금융권 일반 기사(금리, 환율, 은행 건전성, 규제 등). (2), (3)에 해당하는 기사는 window를 related로 표시하고 게시 날짜를 정확히 적는다. 
+- subsidiary_news를 채울 때는 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사 관련 기사(오늘자 primary 우선, 부족하면 최근 7일 이내 related도 허용), (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사, (3) 캄보디아·인도네시아·우리아메리카은행이 영업하는 지역의 금융권 일반 기사(금리, 환율, 은행 건전성, 규제 등). (1)에서 오늘자 기사가 부족하면 최근 7일 이내 related 기사로 채워라. subsidiary_news를 빈 배열로 제출하지 마라. 반드시 최소 2건 이상을 채워라. 
 - 전체 기사는 반드시 10건 이상을 완성한다. 조사 근거 URL이 10개 이상 확보되었으므로 10건 미만으로는 제출하지 마라. 각 카테고리에 기사가 부족하면 다른 카테고리에서 추가로 선정하여 반드시 합계 10건을 채워라.
 - 우리금융그룹·계열사(subsidiary_news)에는 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 동양생명, ABL생명 등 국내 계열사 기사, 우리은행 해외지점·현지법인 기사, 또는 캄보디아·인도네시아·우리아메리카은행 지역 금융권 기사만 선택한다. KB금융, 신한금융, 하나금융, NH농협금융, 한국금융지주 등 다른 금융지주·경쟁사 기사는 daily_news에는 배치할 수 있어도 subsidiary_news에는 절대 포함하지 마라.
 - 전체 기사 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 60% 이상 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 나머지 비중으로 선정한다.
@@ -540,6 +541,7 @@ function buildSynthesisPrompt() {
 - 확인된 사실과 분석·추론을 구분하고 투자 권고나 확정적 시장 예측을 하지 않는다.
 
 CRO 품질 게이트:
+- title 필드에는 반드시 원문 기사의 실제 헤드라인을 그대로 사용하라. "이데일리 금융권 기사입니다", "한국경제 금융권 기사입니다" 같이 매체명과 카테고리만 조합한 문장을 title로 만들지 마라. 원문에 있는 구체적인 기사 제목을 한국어로 작성하라. - 수치, 날짜, 게시 시각, 기관명, 기업명과 근거 신뢰도를 후보 간 비교한다.
 - 다음 기사는 리스크 영향이 없으므로 절대 선정하지 마라: 내부 교육·행사, 후원·CSR, 인사 발령, 홍보성 기사, 체육대회·시상식·채용박람회, 단순 통계 발표, 일반 행정 공지. 이런 기사가 조사 근거에 있어도 반드시 제외하라. - 수치, 날짜, 게시 시각, 기관명, 기업명과 근거 신뢰도를 후보 간 비교한다.
 - 자본·유동성·신용·시장·운영·사이버·법무/준법·평판·전략 리스크 영향을 평가한다.
 - 영향 전파 속도, 영향 범위, 대응 가능 시간, 규제기관 관심으로 긴급도를 판단한다.
@@ -663,7 +665,7 @@ function countNews(candidate) {
     .reduce((sum, key) => sum + (candidate[key] || []).length, 0);
 }
 
-const MAX_SYNTHESIS_ATTEMPTS = 7;
+const MAX_SYNTHESIS_ATTEMPTS = 4;
 
 for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
   const bannedUrlsText = rejectedUrls.size > 0
@@ -713,7 +715,8 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     if ((candidate.critical || []).length < 1) {
       throw new Error(`Critical (Priority Watch) contained 0 articles; at least 1 is required.`);
     }
-    if (candidateNews.length < 10) throw new Error(`Final briefing contained only ${candidateNews.length} articles; at least 10 are required. 조사 근거 URL에서 추가 기사를 찾아 합계 10건을 반드시 채워라.`);
+    const minimumRequired = attempt <= 2 ? 10 : 7;
+    if (candidateNews.length < minimumRequired) throw new Error(`Final briefing contained only ${candidateNews.length} articles; at least ${minimumRequired} are required. 조사 근거 URL에서 추가 기사를 찾아 합계 ${minimumRequired}건을 반드시 채워라.`);
     const candidateUrls = new Set();
     for (const item of candidateNews) {
       let url;
@@ -776,6 +779,9 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
       if (item.window !== 'primary') {
         throw new Error(`Critical article must be dated today (window=primary): ${item.title} URL: ${item.url}`);
       }
+    }
+    if ((candidate.subsidiary_news || []).length < 2) {
+      throw new Error(`subsidiary_news contained only ${(candidate.subsidiary_news || []).length} articles; at least 2 are required. woori_media 조사 결과에서 우리금융 계열사 기사를 반드시 2건 이상 선정하라.`);
     }
     for (const item of candidate.subsidiary_news || []) {
       if (!mentionsWooriSubsidiary(item)) {
