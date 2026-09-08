@@ -302,7 +302,7 @@ primary 후보가 부족하면 맥락 이해에 직접 필요한 최근 7일 이
 각 후보에 제목, 매체·기관, 게시 일시, 직접 URL, 확인된 사실, 우리금융 CRO 중요성, 리스크 유형, 긴급도, 근거 신뢰도와 확인할 질문을 포함하라.
 각 후보에 제목, 매체·기관, 게시 일시, 직접 URL, 확인된 사실, 우리금융 CRO 중요성, 리스크 유형, 긴급도, 근거 신뢰도와 확인할 질문을 포함하라. 제목은 원문 기사의 실제 헤드라인을 그대로 가져와라. "이데일리 금융권 기사입니다" 같이 매체명과 카테고리만 조합한 문장을 제목으로 만들지 마라. 반드시 원문에 있는 구체적인 기사 제목을 사용하라.
 모든 한국어 서술은 임원 보고서에 맞는 정중한 합니다체로 작성하라. 문장을 '한다·이다·있다·된다·필요하다'로 끝내지 말고 '합니다·입니다·있습니다·됩니다·필요합니다'로 끝내라.
-반드시 웹 검색을 수행하고, 모든 후보 옆에 실제 검색 출처를 인라인 인용으로 붙여라. 이 조사 단계에서는 JSON을 만들지 말고 읽기 쉬운 한국어 조사 메모로 답하라. 다음 기사는 CRO 리스크 브리핑 후보에서 절대 제외하라: 내부 교육·세미나·행사, 후원·CSR·봉사활동, 인사 발령·조직 개편(리스크 사고와 무관한 것), 홍보성 기사, 체육대회·채용박람회·시상식, 단순 통계 발표(리스크 영향 분석이 없는 것), 일반 행정 공지. 이 기사들은 숫자를 채우기 위해 끼워 넣지 마라. 오직 자본·유동성·신용·시장·운영·사이버·법무·평판·전략 리스크에 직접적 영향이 있는 기사만 후보로 삼아라.
+반드시 웹 검색을 수행하고, 모든 후보 옆에 실제 검색 출처를 인라인 인용으로 붙여라. 이 조사 단계에서는 JSON을 만들지 말고 읽기 쉬운 한국어 조사 메모로 답하라. 다음 기사는 CRO 리스크 브리핑 후보에서 절대 제외하라: 내부 교육·세미나·행사, 후원·CSR·봉사활동, 인사 발령·조직 개편(리스크 사고와 무관한 것), 홍보성 기사, 체육대회·채용박람회·시상식, 단순 통계 발표(리스크 영향 분석이 없는 것), 일반 행정 공지, 통화안정증권 경쟁입찰·정례모집, 금융위·한국은행·금감원 정기 보도자료, 기관 공식 보도자료(기자가 작성한 언론기사가 아닌 것). 이 기사들은 숫자를 채우기 위해 끼워 넣지 마라. 오직 자본·유동성·신용·시장·운영·사이버·법무·평판·전략 리스크에 직접적 영향이 있는 기사만 후보로 삼아라.
 `;
 
 const koreanMediaDomains = [
@@ -332,17 +332,17 @@ const wooriSubsidiaryKeywords = [
 ];
 
 function mentionsWooriSubsidiary(item) {
-  const haystack = `${item.title || ''} ${item.entity || ''} ${item.summary || ''} ${item.why_woori_cro || ''}`;
+  const titleEntity = `${item.title || ''} ${item.entity || ''}`;
+  const haystack = `${titleEntity} ${item.summary || ''} ${item.why_woori_cro || ''}`;
   const hasSubsidiaryKeyword = wooriSubsidiaryKeywords.some((keyword) => haystack.includes(keyword));
   if (!hasSubsidiaryKeyword) return false;
+  const competitorKeywords = ['KB금융', 'KB국민', '신한금융', '신한은행', '하나금융', '하나은행', 'NH농협', '농협금융', 'IBK기업은행', '기업은행', '한국금융지주'];
+  const titleHasCompetitor = competitorKeywords.some((keyword) => titleEntity.includes(keyword));
+  const titleHasWoori = wooriSubsidiaryKeywords.some((keyword) => titleEntity.includes(keyword));
+  if (titleHasCompetitor && !titleHasWoori) return false;
   const generalMarketPatterns = ['엔화', '엔환율', '아시아 증시', '증시 반등', '투자심리', '투자 심리', '아시아 증시반등', '역대 최대', '최대 모집'];
   const isGeneralMarketNews = generalMarketPatterns.some((pattern) => haystack.includes(pattern));
-  if (isGeneralMarketNews) {
-    const hasDirectSubsidiaryName = wooriSubsidiaryKeywords.some((keyword) => {
-      return `${item.title || ''} ${item.entity || ''}`.includes(keyword);
-    });
-    if (!hasDirectSubsidiaryName) return false;
-  }
+  if (isGeneralMarketNews && !titleHasWoori) return false;
   return true;
 }
 
@@ -419,7 +419,7 @@ async function researchStage(label, scope, allowedDomains, minimumSources = 4) {
       tools: [{
         type: 'web_search',
         search_context_size: 'high',
-        filters: { allowed_domains: allowedDomains },
+        ...(allowedDomains && allowedDomains.length > 0 ? { filters: { allowed_domains: allowedDomains } } : {}),
         user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' }
       }],
       max_tool_calls: 3,
@@ -447,21 +447,20 @@ async function researchStage(label, scope, allowedDomains, minimumSources = 4) {
 
 const domesticMedia = await researchStage(
   'Korean financial media research',
-  `한국 주요 통신사·경제지·금융 전문매체의 일반 언론기사를 조사하라.
+  `한국 주요 통신사·경제지·금융 전문매체 및 네이버뉴스의 일반 언론기사를 조사하라. 네이버뉴스(news.naver.com, finance.naver.com)의 검색 결과를 적극적으로 활용하라.
 금리·환율·유동성·부동산 PF·가계/기업 신용·자본규제·소비자보호·사이버·운영리스크와 금융회사 사건을 폭넓게 점검하라.
 정부기관 보도자료가 아니라 기자가 작성한 기사 원문을 후보로 최소 8건 최대 12건 제시하라. 같은 정책도 시장·금융회사 파급효과를 분석한 언론기사를 우선하라.`,
-  koreanMediaDomains,
+  null,
   5
 );
 await coolDown('Korean financial media research');
 
 const wooriMedia = await researchStage(
   'Woori Financial Group media research',
-  `한국 주요 통신사·경제지·금융 전문매체에서 우리금융그룹 및 계열사에 관한 일반 언론기사를 전용으로 조사하라.
+  `한국 주요 통신사·경제지·금융 전문매체 및 네이버뉴스에서 우리금융그룹 및 계열사에 관한 일반 언론기사를 전용으로 조사하라. 네이버뉴스(news.naver.com, finance.naver.com)의 검색 결과를 적극적으로 활용하라.
 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 동양생명, ABL생명 관련 보도를 빠짐없이 점검하라.
-우리은행 해외지점 및 해외 현지법인인 우리아메리카은행, 우리소다라 등과 캄보디아·인도네시아 금융권 이슈도 적극적으로 조사하라.
-해외법인 직접 보도가 부족한 경우에는 해당 지역의 금리, 환율, 은행 건전성, 금융규제, 소비자보호, 사이버, AML 관련 일반 금융권 기사를 후보로 조사하되 related 여부와 연결 근거를 명확히 적어라.
-기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최대 14건 제시하라.`,
+우리은행 해외지점 및 해외 현지법인인 우리아메리카은행, 우리소다라 등의 직접 관련 보도도 조사하라.
+기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최소 8건 최대 12건 제시하라.`,
   koreanMediaDomains,
   5
 );
@@ -469,10 +468,10 @@ await coolDown('Woori Financial Group media research');
 
 const peerMedia = await researchStage(
   'Peer competitor media research',
-  `한국 주요 통신사·경제지·금융 전문매체에서 국내 주요 금융 경쟁사의 일반 언론기사를 전용으로 조사하라.
+  `한국 주요 통신사·경제지·금융 전문매체 및 네이버뉴스에서 국내 주요 금융 경쟁사의 일반 언론기사를 전용으로 조사하라. 네이버뉴스(news.naver.com, finance.naver.com)의 검색 결과를 적극적으로 활용하라.
 KB금융, 신한금융, 하나금융, NH농협금융, IBK기업은행, 한국금융지주 및 주요 은행·증권·보험·카드사의 자본, 건전성, 유동성, 인수합병, 제재, 금융사고, 소비자보호, 실적과 리스크 변화를 점검하라.
 우리금융그룹 관련 기사는 이 조사 단계의 후보로 넣지 말고, 경쟁사 변화가 우리금융그룹의 자본·유동성·신용·시장·운영·준법·평판 리스크에 주는 시사점을 함께 적어라.
-기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최대 14건 제시하라.`,
+기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최소 8건 최대 12건 제시하라.`,
   koreanMediaDomains,
   5
 );
@@ -488,22 +487,11 @@ const globalMedia = await researchStage(
 );
 await coolDown('Global financial media research');
 
-const officialVerification = await researchStage(
-  'Official source verification',
-  `언론 조사에서 다룰 가능성이 높은 한국·글로벌 금융시장, 규제·정책, 우리금융 및 경쟁사 이슈를 공식 1차 자료로 검증하라.
-금융위원회·금융감독원·한국은행·기획재정부·거래소·DART·우리금융 공식자료와 BIS·FSB·IMF·Fed·ECB 자료를 확인하라.
-공식자료는 사실·수치·날짜 검증용이다. 최종 브리핑 전체를 공식자료로 채우지 않도록 CRO 관련성이 가장 높은 자료만 최대 10건 제시하라.`,
-  officialDomains,
-  3
-);
-await coolDown('Official source verification');
-
 const researchEvidence = {
   korean_media: domesticMedia,
   woori_media: wooriMedia,
   peer_media: peerMedia,
-  global_media: globalMedia,
-  official_verification: officialVerification
+  global_media: globalMedia
 };
 const researchedUrlByCanonical = new Map();
 const researchedUrlsByPath = new Map();
@@ -526,14 +514,14 @@ function buildSynthesisPrompt() {
 당신은 우리금융그룹 전체 CRO를 지원하는 전략 비서 CRO STAFF다. 실행일은 ${date} KST다.
 아래 네 조사팀의 웹 조사 메모와 검증 출처 URL만 사용하여 최종 데일리 브리핑을 작성하라. 조사 메모에 없는 사실과 수치를 새로 만들지 마라.
 
-우선순위: 1. 한국 금융시장 리스크 2. 한국 금융 규제·정책 변화 3. 국내 금융 경쟁사 동향 4. 글로벌 금융시장 및 해외 규제·정책 5. 우리금융그룹과 계열사 직접 영향은 범주와 관계없이 상향 
-언어 규칙 (반드시 준수): - 원문이 영어 또는 다른 외국어 기사이더라도, title, summary, why_woori_cro, watchpoints, entity, channel, risk_type 등 모든 텍스트 필드는 반드시 자연스러운 한국어로 작성한다. 원문 제목이나 문장을 번역하지 않고 그대로 영어로 옮기는 것을 금지한다. - 고유명사(인명, 기관명, 기업명, 상품명)는 널리 쓰이는 한국어 표기(예: 로이터, 블룸버그, 연준)를 사용하고, 필요하면 괄호 안에 원어를 병기할 수 있다. 
+우선순위: 1. 한국 금융시장 리스크 2. 한국 금융 규제·정책 변화 3. 국내 금융 경쟁사 동향 4. 글로벌 금융시장 및 해외 규제·정책 5. 우리금융그룹과 계열사 직접 영향은 범주와 관계없이 상향
+언어 규칙 (반드시 준수): - 원문이 영어 또는 다른 외국어 기사이더라도, title, summary, why_woori_cro, watchpoints, entity, channel, risk_type 등 모든 텍스트 필드는 반드시 자연스러운 한국어로 작성한다. 원문 제목이나 문장을 번역하지 않고 그대로 영어로 옮기는 것을 금지한다. - 고유명사(인명, 기관명, 기업명, 상품명)는 널리 쓰이는 한국어 표기(예: 로이터, 블룸버그, 연준)를 사용하고, 필요하면 괄호 안에 원어를 병기할 수 있다.
 카테고리별 리서치 출처 우선순위 (daily_news 구성 시 반드시 준수): - daily_news는 korean_media와 peer_media 조사 결과를 우선적으로 사용한다. 우리금융그룹 및 계열사 직접 영향 기사는 woori_media 조사 결과를 우선 사용하되 subsidiary_news 배치를 먼저 검토한다. global_media(Reuters, Bloomberg, FT, CNBC 등) 기사는 daily_news 전체의 약 30% 이내로 제한한다. - global_media 기사는 한국 금융시장이나 우리금융그룹에 직접적인 영향이 있는 경우에만 선택하고, 단순 해외 시황 소개성 기사는 선택하지 않는다.
 
 최종 선정 규칙:
-- 전체 기사는 최소 10건을 목표로 선정한다. critical(크리티컬)은 최소 1건은 반드시 포함하고, 나머지는 daily_news, subsidiary_news, additional_news 사이에서 그날 확보된 조사 근거의 양과 질에 맞게 자유롭게 배분한다. 
-- 특정 카테고리에 오늘 조건을 만족하는 기사가 부족하면 억지로 채우지 말고, 다른 카테고리에서 조건을 만족하는 기사를 더 선정해서 전체 합계 10건을 채운다. 
-- subsidiary_news를 채울 때는 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사 관련 기사(오늘자 primary 우선, 부족하면 최근 7일 이내 related도 허용), (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사, (3) 캄보디아·인도네시아·우리아메리카은행이 영업하는 지역의 금융권 일반 기사(금리, 환율, 은행 건전성, 규제 등). (1)에서 오늘자 기사가 부족하면 최근 7일 이내 related 기사로 채워라. subsidiary_news를 빈 배열로 제출하지 마라. 반드시 최소 2건 이상을 채워라. 
+- 전체 기사는 최소 10건을 목표로 선정한다. critical(크리티컬)은 최소 1건은 반드시 포함하고, 나머지는 daily_news, subsidiary_news, additional_news 사이에서 그날 확보된 조사 근거의 양과 질에 맞게 자유롭게 배분한다.
+- 특정 카테고리에 오늘 조건을 만족하는 기사가 부족하면 억지로 채우지 말고, 다른 카테고리에서 조건을 만족하는 기사를 더 선정해서 전체 합계 10건을 채운다.
+- subsidiary_news를 채울 때는 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사 관련 기사(오늘자 primary 우선, 부족하면 최근 7일 이내 related도 허용), (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사. (1)에서 오늘자 기사가 부족하면 최근 7일 이내 related 기사로 채워라. subsidiary_news에는 일반 시장 뉴스(금리, 환율, 증시, 투자심리, 은행 건전성 등)를 절대 배치하지 마라. subsidiary_news를 빈 배열로 제출하지 마라. 반드시 최소 2건 이상을 채워라.
 - 전체 기사는 반드시 10건 이상을 완성한다. 조사 근거 URL이 10개 이상 확보되었으므로 10건 미만으로는 제출하지 마라. 각 카테고리에 기사가 부족하면 다른 카테고리에서 추가로 선정하여 반드시 합계 10건을 채워라.
 - 우리금융그룹·계열사(subsidiary_news)에는 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명 등 국내 계열사 기사, 또는 우리은행 해외지점·현지법인(우리은행 캄보디아, 우리소다라, 우리아메리카은행) 기사만 선택한다. 캄보디아·인도네시아·미국 지역의 일반 금융권 기사(금리, 환율, 증시, 투자심리, 은행 건전성 등)는 subsidiary_news에 절대 포함하지 마라. 그런 기사는 daily_news에만 배치할 수 있다. KB금융, 신한금융, 하나금융, NH농협금융, 한국금융지주 등 다른 금융지주·경쟁사 기사도 subsidiary_news에는 절대 포함하지 마라.
 - subsidiary_news에는 우리금융그룹 계열사 또는 우리은행 해외지점·해외 현지법인에 직접 관련된 기사만 선정한다. 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사(우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명 등) 관련 기사(오늘자 primary 우선, 부족하면 최근 7일 이내 related도 허용), (2) 우리은행 해외지점·해외 현지법인(우리은행 캄보디아, 우리소다라, 우리아메리카은행 등) 관련 기사. subsidiary_news에는 절대로 일반 시장 뉴스(엔화, 환율, 증시, 투자심리, 금리, 은행 건전성 등)를 배치하지 마라. 해당 지역의 일반 금융권 기사는 daily_news에만 배치할 수 있다. subsidiary_news를 빈 배열로 제출하지 마라. 반드시 최소 2건 이상을 채워라.
@@ -543,7 +531,7 @@ function buildSynthesisPrompt() {
 - critical 기사는 반드시 window를 primary로 표시하며, 실행 시점 기준 최근 36시간 이내에 게시된 기사만 사용한다. published 필드에는 반드시 정확한 게시 시각(시:분 단위)을 KST 기준으로 적는다.
 - daily_news와 subsidiary_news를 채우기 위해 related로 표시하는 기사는 최근 7일 이내여야 하며, 전체 기사 중 related는 최대 8건까지 허용한다.
 - "오늘자 검증 가능한 기사 없음" 같은 placeholder 문구를 title이나 다른 필드에 넣지 마라. 절대로 가짜 기사를 만들지 마라. 조사 근거 URL 목록에 없는 URL을 사용하지 마라. 10건을 채우기 위해 존재하지 않는 기사를 지어내지 마라. 그런 항목을 만들 수 없으면 조사 근거 안에서 실제로 존재하는 다른 기사로 대체하거나, additional_news에 한해서만 해당 카테고리를 빈 배열로 남긴다.
-- 동일 사건과 동일 URL을 제거하고 대표 원문 하나만 남긴다. 서로 다른 매체가 같은 사건(예: 같은 날 발표된 같은 통계, 같은 기관의 같은 공지, 같은 기업의 같은 이슈)을 각자 보도한 경우, URL이 다르더라도 반드시 동일 사건으로 간주하여 가장 상세하고 신뢰도 높은 원문 하나만 남기고 나머지는 절대 선택하지 마라. 예를 들어 "카드론 금리 상승"처럼 같은 주제를 다룬 여러 매체의 기사를 daily_news에 중복 포함시키지 마라. - 같은 기관(예: 한국은행)이 발행하는 정기 공지(예: 통화안정증권 정례모집, 경쟁입찰 등)는 여러 회차가 있어도 최근 것 하나만 선택하고, 유사한 정기 공지를 여러 건 선택하지 마라.
+- 동일 사건과 동일 URL을 제거하고 대표 원문 하나만 남긴다. 서로 다른 매체가 같은 사건(예: 같은 날 발표된 같은 통계, 같은 기관의 같은 공지, 같은 기업의 같은 이슈)을 각자 보도한 경우, URL이 다르더라도 반드시 동일 사건으로 간주하여 가장 상세하고 신뢰도 높은 원문 하나만 남기고 나머지는 절대 선택하지 마라. 예를 들어 "카드론 금리 상승"처럼 같은 주제를 다룬 여러 매체의 기사를 daily_news에 중복 포함시키지 마라. - 통화안정증권 경쟁입찰·정례모집, 금융위·한국은행·금감원 정기 보도자료, 기관 공식 보도자료는 절대 선정하지 마라. 오직 기자가 작성한 언론기사만 선정하라.
 - critical, daily_news, subsidiary_news, additional_news 네 카테고리를 통틀어 같은 URL이나 같은 게시물 번호(seq, id 등)를 가진 기사를 두 번 이상 선택하지 마라. 카테고리를 넘나드는 중복도 동일 사건 중복으로 간주하고 반드시 제거하라.
 - 만약 특정 사건이 여러 카테고리에 모두 적합해 보이면, 그 사건은 가장 관련성이 높은 카테고리 하나에만 배치하고 다른 카테고리에는 조사 근거 안에서 완전히 다른 사건을 새로 찾아 채워라. url 필드를 빈 문자열이나 추정값으로 채우지 말고, 반드시 조사 근거에 있는 실제 URL만 사용하라.
 - URL은 각 조사팀의 source_urls에 있는 값을 글자 하나도 바꾸지 않고 그대로 복사한다.
@@ -552,8 +540,8 @@ function buildSynthesisPrompt() {
 - 확인된 사실과 분석·추론을 구분하고 투자 권고나 확정적 시장 예측을 하지 않는다.
 
 CRO 품질 게이트:
-- title 필드에는 반드시 원문 기사의 실제 헤드라인을 그대로 사용하라. "이데일리 금융권 기사입니다", "한국경제 금융권 기사입니다" 같이 매체명과 카테고리만 조합한 문장을 title로 만들지 마라. 원문에 있는 구체적인 기사 제목을 한국어로 작성하라. "제목 없음"을 title로 사용하지 마라. title이 없는 기사는 제출하지 마라. URL이 없는 기사도 제출하지 마라.
-- 다음 기사는 리스크 영향이 없으므로 절대 선정하지 마라: 내부 교육·행사, 후원·CSR, 인사 발령, 홍보성 기사, 체육대회·시상식·채용박람회, 단순 통계 발표, 일반 행정 공지. 이런 기사가 조사 근거에 있어도 반드시 제외하라. - 수치, 날짜, 게시 시각, 기관명, 기업명과 근거 신뢰도를 후보 간 비교한다.
+- title 필드에는 반드시 원문 기사의 실제 헤드라인을 그대로 사용하라. "이데일리 금융권 기사입니다", "한국경제 금융권 기사입니다", "금융권 동향관련보도", "증권금융시장 관련보도", "우리은행 해외현지법인 관련보도", "계열사 관련보도" 같이 매체명·카테고리·그룹명만 조합한 문장을 title로 만들지 마라. "관련보도"나 "관련 보도"로 끝나는 제목을 절대 만들지 마라. 원문에 있는 구체적인 기사 제목을 한국어로 작성하라. "제목 없음"을 title로 사용하지 마라. title이 없는 기사는 제출하지 마라. URL이 없는 기사도 제출하지 마라.
+- 다음 기사는 리스크 영향이 없으므로 절대 선정하지 마라: 내부 교육·행사, 후원·CSR, 인사 발령, 홍보성 기사, 체육대회·시상식·채용박람회, 단순 통계 발표, 일반 행정 공지, 통화안정증권 경쟁입찰·정례모집, 금융위·한국은행·금감원 정기 보도자료, 기관 공식 보도자료. 이런 기사가 조사 근거에 있어도 반드시 제외하라. - 수치, 날짜, 게시 시각, 기관명, 기업명과 근거 신뢰도를 후보 간 비교한다.
 - 자본·유동성·신용·시장·운영·사이버·법무/준법·평판·전략 리스크 영향을 평가한다.
 - 영향 전파 속도, 영향 범위, 대응 가능 시간, 규제기관 관심으로 긴급도를 판단한다.
 - 기사 간 연결고리, 리스크 전이 경로, 오늘 확인할 지표·질문, 단기 모니터링 포인트를 도출한다.
@@ -590,6 +578,14 @@ function sentenceCount(text) {
 }
 
 function narrativeQualityError(candidate, candidateNews) {
+  const genericTitlePatterns = ['금융권 기사입니다', '금융권 동향관련보도', '금융권 동향 관련 보도', '증권금융시장 관련보도', '증권금융시장 관련 보도', '금융 기사입니다', '경제 기사입니다', '시장 기사입니다', '관련보도', '관련 보도', '해외현지법인 관련', '해외지점 관련', '계열사 관련보도', '금융권 동향', '증권금융시장', '해당없음', '해당 없음', '해당사항없음', '해당 사항 없음', 'placeholder', 'Placeholder', 'N/A', 'n/a', '제목 없음'];
+  const genericTitleItem = candidateNews.find((item) => {
+    const title = String(item.title || '');
+    return genericTitlePatterns.some((pattern) => title.includes(pattern));
+  });
+  if (genericTitleItem) {
+    return `Article title appeared to be a generic/placeholder instead of the actual headline: "${genericTitleItem.title}"`;
+  }
   const irrelevantPatterns = ['교육', '세미나', '후원', 'CSR', '봉사', '체육대회', '시상식', '채용박람회', '환영 행사', '초청 강연'];
   const irrelevantItem = candidateNews.find((item) => {
     const text = `${item.title || ''} ${item.summary || ''}`;
@@ -901,7 +897,7 @@ briefing.meta = {
   briefing_date: date,
   generated_at: new Date().toISOString(),
   primary_window: '실행 시점 기준 최근 24시간 (KST), 부족분은 날짜가 표시된 최근 7일 유관·배경 자료',
-  research_method: '4 media research stages + separate official-source verification + independent CRO quality-gate synthesis',
+  research_method: '4 media research stages + independent CRO quality-gate synthesis',
   source_mix: {
     media: allNews.filter((item) => item.source_type === 'media').length,
     official: allNews.filter((item) => item.source_type === 'official').length
