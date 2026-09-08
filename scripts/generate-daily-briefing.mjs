@@ -666,6 +666,7 @@ function countNews(candidate) {
 }
 
 const MAX_SYNTHESIS_ATTEMPTS = 4;
+const badUrls = new Set();
 
 for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
   const bannedUrlsText = rejectedUrls.size > 0
