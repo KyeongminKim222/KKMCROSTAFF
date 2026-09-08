@@ -301,7 +301,7 @@ primary 후보가 부족하면 맥락 이해에 직접 필요한 최근 7일 이
 이전 브리핑의 사건·주제와 사실상 같은 경우에는 URL과 언론사가 달라도 후보에서 제외하라. 예를 들어 같은 기업의 같은 제재·사고·실적·자본조달·정책발표·통계발표를 다른 매체가 보도한 기사는 새로운 기사로 보지 마라. 이전 브리핑 주제 참고 자료: ${JSON.stringify(previousTopics)}
 각 후보에 제목, 매체·기관, 게시 일시, 직접 URL, 확인된 사실, 우리금융 CRO 중요성, 리스크 유형, 긴급도, 근거 신뢰도와 확인할 질문을 포함하라.
 모든 한국어 서술은 임원 보고서에 맞는 정중한 합니다체로 작성하라. 문장을 '한다·이다·있다·된다·필요하다'로 끝내지 말고 '합니다·입니다·있습니다·됩니다·필요합니다'로 끝내라.
-반드시 웹 검색을 수행하고, 모든 후보 옆에 실제 검색 출처를 인라인 인용으로 붙여라. 이 조사 단계에서는 JSON을 만들지 말고 읽기 쉬운 한국어 조사 메모로 답하라.
+반드시 웹 검색을 수행하고, 모든 후보 옆에 실제 검색 출처를 인라인 인용으로 붙여라. 이 조사 단계에서는 JSON을 만들지 말고 읽기 쉬운 한국어 조사 메모로 답하라. 다음 기사는 CRO 리스크 브리핑 후보에서 절대 제외하라: 내부 교육·세미나·행사, 후원·CSR·봉사활동, 인사 발령·조직 개편(리스크 사고와 무관한 것), 홍보성 기사, 체육대회·채용박람회·시상식, 단순 통계 발표(리스크 영향 분석이 없는 것), 일반 행정 공지. 이 기사들은 숫자를 채우기 위해 끼워 넣지 마라. 오직 자본·유동성·신용·시장·운영·사이버·법무·평판·전략 리스크에 직접적 영향이 있는 기사만 후보로 삼아라.
 `;
 
 const koreanMediaDomains = [
@@ -407,16 +407,16 @@ async function researchStage(label, scope, allowedDomains, minimumSources = 4) {
       input: `당신은 CRO STAFF의 조사 담당자다.\n\n조사 범위:\n${scope}\n\n공통 조사 규칙:\n${commonResearchRules}`,
       tools: [{
         type: 'web_search',
-        search_context_size: 'medium',
+        search_context_size: 'high',
         filters: { allowed_domains: allowedDomains },
         user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' }
       }],
-      max_tool_calls: 2,
+      max_tool_calls: 3,
       include: ['web_search_call.action.sources'],
       store: false,
-      reasoning: { effort: 'low' },
+      reasoning: { effort: 'medium' },
       text: { verbosity: 'medium' },
-      max_output_tokens: 4500
+      max_output_tokens: 6000
     });
     const narrative = extractOutputText(body);
     const sourceUrls = extractSourceUrls(body);
@@ -438,7 +438,7 @@ const domesticMedia = await researchStage(
   'Korean financial media research',
   `한국 주요 통신사·경제지·금융 전문매체의 일반 언론기사를 조사하라.
 금리·환율·유동성·부동산 PF·가계/기업 신용·자본규제·소비자보호·사이버·운영리스크와 금융회사 사건을 폭넓게 점검하라.
-정부기관 보도자료가 아니라 기자가 작성한 기사 원문을 후보로 최대 14건 제시하라. 같은 정책도 시장·금융회사 파급효과를 분석한 언론기사를 우선하라.`,
+정부기관 보도자료가 아니라 기자가 작성한 기사 원문을 후보로 최소 8건 최대 12건 제시하라. 같은 정책도 시장·금융회사 파급효과를 분석한 언론기사를 우선하라.`,
   koreanMediaDomains,
   5
 );
@@ -523,14 +523,14 @@ function buildSynthesisPrompt() {
 - 전체 기사는 최소 10건을 목표로 선정한다. critical(크리티컬)은 최소 1건은 반드시 포함하고, 나머지는 daily_news, subsidiary_news, additional_news 사이에서 그날 확보된 조사 근거의 양과 질에 맞게 자유롭게 배분한다. 
 - 특정 카테고리에 오늘 조건을 만족하는 기사가 부족하면 억지로 채우지 말고, 다른 카테고리에서 조건을 만족하는 기사를 더 선정해서 전체 합계 10건을 채운다. 
 - subsidiary_news를 채울 때는 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사 관련 오늘자 기사, (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사, (3) 캄보디아·인도네시아·우리아메리카은행이 영업하는 지역의 금융권 일반 기사(금리, 환율, 은행 건전성, 규제 등). (2), (3)에 해당하는 기사는 window를 related로 표시하고 게시 날짜를 정확히 적는다. 
-- 조사 근거가 부족해서 전체 10건을 도저히 채울 수 없는 경우, 확보된 기사만으로 최소 7건 이상을 완성한다.
+- 전체 기사는 반드시 10건 이상을 완성한다. 조사 근거 URL이 10개 이상 확보되었으므로 10건 미만으로는 제출하지 마라. 각 카테고리에 기사가 부족하면 다른 카테고리에서 추가로 선정하여 반드시 합계 10건을 채워라.
 - 우리금융그룹·계열사(subsidiary_news)에는 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 동양생명, ABL생명 등 국내 계열사 기사, 우리은행 해외지점·현지법인 기사, 또는 캄보디아·인도네시아·우리아메리카은행 지역 금융권 기사만 선택한다. KB금융, 신한금융, 하나금융, NH농협금융, 한국금융지주 등 다른 금융지주·경쟁사 기사는 daily_news에는 배치할 수 있어도 subsidiary_news에는 절대 포함하지 마라.
 - 전체 기사 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 60% 이상 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 나머지 비중으로 선정한다.
 - 공식자료는 사실과 수치 검증에 적극 활용하되, 같은 사건의 언론기사가 있으면 독자가 맥락과 파급효과를 이해할 수 있는 언론기사를 대표 원문으로 우선 선정한다.
 - Gumloop 예시처럼 연합뉴스, 주요 경제지·금융 전문매체 및 Reuters·Bloomberg·FT·CNBC 등 신뢰도 높은 일반기사가 브리핑의 중심이 되어야 한다.
 - critical 기사는 반드시 window를 primary로 표시하며, 실행 시점 기준 최근 36시간 이내에 게시된 기사만 사용한다. published 필드에는 반드시 정확한 게시 시각(시:분 단위)을 KST 기준으로 적는다.
 - daily_news와 subsidiary_news를 채우기 위해 related로 표시하는 기사는 최근 7일 이내여야 하며, 전체 기사 중 related는 최대 8건까지 허용한다.
-- "오늘자 검증 가능한 기사 없음" 같은 placeholder 문구를 title이나 다른 필드에 넣지 마라. 그런 항목을 만들 수 없으면 조사 근거 안에서 실제로 존재하는 다른 기사로 대체하거나, additional_news에 한해서만 해당 카테고리를 빈 배열로 남긴다.
+- "오늘자 검증 가능한 기사 없음" 같은 placeholder 문구를 title이나 다른 필드에 넣지 마라. 절대로 가짜 기사를 만들지 마라. 조사 근거 URL 목록에 없는 URL을 사용하지 마라. 10건을 채우기 위해 존재하지 않는 기사를 지어내지 마라. 그런 항목을 만들 수 없으면 조사 근거 안에서 실제로 존재하는 다른 기사로 대체하거나, additional_news에 한해서만 해당 카테고리를 빈 배열로 남긴다.
 - 동일 사건과 동일 URL을 제거하고 대표 원문 하나만 남긴다. 서로 다른 매체가 같은 사건(예: 같은 날 발표된 같은 통계, 같은 기관의 같은 공지, 같은 기업의 같은 이슈)을 각자 보도한 경우, URL이 다르더라도 반드시 동일 사건으로 간주하여 가장 상세하고 신뢰도 높은 원문 하나만 남기고 나머지는 절대 선택하지 마라. 예를 들어 "카드론 금리 상승"처럼 같은 주제를 다룬 여러 매체의 기사를 daily_news에 중복 포함시키지 마라. - 같은 기관(예: 한국은행)이 발행하는 정기 공지(예: 통화안정증권 정례모집, 경쟁입찰 등)는 여러 회차가 있어도 최근 것 하나만 선택하고, 유사한 정기 공지를 여러 건 선택하지 마라.
 - critical, daily_news, subsidiary_news, additional_news 네 카테고리를 통틀어 같은 URL이나 같은 게시물 번호(seq, id 등)를 가진 기사를 두 번 이상 선택하지 마라. 카테고리를 넘나드는 중복도 동일 사건 중복으로 간주하고 반드시 제거하라.
 - 만약 특정 사건이 여러 카테고리에 모두 적합해 보이면, 그 사건은 가장 관련성이 높은 카테고리 하나에만 배치하고 다른 카테고리에는 조사 근거 안에서 완전히 다른 사건을 새로 찾아 채워라. url 필드를 빈 문자열이나 추정값으로 채우지 말고, 반드시 조사 근거에 있는 실제 URL만 사용하라.
@@ -540,7 +540,7 @@ function buildSynthesisPrompt() {
 - 확인된 사실과 분석·추론을 구분하고 투자 권고나 확정적 시장 예측을 하지 않는다.
 
 CRO 품질 게이트:
-- 수치, 날짜, 게시 시각, 기관명, 기업명과 근거 신뢰도를 후보 간 비교한다.
+- 다음 기사는 리스크 영향이 없으므로 절대 선정하지 마라: 내부 교육·행사, 후원·CSR, 인사 발령, 홍보성 기사, 체육대회·시상식·채용박람회, 단순 통계 발표, 일반 행정 공지. 이런 기사가 조사 근거에 있어도 반드시 제외하라. - 수치, 날짜, 게시 시각, 기관명, 기업명과 근거 신뢰도를 후보 간 비교한다.
 - 자본·유동성·신용·시장·운영·사이버·법무/준법·평판·전략 리스크 영향을 평가한다.
 - 영향 전파 속도, 영향 범위, 대응 가능 시간, 규제기관 관심으로 긴급도를 판단한다.
 - 기사 간 연결고리, 리스크 전이 경로, 오늘 확인할 지표·질문, 단기 모니터링 포인트를 도출한다.
@@ -577,6 +577,16 @@ function sentenceCount(text) {
 }
 
 function narrativeQualityError(candidate, candidateNews) {
+  const irrelevantPatterns = ['교육', '세미나', '후원', 'CSR', '봉사', '체육대회', '시상식', '채용박람회', '환영 행사', '초청 강연'];
+  const irrelevantItem = candidateNews.find((item) => {
+    const text = `${item.title || ''} ${item.summary || ''}`;
+    return irrelevantPatterns.some((pattern) => text.includes(pattern)) &&
+           !text.includes('리스크') && !text.includes('제재') && !text.includes('사고') &&
+           !text.includes('손실') && !text.includes('규제') && !text.includes('벌금');
+  });
+  if (irrelevantItem) {
+    return `Article appeared to be a non-risk event (education/sponsorship/CSR) incorrectly included: ${irrelevantItem.title}`;
+  }
   const narrativeFields = [
     candidate.executive_judgment,
     ...(candidate.executive_judgment_bullets || []),
@@ -586,6 +596,14 @@ function narrativeQualityError(candidate, candidateNews) {
     ...((candidate.insights || {}).action_items || []),
     (candidate.insights || {}).stance
   ];
+  const placeholderPatterns = ['해당없음', '해당 없음', '해당사항없음', '해당 사항 없음', 'placeholder', 'Placeholder', 'N/A', 'n/a'];
+  const placeholderItem = candidateNews.find((item) => {
+    const text = `${item.title || ''} ${item.summary || ''} ${item.why_woori_cro || ''}`;
+    return placeholderPatterns.some((pattern) => text.includes(pattern));
+  });
+  if (placeholderItem) {
+    return `Article contained placeholder text instead of real content: ${placeholderItem.title}`;
+  }
   if (narrativeFields.some(usesNonFormalKorean)) {
     return 'Korean narrative used plain 한다체 instead of formal 합니다체.';
   }
@@ -655,7 +673,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     model,
     input: `${buildSynthesisPrompt()}${synthesisFeedback ? `\n\n이전 시도 품질 오류:\n${synthesisFeedback}\n이 오류를 모두 고쳐 완전히 새로 선정하라.` : ''}${bannedUrlsText}`,
     store: false,
-    reasoning: { effort: 'low' },
+    reasoning: { effort: 'medium' },
     text: {
       verbosity: 'medium',
       format: {
@@ -695,7 +713,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     if ((candidate.critical || []).length < 1) {
       throw new Error(`Critical (Priority Watch) contained 0 articles; at least 1 is required.`);
     }
-    if (candidateNews.length < 10) throw new Error(`Final briefing contained only ${candidateNews.length} articles; at least 10 are required.`);
+    if (candidateNews.length < 10) throw new Error(`Final briefing contained only ${candidateNews.length} articles; at least 10 are required. 조사 근거 URL에서 추가 기사를 찾아 합계 10건을 반드시 채워라.`);
     const candidateUrls = new Set();
     for (const item of candidateNews) {
       let url;
@@ -713,7 +731,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
         if (pathMatches.length === 1) researchedUrl = pathMatches[0];
       }
       if (!researchedUrl) {
-        console.warn(`Final URL was not present in the extracted source list; retaining the valid synthesized URL: ${item.url}`);
+        throw new Error(`Article URL was not found in the research source list (possibly fabricated): ${item.title} URL: ${item.url}`);
       } else if (item.url !== researchedUrl) {
         console.log(`Normalized researched URL: ${item.url} -> ${researchedUrl}`);
         item.url = researchedUrl;
@@ -810,7 +828,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
 }
 
 if (!briefing) {
-  if (!bestFallbackCandidate || bestFallbackCount < 3 || (bestFallbackCandidate.critical || []).length < 1) {
+  if (!bestFallbackCandidate || bestFallbackCount < 7 || (bestFallbackCandidate.critical || []).length < 1) {
     throw synthesisError || new Error('CRO quality-gate synthesis failed without a result.');
   }
   console.warn(`All ${MAX_SYNTHESIS_ATTEMPTS} attempts failed strict validation. Falling back to the best deduplicated candidate with ${bestFallbackCount} articles.`);
@@ -832,7 +850,7 @@ for (const item of allNews) {
     if (pathMatches.length === 1) researchedUrl = pathMatches[0];
   }
   if (!researchedUrl) {
-    console.warn(`Final URL was not present in the extracted source list; retaining the valid synthesized URL: ${item.url}`);
+    throw new Error(`Final briefing contained a URL not found in research sources (possibly fabricated): ${item.title} URL: ${item.url}`);
   } else if (item.url !== researchedUrl) {
     console.log(`Normalized researched URL: ${item.url} -> ${researchedUrl}`);
     item.url = researchedUrl;
@@ -841,7 +859,7 @@ for (const item of allNews) {
   if (previousCanonicalUrls.has(verifiedKey)) {
     throw new Error(`Final briefing reused an article URL from the previous briefing: ${item.url}`);
   }
-  if (urls.has(verifiedKey)) throw new Error(`Duplicate article URL: ${item.url}`);
+  if (urls.has(verifiedKey)) { console.warn(`Duplicate article URL after normalization, removing: ${item.url}`); continue; }
   urls.add(verifiedKey);
 }
 if (allNews.length < 3) throw new Error(`Fallback briefing contained only ${allNews.length} articles; at least 3 are required.`);
