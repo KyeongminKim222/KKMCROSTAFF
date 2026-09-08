@@ -328,12 +328,22 @@ const wooriSubsidiaryKeywords = [
   '우리종합금융', '우리자산운용', '우리금융저축은행', '우리투자증권',
   '우리에프아이에스', '우리글로벌자산운용', '동양생명', 'ABL생명',
   '우리아메리카', 'Woori America', '우리소다라', 'Woori Saudara', 'Bank Woori Saudara',
-  '캄보디아', 'Cambodia', '인도네시아', 'Indonesia'
+  '우리은행 캄보디아', '우리은행 브라질', '우리은행 중국', '베트남우리은행'
 ];
 
 function mentionsWooriSubsidiary(item) {
   const haystack = `${item.title || ''} ${item.entity || ''} ${item.summary || ''} ${item.why_woori_cro || ''}`;
-  return wooriSubsidiaryKeywords.some((keyword) => haystack.includes(keyword));
+  const hasSubsidiaryKeyword = wooriSubsidiaryKeywords.some((keyword) => haystack.includes(keyword));
+  if (!hasSubsidiaryKeyword) return false;
+  const generalMarketPatterns = ['엔화', '엔환율', '아시아 증시', '증시 반등', '투자심리', '투자 심리', '아시아 증시반등', '역대 최대', '최대 모집'];
+  const isGeneralMarketNews = generalMarketPatterns.some((pattern) => haystack.includes(pattern));
+  if (isGeneralMarketNews) {
+    const hasDirectSubsidiaryName = wooriSubsidiaryKeywords.some((keyword) => {
+      return `${item.title || ''} ${item.entity || ''}`.includes(keyword);
+    });
+    if (!hasDirectSubsidiaryName) return false;
+  }
+  return true;
 }
 
 function extractDateFromPublished(publishedText) {
@@ -525,7 +535,8 @@ function buildSynthesisPrompt() {
 - 특정 카테고리에 오늘 조건을 만족하는 기사가 부족하면 억지로 채우지 말고, 다른 카테고리에서 조건을 만족하는 기사를 더 선정해서 전체 합계 10건을 채운다. 
 - subsidiary_news를 채울 때는 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사 관련 기사(오늘자 primary 우선, 부족하면 최근 7일 이내 related도 허용), (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사, (3) 캄보디아·인도네시아·우리아메리카은행이 영업하는 지역의 금융권 일반 기사(금리, 환율, 은행 건전성, 규제 등). (1)에서 오늘자 기사가 부족하면 최근 7일 이내 related 기사로 채워라. subsidiary_news를 빈 배열로 제출하지 마라. 반드시 최소 2건 이상을 채워라. 
 - 전체 기사는 반드시 10건 이상을 완성한다. 조사 근거 URL이 10개 이상 확보되었으므로 10건 미만으로는 제출하지 마라. 각 카테고리에 기사가 부족하면 다른 카테고리에서 추가로 선정하여 반드시 합계 10건을 채워라.
-- 우리금융그룹·계열사(subsidiary_news)에는 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 동양생명, ABL생명 등 국내 계열사 기사, 우리은행 해외지점·현지법인 기사, 또는 캄보디아·인도네시아·우리아메리카은행 지역 금융권 기사만 선택한다. KB금융, 신한금융, 하나금융, NH농협금융, 한국금융지주 등 다른 금융지주·경쟁사 기사는 daily_news에는 배치할 수 있어도 subsidiary_news에는 절대 포함하지 마라.
+- 우리금융그룹·계열사(subsidiary_news)에는 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명 등 국내 계열사 기사, 또는 우리은행 해외지점·현지법인(우리은행 캄보디아, 우리소다라, 우리아메리카은행) 기사만 선택한다. 캄보디아·인도네시아·미국 지역의 일반 금융권 기사(금리, 환율, 증시, 투자심리, 은행 건전성 등)는 subsidiary_news에 절대 포함하지 마라. 그런 기사는 daily_news에만 배치할 수 있다. KB금융, 신한금융, 하나금융, NH농협금융, 한국금융지주 등 다른 금융지주·경쟁사 기사도 subsidiary_news에는 절대 포함하지 마라.
+- subsidiary_news에는 우리금융그룹 계열사 또는 우리은행 해외지점·해외 현지법인에 직접 관련된 기사만 선정한다. 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사(우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명 등) 관련 기사(오늘자 primary 우선, 부족하면 최근 7일 이내 related도 허용), (2) 우리은행 해외지점·해외 현지법인(우리은행 캄보디아, 우리소다라, 우리아메리카은행 등) 관련 기사. subsidiary_news에는 절대로 일반 시장 뉴스(엔화, 환율, 증시, 투자심리, 금리, 은행 건전성 등)를 배치하지 마라. 해당 지역의 일반 금융권 기사는 daily_news에만 배치할 수 있다. subsidiary_news를 빈 배열로 제출하지 마라. 반드시 최소 2건 이상을 채워라.
 - 전체 기사 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 60% 이상 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 나머지 비중으로 선정한다.
 - 공식자료는 사실과 수치 검증에 적극 활용하되, 같은 사건의 언론기사가 있으면 독자가 맥락과 파급효과를 이해할 수 있는 언론기사를 대표 원문으로 우선 선정한다.
 - Gumloop 예시처럼 연합뉴스, 주요 경제지·금융 전문매체 및 Reuters·Bloomberg·FT·CNBC 등 신뢰도 높은 일반기사가 브리핑의 중심이 되어야 한다.
