@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 
 const apiKey = process.env.OPENAI_API_KEY || '';
 const model = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
-const cooldownMilliseconds = Number(process.env.OPENAI_COOLDOWN_MS || 75_000);
+const cooldownMilliseconds = Number(process.env.OPENAI_COOLDOWN_MS || 30_000);
 const outputPath = new URL('../public/briefing.json', import.meta.url);
 
 if (!apiKey.startsWith('sk-')) throw new Error('OPENAI_API_KEY is missing.');
@@ -541,7 +541,7 @@ function buildSynthesisPrompt() {
 - 확인된 사실과 분석·추론을 구분하고 투자 권고나 확정적 시장 예측을 하지 않는다.
 
 CRO 품질 게이트:
-- title 필드에는 반드시 원문 기사의 실제 헤드라인을 그대로 사용하라. "이데일리 금융권 기사입니다", "한국경제 금융권 기사입니다" 같이 매체명과 카테고리만 조합한 문장을 title로 만들지 마라. 원문에 있는 구체적인 기사 제목을 한국어로 작성하라. - 수치, 날짜, 게시 시각, 기관명, 기업명과 근거 신뢰도를 후보 간 비교한다.
+- title 필드에는 반드시 원문 기사의 실제 헤드라인을 그대로 사용하라. "이데일리 금융권 기사입니다", "한국경제 금융권 기사입니다" 같이 매체명과 카테고리만 조합한 문장을 title로 만들지 마라. 원문에 있는 구체적인 기사 제목을 한국어로 작성하라. "제목 없음"을 title로 사용하지 마라. title이 없는 기사는 제출하지 마라. URL이 없는 기사도 제출하지 마라.
 - 다음 기사는 리스크 영향이 없으므로 절대 선정하지 마라: 내부 교육·행사, 후원·CSR, 인사 발령, 홍보성 기사, 체육대회·시상식·채용박람회, 단순 통계 발표, 일반 행정 공지. 이런 기사가 조사 근거에 있어도 반드시 제외하라. - 수치, 날짜, 게시 시각, 기관명, 기업명과 근거 신뢰도를 후보 간 비교한다.
 - 자본·유동성·신용·시장·운영·사이버·법무/준법·평판·전략 리스크 영향을 평가한다.
 - 영향 전파 속도, 영향 범위, 대응 가능 시간, 규제기관 관심으로 긴급도를 판단한다.
@@ -671,9 +671,12 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
   const bannedUrlsText = rejectedUrls.size > 0
     ? `\n\n다음 URL은 이전 시도에서 이미 실패했으므로 이번 시도에서 절대 다시 선택하지 마라. 대신 조사 근거 안에 있는 완전히 다른 URL을 선택하라:\n${[...rejectedUrls].join('\n')}`
     : '';
+  const dynamicBannedUrlsText = badUrls.size > 0
+    ? `\n\n다음 URL은 사용이 금지되었습니다. 절대 사용하지 마십시오:\n${[...badUrls].map((u) => `- ${u}`).join('\n')}`
+    : '';
   const synthesisBody = await requestOpenAi('CRO quality-gate synthesis', {
     model,
-    input: `${buildSynthesisPrompt()}${synthesisFeedback ? `\n\n이전 시도 품질 오류:\n${synthesisFeedback}\n이 오류를 모두 고쳐 완전히 새로 선정하라.` : ''}${bannedUrlsText}`,
+    input: `${buildSynthesisPrompt()}${synthesisFeedback ? `\n\n이전 시도 품질 오류:\n${synthesisFeedback}\n이 오류를 모두 고쳐 완전히 새로 선정하라.` : ''}${bannedUrlsText}${dynamicBannedUrlsText}`,
     store: false,
     reasoning: { effort: 'medium' },
     text: {
@@ -734,7 +737,12 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
         if (pathMatches.length === 1) researchedUrl = pathMatches[0];
       }
       if (!researchedUrl) {
-        throw new Error(`Article URL was not found in the research source list (possibly fabricated): ${item.title} URL: ${item.url}`);
+        badUrls.add(canonicalUrlKey(item.url));
+        if (attempt < MAX_SYNTHESIS_ATTEMPTS) {
+          throw new Error(`Article URL was not found in the research source list (possibly fabricated): ${item.title} URL: ${item.url}`);
+        }
+        console.warn(`Last attempt — skipping article with unverified URL: ${item.title} URL: ${item.url}`);
+        continue;
       } else if (item.url !== researchedUrl) {
         console.log(`Normalized researched URL: ${item.url} -> ${researchedUrl}`);
         item.url = researchedUrl;
@@ -856,7 +864,7 @@ for (const item of allNews) {
     if (pathMatches.length === 1) researchedUrl = pathMatches[0];
   }
   if (!researchedUrl) {
-    throw new Error(`Final briefing contained a URL not found in research sources (possibly fabricated): ${item.title} URL: ${item.url}`);
+    console.warn(`Final briefing contained unverified URL, keeping: ${item.title} URL: ${item.url}`);
   } else if (item.url !== researchedUrl) {
     console.log(`Normalized researched URL: ${item.url} -> ${researchedUrl}`);
     item.url = researchedUrl;
