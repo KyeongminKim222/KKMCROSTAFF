@@ -1055,35 +1055,32 @@ if (candidateNews.length < minimumRequired) {
   } catch (error) {
     synthesisError = error;
     synthesisFeedback = error.message;
-    const badUrlsFromError = extractUrlsFromText(error.message);
-    const rejectedCanonicalKeys = new Set();
-    badUrlsFromError.forEach((url) => {
+ const badUrlsFromError = extractUrlsFromText(error.message);
+
+    for (const url of badUrlsFromError) {
+      // 이번 합성 시도에서는 재선정하지 않게 금지 목록에만 넣습니다.
+      // 실제 조사 근거와 메타데이터에서는 삭제하지 않습니다.
       rejectedUrls.add(url);
+
+      // 조사 근거에 없는 URL만 별도 금지 목록에 추가합니다.
       try {
         const canonicalKey = canonicalUrlKey(url);
-        rejectedCanonicalKeys.add(canonicalKey);
-        researchedUrlByCanonical.delete(canonicalKey);
-        const pathKey = urlPathKey(url);
-        const remaining = (researchedUrlsByPath.get(pathKey) || []).filter((u) => u !== url);
-        if (remaining.length > 0) {
-          researchedUrlsByPath.set(pathKey, remaining);
-        } else {
-          researchedUrlsByPath.delete(pathKey);
+        const researchedUrl = researchedUrlByCanonical.get(canonicalKey);
+
+        if (!researchedUrl) {
+          badUrls.add(canonicalKey);
         }
-      } catch {}
-    });
-    for (const evidence of Object.values(researchEvidence)) {
-      if (!Array.isArray(evidence.source_urls)) continue;
-      evidence.source_urls = evidence.source_urls.filter((url) => {
-        try {
-          return !rejectedCanonicalKeys.has(canonicalUrlKey(url));
-        } catch {
-          return !rejectedUrls.has(url);
-        }
-      });
+      } catch {
+        badUrls.add(url);
+      }
     }
     if (attempt < MAX_SYNTHESIS_ATTEMPTS) {
-      console.warn(`${error.message} Removed ${badUrlsFromError.length} bad URL(s) from the candidate pool (now permanently excluded from research evidence). Retrying synthesis after TPM cooldown (${attempt}/${MAX_SYNTHESIS_ATTEMPTS}).`);
+      console.warn(
+  `${error.message} ` +
+  `Blocked ${badUrlsFromError.length} URL(s) for the next synthesis attempt ` +
+  `without deleting verified research evidence. ` +
+  `Retrying synthesis after TPM cooldown (${attempt}/${MAX_SYNTHESIS_ATTEMPTS}).`
+);
       await coolDown('CRO quality-gate synthesis retry');
     }
   }
@@ -1152,7 +1149,11 @@ if (!briefing) {
     briefing = createFailureBriefing(date, synthesisError?.message);
   }
 }
-const allNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news'].flatMap((key) => briefing[key] || []);
+const allNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news']
+  .flatMap((key) => briefing[key] || []);
+
+const isFailureFallback = briefing?.meta?.fallback_notice === true;
+
 const urls = new Set();
 for (const item of allNews) {
   const url = new URL(item.url);
