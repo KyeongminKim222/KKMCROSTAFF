@@ -487,33 +487,31 @@ const wooriSubsidiaryKeywords = [
   '우리은행 캄보디아', '우리은행 브라질', '우리은행 중국', '베트남우리은행'
 ];
 
+const competitorKeywords = [
+  'KB금융', 'KB국민', 'KB국민은행',
+  '신한금융', '신한은행', '신한카드', '신한투자증권',
+  '하나금융', '하나은행', '하나카드', '하나증권',
+  'NH농협', '농협금융', '농협은행',
+  'IBK기업은행', '기업은행',
+  '한국금융지주', '한국투자증권'
+];
+
 function mentionsWooriSubsidiary(item) {
-  // subsidiary_news 판정은 모델이 만든 entity·summary가 아니라
+  // subsidiary_news 판정은 모델이 생성한 요약·entity가 아니라
   // 실제 기사 제목만 기준으로 합니다.
-  const title = String(item.title || '').trim();
+  const title = String(item?.title || '').trim();
 
   if (!title) return false;
 
-  const competitorKeywords = [
-    'KB금융', 'KB국민', 'KB국민은행',
-    '신한금융', '신한은행', '신한카드', '신한투자증권',
-    '하나금융', '하나은행', '하나카드', '하나증권',
-    'NH농협', '농협금융', '농협은행',
-    'IBK기업은행', '기업은행',
-    '한국금융지주', '한국투자증권'
-  ];
-
-  // 경쟁사가 제목에 등장하면, 우리금융 관련 표현이 함께 있어도
-  // 계열사 뉴스가 아닌 daily_news 후보로만 처리합니다.
+  // 경쟁사 기사는 우리금융이 비교 언급되어도 계열사 뉴스가 아닙니다.
   if (competitorKeywords.some((keyword) => title.includes(keyword))) {
     return false;
   }
 
-  // 실제 기사 제목에 우리금융 또는 계열사명이 직접 등장해야 합니다.
-  return wooriSubsidiaryKeywords.some((keyword) => title.includes(keyword));
-}
-if (competitorKeywords.some((keyword) => title.includes(keyword))) {
-  return false;
+  // 실제 기사 제목에 우리금융 또는 계열사명이 직접 있어야 합니다.
+  return wooriSubsidiaryKeywords.some((keyword) =>
+    title.includes(keyword)
+  );
 }
 
 function isCompetitorFinancialArticle(item) {
