@@ -219,19 +219,7 @@ async function requestOpenAi(label, requestBody, maxAttempts = 3) {
   throw new Error(`${label} exhausted all retry attempts.`);
 }
 
-function parseStructuredOutput(body, label) {
-  const text = extractOutputText(body);
-  if (!text) {
-    const outputTypes = (body.output || []).map((item) => item.type).join(', ') || 'none';
-    const incompleteReason = body?.incomplete_details?.reason || body?.error?.message || 'not provided';
-    throw new Error(`${label} did not contain structured output (status=${body.status || 'unknown'}, output_types=${outputTypes}, reason=${incompleteReason}).`);
-  }
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(`${label} returned invalid JSON.`);
-  }
-}
+function parseStructuredOutput(body, label) {   const text = extractOutputText(body);   if (!text) {     const outputTypes = (body.output || []).map((item) => item.type).join(', ') || 'none';     const incompleteReason = body?.incomplete_details?.reason || body?.error?.message || 'not provided';     throw new Error(`${label} did not contain structured output (status=${body.status || 'unknown'}, output_types=${outputTypes}, reason=${incompleteReason}).`);   }   try {     return JSON.parse(text);   } catch {     const preview = text.length > 400 ? `${text.slice(0, 200)} ... (생략) ... ${text.slice(-200)}` : text;     throw new Error(`${label} returned invalid JSON (length=${text.length}). Preview: ${preview}`);   } }
 
 async function coolDown(label) {
   const milliseconds = Number.isFinite(cooldownMilliseconds) && cooldownMilliseconds >= 0
@@ -829,7 +817,7 @@ function countNews(candidate) {
     .reduce((sum, key) => sum + (candidate[key] || []).length, 0);
 }
 
-const MAX_SYNTHESIS_ATTEMPTS = 4;
+const MAX_SYNTHESIS_ATTEMPTS = 5;
 const badUrls = new Set();
 
 for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
@@ -839,34 +827,11 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
   const dynamicBannedUrlsText = badUrls.size > 0
     ? `\n\n다음 URL은 사용이 금지되었습니다. 절대 사용하지 마십시오:\n${[...badUrls].map((u) => `- ${u}`).join('\n')}`
     : '';
-  const synthesisBody = await requestOpenAi('CRO quality-gate synthesis', {
-    model,
-    input: `${buildSynthesisPrompt()}${synthesisFeedback ? `\n\n이전 시도 품질 오류:\n${synthesisFeedback}\n이 오류를 모두 고쳐 완전히 새로 선정하라.` : ''}${bannedUrlsText}${dynamicBannedUrlsText}`,
-    store: false,
-    reasoning: { effort: 'medium' },
-    text: {
-      verbosity: 'medium',
-      format: {
-        type: 'json_schema',
-        name: 'cro_staff_daily_briefing',
-        strict: true,
-        schema
-      }
-    },
-    max_output_tokens: 24000
-  });
+  const synthesisBody = await requestOpenAi('CRO quality-gate synthesis', {     model,     input: `${buildSynthesisPrompt()}${synthesisFeedback ? `\n\n이전 시도 품질 오류:\n${synthesisFeedback}\n이 오류를 모두 고쳐 완전히 새로 선정하라.` : ''}${bannedUrlsText}${dynamicBannedUrlsText}`,     store: false,     reasoning: { effort: 'low' },     text: {       verbosity: 'medium',       format: {         type: 'json_schema',         name: 'cro_staff_daily_briefing',         strict: true,         schema       }     },     max_output_tokens: 32000   });
   let candidate;
   try {
     candidate = parseStructuredOutput(synthesisBody, 'CRO quality-gate synthesis');
-  } catch (parseError) {
-    synthesisError = parseError;
-    synthesisFeedback = parseError.message;
-    if (attempt < MAX_SYNTHESIS_ATTEMPTS) {
-      console.warn(`${parseError.message} Retrying synthesis after TPM cooldown (${attempt}/${MAX_SYNTHESIS_ATTEMPTS}).`);
-      await coolDown('CRO quality-gate synthesis retry');
-    }
-    continue;
-  }
+  } catch (parseError) {     synthesisError = parseError;     synthesisFeedback = parseError.message;     console.warn(`${parseError.message} (attempt ${attempt}/${MAX_SYNTHESIS_ATTEMPTS}).`);     if (attempt < MAX_SYNTHESIS_ATTEMPTS) {       await coolDown('CRO quality-gate synthesis retry');     }     continue;   }
 
   // Override fabricated titles and dates with actual values from research metadata
   for (const item of ['critical', 'daily_news', 'subsidiary_news', 'additional_news'].flatMap((k) => candidate[k] || [])) {
