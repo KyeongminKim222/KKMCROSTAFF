@@ -346,7 +346,7 @@ const schema = {
     },
     critical: { type: 'array', minItems: 1, maxItems: 2, items: newsItem },
     daily_news: { type: 'array', minItems: 5, maxItems: 6, items: newsItem },
-    subsidiary_news: { type: 'array', minItems: 2, maxItems: 5, items: newsItem },
+    subsidiary_news: { type: 'array', minItems: 0, maxItems: 4, items: newsItem },
     additional_news: { type: 'array', minItems: 0, maxItems: 2, items: newsItem },
     forward_looking_points: {
       type: 'array',
@@ -447,11 +447,26 @@ title은 반드시 원문 기사의 실제 헤드라인을 그대로 적어라. 
 `;
 
 const koreanMediaDomains = [
-  'yna.co.kr', 'news1.kr', 'hankyung.com', 'mk.co.kr', 'sedaily.com',
-  'edaily.co.kr', 'mt.co.kr', 'news.bizwatch.co.kr', 'biz.chosun.com',
-  'fnnews.com', 'asiae.co.kr', 'etoday.co.kr', 'ytn.co.kr',
-  'infomax.co.kr', 'heraldcorp.com', 'donga.com', 'joongang.co.kr',
-  'news.naver.com', 'finance.naver.com'
+  'n.news.naver.com',
+  'news.naver.com',
+  'finance.naver.com',
+  'yna.co.kr',
+  'news1.kr',
+  'hankyung.com',
+  'mk.co.kr',
+  'sedaily.com',
+  'edaily.co.kr',
+  'mt.co.kr',
+  'news.bizwatch.co.kr',
+  'biz.chosun.com',
+  'fnnews.com',
+  'asiae.co.kr',
+  'etoday.co.kr',
+  'ytn.co.kr',
+  'infomax.co.kr',
+  'heraldcorp.com',
+  'donga.com',
+  'joongang.co.kr'
 ];
 const globalMediaDomains = [
   'reuters.com', 'bloomberg.com', 'ft.com', 'wsj.com', 'cnbc.com',
@@ -473,17 +488,31 @@ const wooriSubsidiaryKeywords = [
 ];
 
 function mentionsWooriSubsidiary(item) {
+  // 모델이 만든 summary/why_woori_cro는 판정 근거로 사용하지 않습니다.
+  // 실제 기사 제목과 entity에 우리금융 계열사명이 있어야만 통과합니다.
   const titleEntity = `${item.title || ''} ${item.entity || ''}`;
-  const haystack = `${titleEntity} ${item.summary || ''} ${item.why_woori_cro || ''}`;
-  const hasSubsidiaryKeyword = wooriSubsidiaryKeywords.some((keyword) => haystack.includes(keyword));
-  if (!hasSubsidiaryKeyword) return false;
-  const competitorKeywords = ['KB금융', 'KB국민', '신한금융', '신한은행', '하나금융', '하나은행', 'NH농협', '농협금융', 'IBK기업은행', '기업은행', '한국금융지주'];
-  const titleHasCompetitor = competitorKeywords.some((keyword) => titleEntity.includes(keyword));
-  const titleHasWoori = wooriSubsidiaryKeywords.some((keyword) => titleEntity.includes(keyword));
+
+  const hasWooriKeyword = wooriSubsidiaryKeywords.some((keyword) =>
+    titleEntity.includes(keyword)
+  );
+
+  if (!hasWooriKeyword) return false;
+
+  const competitorKeywords = [
+    'KB금융', 'KB국민', '신한금융', '신한은행', '하나금융', '하나은행',
+    'NH농협', '농협금융', 'IBK기업은행', '기업은행', '한국금융지주'
+  ];
+
+  const titleHasCompetitor = competitorKeywords.some((keyword) =>
+    titleEntity.includes(keyword)
+  );
+
+  const titleHasWoori = wooriSubsidiaryKeywords.some((keyword) =>
+    titleEntity.includes(keyword)
+  );
+
   if (titleHasCompetitor && !titleHasWoori) return false;
-  const generalMarketPatterns = ['엔화', '엔환율', '아시아 증시', '증시 반등', '투자심리', '투자 심리', '아시아 증시반등', '역대 최대', '최대 모집'];
-  const isGeneralMarketNews = generalMarketPatterns.some((pattern) => haystack.includes(pattern));
-  if (isGeneralMarketNews && !titleHasWoori) return false;
+
   return true;
 }
 
@@ -613,10 +642,13 @@ async function researchStage(label, scope, allowedDomains, minimumSources = 4) {
 
 const domesticMedia = await researchStage(
   'Korean financial media research',
-  `한국 주요 통신사·경제지·금융 전문매체 및 네이버뉴스의 일반 언론기사를 조사하라. 네이버뉴스(news.naver.com, finance.naver.com)의 검색 결과를 적극적으로 활용하라.
-금리·환율·유동성·부동산 PF·가계/기업 신용·자본규제·소비자보호·사이버·운영리스크와 금융회사 사건을 폭넓게 점검하라.
-정부기관 보도자료가 아니라 기자가 작성한 기사 원문을 후보로 최소 6건 최대 8건 제시하라. 같은 정책도 시장·금융회사 파급효과를 분석한 언론기사를 우선하라.`,
-  null,
+  `한국 금융시장·금융회사 리스크 관련 일반 언론기사를 조사하라.
+후보는 네이버 메인뉴스 및 네이버 경제뉴스 기사 링크(n.news.naver.com, news.naver.com, finance.naver.com)를 최우선으로 사용하라.
+네이버 기사 링크가 충분하면 후보 6~8건 중 최소 4건 이상은 네이버 뉴스 직접 링크로 제시하라.
+네이버에 적합한 기사가 부족할 때만 연합뉴스·주요 경제지·금융전문매체의 원문 링크를 보완적으로 사용하라.
+금리·환율·유동성·부동산 PF·가계·기업 신용·자본규제·소비자보호·사이버·운영리스크와 금융회사 사건을 점검하라.
+정부기관 보도자료가 아니라 기자가 작성한 기사 원문만 후보로 제시하라. 같은 정책이라도 시장·금융회사 파급효과를 분석한 언론기사를 우선하라.`,
+  koreanMediaDomains,
   5
 );
 await coolDown('Korean financial media research');
@@ -659,6 +691,47 @@ const researchEvidence = {
   peer_media: peerMedia,
   global_media: globalMedia
 };
+const sourceStagesByCanonical = new Map();
+
+for (const [stage, evidence] of Object.entries(researchEvidence)) {
+  for (const sourceUrl of evidence.source_urls || []) {
+    try {
+      const key = canonicalUrlKey(sourceUrl);
+
+      if (!sourceStagesByCanonical.has(key)) {
+        sourceStagesByCanonical.set(key, new Set());
+      }
+
+      sourceStagesByCanonical.get(key).add(stage);
+    } catch {}
+  }
+}
+
+function isFromResearchStage(rawUrl, stage) {
+  try {
+    return sourceStagesByCanonical
+      .get(canonicalUrlKey(rawUrl))
+      ?.has(stage) === true;
+  } catch {
+    return false;
+  }
+}
+
+function isNaverNewsUrl(rawUrl) {
+  try {
+    const hostname = new URL(rawUrl).hostname
+      .toLowerCase()
+      .replace(/^www\./, '');
+
+    return [
+      'n.news.naver.com',
+      'news.naver.com',
+      'finance.naver.com'
+    ].some((domain) => hostMatchesDomain(hostname, domain));
+  } catch {
+    return false;
+  }
+}
 const researchedUrlByCanonical = new Map();
 const researchedUrlsByPath = new Map();
 for (const sourceUrl of Object.values(researchEvidence).flatMap((evidence) => evidence.source_urls || [])) {
@@ -716,10 +789,16 @@ function buildSynthesisPrompt() {
 언어 규칙 (반드시 준수): - summary, why_woori_cro, watchpoints, entity, channel, risk_type 등 분석 텍스트 필드는 반드시 자연스러운 한국어로 작성한다. - title은 URL별 실제 기사 제목 매핑에 있는 제목을 그대로 사용한다. 외국어 원문 제목은 임의로 번역하거나 바꾸지 마라. - 고유명사(인명, 기관명, 기업명, 상품명)는 널리 쓰이는 한국어 표기(예: 로이터, 블룸버그, 연준)를 사용하고, 필요하면 괄호 안에 원어를 병기할 수 있다.
 카테고리별 리서치 출처 우선순위 (daily_news 구성 시 반드시 준수): - daily_news는 korean_media와 peer_media 조사 결과를 우선적으로 사용한다. 우리금융그룹 및 계열사 직접 영향 기사는 woori_media 조사 결과를 우선 사용하되 subsidiary_news 배치를 먼저 검토한다. global_media(Reuters, Bloomberg, FT, CNBC 등) 기사는 daily_news 전체의 약 30% 이내로 제한한다. - global_media 기사는 한국 금융시장이나 우리금융그룹에 직접적인 영향이 있는 경우에만 선택하고, 단순 해외 시황 소개성 기사는 선택하지 않는다.
 
+- daily_news는 한국 기사 중심으로 구성하며, 5~6건 중 최소 3건은 네이버 메인뉴스·네이버 경제뉴스 직접 링크를 사용하라.
+- global_media 단독 출처 기사는 전체 기사 중 최대 20%까지만 허용한다. 글로벌 기사는 한국 금융시장, 원화·채권·유동성 또는 우리금융그룹에 직접 전이될 가능성이 높은 경우만 선택하라.
+- subsidiary_news에는 woori_media 조사 단계에서 수집된 URL 중 우리금융지주·우리은행·우리카드·우리금융캐피탈·우리투자증권·동양생명·ABL생명 등 우리금융 계열사가 기사 제목 또는 대상에 직접 등장하는 기사만 넣어라.
+- 해외 일반 기업, 해외 일반 사이버 공격, 해외 시장 동향, 경쟁사 단독 기사, 우리금융과 무관한 기업 기사는 subsidiary_news에 절대 넣지 마라.
+- 우리금융 직접 관련 기사가 없으면 subsidiary_news는 빈 배열([])로 제출하라. 기사의 수를 채우기 위해 무관한 뉴스를 넣는 것을 절대 금지한다.
+
 최종 선정 규칙:
 - 전체 기사는 최소 10건을 목표로 선정한다. critical(크리티컬)은 최소 1건은 반드시 포함하고, 나머지는 daily_news, subsidiary_news, additional_news 사이에서 그날 확보된 조사 근거의 양과 질에 맞게 자유롭게 배분한다.
 - 특정 카테고리에 오늘 조건을 만족하는 기사가 부족하면 억지로 채우지 말고, 다른 카테고리에서 조건을 만족하는 기사를 더 선정해서 전체 합계 10건을 채운다.
-- subsidiary_news를 채울 때는 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사 관련 기사(오늘자 primary 우선, 부족하면 최근 7일 이내 related도 허용), (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사. (1)에서 오늘자 기사가 부족하면 최근 7일 이내 related 기사로 채워라. subsidiary_news에는 일반 시장 뉴스(금리, 환율, 증시, 투자심리, 은행 건전성 등)를 절대 배치하지 마라. subsidiary_news를 빈 배열로 제출하지 마라. 반드시 최소 2건 이상을 채워라.
+- subsidiary_news를 채울 때는 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사 관련 기사(오늘자 primary 우선, 부족하면 최근 7일 이내 related도 허용), (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사. (1)에서 오늘자 기사가 부족하면 최근 7일 이내 related 기사로 채워라. subsidiary_news에는 일반 시장 뉴스(금리, 환율, 증시, 투자심리, 은행 건전성 등)를 절대 배치하지 마라. subsidiary_news에는 우리금융그룹 또는 계열사에 직접 관련된 기사만 넣어라.조건에 맞는 실제 기사가 없으면 빈 배열([])로 제출하라.일반 시장 뉴스, 해외 일반 기업 뉴스, 단순 사이버 뉴스로 빈자리를 채우는 것은 절대 금지한다.
 - 전체 기사는 10건을 목표로 선정하되, 검증 가능한 서로 다른 사건이 부족하면 억지로 채우지 마라. 이 경우 최소 8건 이상을 선정하고, 존재하지 않는 기사나 중복 사건을 만들지 마라.
 - 우리금융그룹·계열사(subsidiary_news)에는 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명 등 국내 계열사 기사, 또는 우리은행 해외지점·현지법인(우리은행 캄보디아, 우리소다라, 우리아메리카은행) 기사만 선택한다. 캄보디아·인도네시아·미국 지역의 일반 금융권 기사(금리, 환율, 증시, 투자심리, 은행 건전성 등)는 subsidiary_news에 절대 포함하지 마라. 그런 기사는 daily_news에만 배치할 수 있다. KB금융, 신한금융, 하나금융, NH농협금융, 한국금융지주 등 다른 금융지주·경쟁사 기사도 subsidiary_news에는 절대 포함하지 마라.
 - subsidiary_news에는 우리금융그룹 계열사 또는 우리은행 해외지점·해외 현지법인에 직접 관련된 기사만 선정한다. 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사(우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명 등) 관련 기사(오늘자 primary 우선, 부족하면 최근 7일 이내 related도 허용), (2) 우리은행 해외지점·해외 현지법인(우리은행 캄보디아, 우리소다라, 우리아메리카은행 등) 관련 기사. subsidiary_news에는 절대로 일반 시장 뉴스(엔화, 환율, 증시, 투자심리, 금리, 은행 건전성 등)를 배치하지 마라. 해당 지역의 일반 금융권 기사는 daily_news에만 배치할 수 있다. subsidiary_news를 빈 배열로 제출하지 마라. 반드시 최소 2건 이상을 채워라.
@@ -1036,19 +1115,73 @@ if (candidateNews.length < minimumRequired) {
         throw new Error(`Critical article must be dated today (window=primary): ${item.title} URL: ${item.url}`);
       }
     }
-    if ((candidate.subsidiary_news || []).length < 2) {
-      throw new Error(`subsidiary_news contained only ${(candidate.subsidiary_news || []).length} articles; at least 2 are required. woori_media 조사 결과에서 우리금융 계열사 기사를 반드시 2건 이상 선정하라.`);
-    }
+// 우리금융 직접 관련 기사가 없는 날에는 subsidiary_news를 빈 배열로 둡니다.
+// 무관한 기사를 채우기 위해 넣지 않습니다.
     for (const item of candidate.subsidiary_news || []) {
-      if (!mentionsWooriSubsidiary(item)) {
-        throw new Error(`Subsidiary news item did not reference a Woori Financial Group subsidiary or approved overseas market: ${item.title} URL: ${item.url}`);
-      }
-    }
+  if (!isFromResearchStage(item.url, 'woori_media')) {
+    throw new Error(
+      `Subsidiary news must use a URL found by Woori Financial Group media research: ` +
+      `${item.title} URL: ${item.url}`
+    );
+  }
+
+  if (!mentionsWooriSubsidiary(item)) {
+    throw new Error(
+      `Subsidiary news must directly name a Woori Financial Group subsidiary in its title or entity: ` +
+      `${item.title} URL: ${item.url}`
+    );
+  }
+}
     candidateNews.forEach((item) => { item.source_type = isOfficialUrl(item.url) ? 'official' : 'media'; });
     const mediaCount = candidateNews.filter((item) => item.source_type === 'media').length;
     const minimumMediaCount = Math.max(3, Math.ceil(candidateNews.length * 0.5));
-    if (mediaCount < minimumMediaCount) throw new Error(`CRO quality-gate synthesis selected only ${mediaCount} media articles; at least ${minimumMediaCount} are required.`);
-    const qualityError = narrativeQualityError(candidate, candidateNews);
+
+if (mediaCount < minimumMediaCount) {
+  throw new Error(
+    `CRO quality-gate synthesis selected only ${mediaCount} media articles; ` +
+    `at least ${minimumMediaCount} are required.`
+  );
+}
+
+// 전체 브리핑에서 global_media 단독 출처 기사는 최대 20%만 허용합니다.
+const globalOnlyItems = candidateNews.filter((item) => {
+  const isGlobal = isFromResearchStage(item.url, 'global_media');
+
+  const isKoreanOrWooriOrPeer =
+    isFromResearchStage(item.url, 'korean_media') ||
+    isFromResearchStage(item.url, 'woori_media') ||
+    isFromResearchStage(item.url, 'peer_media');
+
+  return isGlobal && !isKoreanOrWooriOrPeer;
+});
+
+const maximumGlobalItems = Math.max(1, Math.floor(candidateNews.length * 0.2));
+
+if (globalOnlyItems.length > maximumGlobalItems) {
+  throw new Error(
+    `Too many global-media articles: ${globalOnlyItems.length}. ` +
+    `At most ${maximumGlobalItems} global-only articles are allowed. ` +
+    `Replace them with Korean or Naver financial-news articles.`
+  );
+}
+
+// daily_news 5~6건 중 최소 3건은 네이버 뉴스 또는 네이버 금융 직접 링크여야 합니다.
+const dailyNews = candidate.daily_news || [];
+const minimumNaverDailyItems = dailyNews.length >= 5
+  ? 3
+  : Math.min(2, dailyNews.length);
+
+const naverDailyItems = dailyNews.filter((item) => isNaverNewsUrl(item.url));
+
+if (naverDailyItems.length < minimumNaverDailyItems) {
+  throw new Error(
+    `daily_news contained only ${naverDailyItems.length} Naver news articles; ` +
+    `at least ${minimumNaverDailyItems} are required. ` +
+    `Use n.news.naver.com, news.naver.com, or finance.naver.com direct article URLs.`
+  );
+}
+
+const qualityError = narrativeQualityError(candidate, candidateNews);
     if (qualityError) throw new Error(qualityError);
     briefing = candidate;
     break;
