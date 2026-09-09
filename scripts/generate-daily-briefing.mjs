@@ -512,7 +512,77 @@ function mentionsWooriSubsidiary(item) {
   // 실제 기사 제목에 우리금융 또는 계열사명이 직접 등장해야 합니다.
   return wooriSubsidiaryKeywords.some((keyword) => title.includes(keyword));
 }
+const competitorKeywords = [
+  'KB금융', 'KB국민', 'KB국민은행',
+  '신한금융', '신한은행', '신한카드', '신한투자증권',
+  '하나금융', '하나은행', '하나카드', '하나증권',
+  'NH농협', '농협금융', '농협은행',
+  'IBK기업은행', '기업은행',
+  '한국금융지주', '한국투자증권'
+];
 
+function isCompetitorFinancialArticle(item) {
+  const title = String(item?.title || '').trim();
+
+  return competitorKeywords.some((keyword) => title.includes(keyword));
+}
+
+function moveMisplacedSubsidiaryNews(candidate) {
+  candidate.critical ||= [];
+  candidate.daily_news ||= [];
+  candidate.subsidiary_news ||= [];
+  candidate.additional_news ||= [];
+
+  const existingDailyUrls = new Set(
+    candidate.daily_news
+      .map((item) => {
+        try {
+          return canonicalUrlKey(item.url);
+        } catch {
+          return '';
+        }
+      })
+      .filter(Boolean)
+  );
+
+  const validSubsidiaryNews = [];
+
+  for (const item of candidate.subsidiary_news) {
+    const isDirectWooriArticle =
+      isFromResearchStage(item.url, 'woori_media') &&
+      mentionsWooriSubsidiary(item);
+
+    if (isDirectWooriArticle) {
+      validSubsidiaryNews.push(item);
+      continue;
+    }
+
+    // 신한·KB·하나 등 경쟁사 기사는 버리지 않고 daily_news로 이동합니다.
+    if (isCompetitorFinancialArticle(item)) {
+      try {
+        const key = canonicalUrlKey(item.url);
+
+        if (!existingDailyUrls.has(key)) {
+          item.critical = false;
+          candidate.daily_news.push(item);
+          existingDailyUrls.add(key);
+
+          console.log(
+            `Moved competitor article from subsidiary_news to daily_news: ${item.title}`
+          );
+        }
+      } catch {}
+      continue;
+    }
+
+    // 우리금융 직접 관련이 아닌 해외 일반기업·일반 사이버·일반 시장 기사는 제외합니다.
+    console.log(
+      `Removed unrelated article from subsidiary_news: ${item.title || '제목 미확인'}`
+    );
+  }
+
+  candidate.subsidiary_news = validSubsidiaryNews;
+}
 function extractDateFromPublished(publishedText) {
   const match = String(publishedText || '').match(/(\d{4})-(\d{2})-(\d{2})/);
   return match ? match[0] : '';
@@ -786,7 +856,7 @@ function buildSynthesisPrompt() {
 언어 규칙 (반드시 준수): - summary, why_woori_cro, watchpoints, entity, channel, risk_type 등 분석 텍스트 필드는 반드시 자연스러운 한국어로 작성한다. - title은 URL별 실제 기사 제목 매핑에 있는 제목을 그대로 사용한다. 외국어 원문 제목은 임의로 번역하거나 바꾸지 마라. - 고유명사(인명, 기관명, 기업명, 상품명)는 널리 쓰이는 한국어 표기(예: 로이터, 블룸버그, 연준)를 사용하고, 필요하면 괄호 안에 원어를 병기할 수 있다.
 카테고리별 리서치 출처 우선순위 (daily_news 구성 시 반드시 준수): - daily_news는 korean_media와 peer_media 조사 결과를 우선적으로 사용한다. 우리금융그룹 및 계열사 직접 영향 기사는 woori_media 조사 결과를 우선 사용하되 subsidiary_news 배치를 먼저 검토한다. global_media(Reuters, Bloomberg, FT, CNBC 등) 기사는 daily_news 전체의 약 30% 이내로 제한한다. - global_media 기사는 한국 금융시장이나 우리금융그룹에 직접적인 영향이 있는 경우에만 선택하고, 단순 해외 시황 소개성 기사는 선택하지 않는다.
 
-- daily_news는 한국 기사 중심으로 구성하며, 5~6건 중 최소 3건은 네이버 메인뉴스·네이버 경제뉴스 직접 링크를 사용하라.
+- daily_news는 한국 기사 중심으로 구성하라. 네이버 메인뉴스·네이버 경제뉴스에서 주요하게 다뤄진 사안을 우선 선정하되, 출처 URL은 네이버 링크 또는 해당 언론사의 원문 링크를 모두 허용한다.
 - global_media 단독 출처 기사는 전체 기사 중 최대 20%까지만 허용한다. 글로벌 기사는 한국 금융시장, 원화·채권·유동성 또는 우리금융그룹에 직접 전이될 가능성이 높은 경우만 선택하라.
 - subsidiary_news에는 woori_media 조사 단계에서 수집된 URL 중 실제 기사 제목에 우리금융지주·우리은행·우리카드·우리금융캐피탈·우리투자증권·동양생명·ABL생명 등 우리금융 계열사명이 직접 등장하는 기사만 넣어라. - 신한금융·신한은행·KB금융·KB국민은행·하나금융·하나은행·NH농협·IBK기업은행·한국금융지주 등 경쟁사명이 기사 제목에 등장하면, 우리금융이 본문에서 언급되거나 비교 대상이어도 subsidiary_news에 넣지 마라. 해당 기사는 daily_news 후보로만 검토하라.
 - 해외 일반 기업, 해외 일반 사이버 공격, 해외 시장 동향, 경쟁사 단독 기사, 우리금융과 무관한 기업 기사는 subsidiary_news에 절대 넣지 마라.
@@ -1018,7 +1088,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
       }
     }
   }
-
+  moveMisplacedSubsidiaryNews(candidate);
   try {
     const dedupedFallback = dedupeCandidateNews(JSON.parse(JSON.stringify(candidate)));
     const fallbackCount = countNews(dedupedFallback);
@@ -1159,22 +1229,6 @@ if (globalOnlyItems.length > maximumGlobalItems) {
     `Too many global-media articles: ${globalOnlyItems.length}. ` +
     `At most ${maximumGlobalItems} global-only articles are allowed. ` +
     `Replace them with Korean or Naver financial-news articles.`
-  );
-}
-
-// daily_news 5~6건 중 최소 3건은 네이버 뉴스 또는 네이버 금융 직접 링크여야 합니다.
-const dailyNews = candidate.daily_news || [];
-const minimumNaverDailyItems = dailyNews.length >= 5
-  ? 3
-  : Math.min(2, dailyNews.length);
-
-const naverDailyItems = dailyNews.filter((item) => isNaverNewsUrl(item.url));
-
-if (naverDailyItems.length < minimumNaverDailyItems) {
-  throw new Error(
-    `daily_news contained only ${naverDailyItems.length} Naver news articles; ` +
-    `at least ${minimumNaverDailyItems} are required. ` +
-    `Use n.news.naver.com, news.naver.com, or finance.naver.com direct article URLs.`
   );
 }
 
