@@ -526,55 +526,111 @@ function moveMisplacedSubsidiaryNews(candidate) {
   candidate.subsidiary_news ||= [];
   candidate.additional_news ||= [];
 
-  const existingDailyUrls = new Set(
-    candidate.daily_news
-      .map((item) => {
-        try {
-          return canonicalUrlKey(item.url);
-        } catch {
-          return '';
-        }
-      })
-      .filter(Boolean)
-  );
-
+  const subsidiaryUrlKeys = new Set();
   const validSubsidiaryNews = [];
+  const competitorItems = [];
+  const remainingDailyNews = [];
 
+  // 1) 기존 subsidiary_news를 정리합니다.
   for (const item of candidate.subsidiary_news) {
-    const isDirectWooriArticle =
-      isFromResearchStage(item.url, 'woori_media') &&
-      mentionsWooriSubsidiary(item);
+    let urlKey = '';
 
-    if (isDirectWooriArticle) {
-      validSubsidiaryNews.push(item);
+    try {
+      urlKey = canonicalUrlKey(item.url);
+    } catch {
+      console.log(
+        `Removed subsidiary article with invalid URL: ${item.title || '제목 미확인'}`
+      );
       continue;
     }
 
-    // 신한·KB·하나 등 경쟁사 기사는 버리지 않고 daily_news로 이동합니다.
+    // 실제 제목에 우리금융 계열사가 직접 등장하는 기사만 유지합니다.
+    if (mentionsWooriSubsidiary(item)) {
+      if (!subsidiaryUrlKeys.has(urlKey)) {
+        item.critical = false;
+        validSubsidiaryNews.push(item);
+        subsidiaryUrlKeys.add(urlKey);
+      }
+      continue;
+    }
+
+    // 신한·KB·하나 등 경쟁사 기사는 daily_news로 옮길 후보로 보관합니다.
     if (isCompetitorFinancialArticle(item)) {
-      try {
-        const key = canonicalUrlKey(item.url);
+      item.critical = false;
+      competitorItems.push(item);
 
-        if (!existingDailyUrls.has(key)) {
-          item.critical = false;
-          candidate.daily_news.push(item);
-          existingDailyUrls.add(key);
-
-          console.log(
-            `Moved competitor article from subsidiary_news to daily_news: ${item.title}`
-          );
-        }
-      } catch {}
+      console.log(
+        `Moved competitor article from subsidiary_news to daily_news: ${item.title}`
+      );
       continue;
     }
 
-    // 우리금융 직접 관련이 아닌 해외 일반기업·일반 사이버·일반 시장 기사는 제외합니다.
+    // 우리금융·경쟁사 어느 쪽도 아닌 기사는 계열사 뉴스에서 제외합니다.
     console.log(
       `Removed unrelated article from subsidiary_news: ${item.title || '제목 미확인'}`
     );
   }
 
+  // 2) daily_news에 들어간 우리금융 직접 기사를 subsidiary_news로 옮깁니다.
+  for (const item of candidate.daily_news) {
+    let urlKey = '';
+
+    try {
+      urlKey = canonicalUrlKey(item.url);
+    } catch {
+      remainingDailyNews.push(item);
+      continue;
+    }
+
+    if (mentionsWooriSubsidiary(item)) {
+      if (!subsidiaryUrlKeys.has(urlKey) && validSubsidiaryNews.length < 4) {
+        item.critical = false;
+        validSubsidiaryNews.push(item);
+        subsidiaryUrlKeys.add(urlKey);
+
+        console.log(
+          `Moved direct Woori article from daily_news to subsidiary_news: ${item.title}`
+        );
+      }
+
+      // 우리금융 직접 기사는 daily_news에는 남기지 않습니다.
+      continue;
+    }
+
+    remainingDailyNews.push(item);
+  }
+
+  // 3) 기존 daily_news와 계열사에서 이동한 경쟁사 기사를 합칩니다.
+  const dailyUrlKeys = new Set();
+  const finalDailyNews = [];
+
+  for (const item of [...remainingDailyNews, ...competitorItems]) {
+    try {
+      const urlKey = canonicalUrlKey(item.url);
+
+      // 같은 URL은 daily_news에 한 번만 둡니다.
+      if (dailyUrlKeys.has(urlKey)) continue;
+
+      // 스키마의 daily_news 최대 6건을 넘기지 않습니다.
+      if (finalDailyNews.length >= 6) {
+        console.log(
+          `Daily news limit reached; omitted competitor article: ${item.title}`
+        );
+        continue;
+      }
+
+      item.critical = false;
+      finalDailyNews.push(item);
+      dailyUrlKeys.add(urlKey);
+    } catch {
+      console.log(
+        `Removed daily article with invalid URL: ${item.title || '제목 미확인'}`
+      );
+    }
+  }
+
   candidate.subsidiary_news = validSubsidiaryNews;
+  candidate.daily_news = finalDailyNews;
 }
 function extractDateFromPublished(publishedText) {
   const match = String(publishedText || '').match(/(\d{4})-(\d{2})-(\d{2})/);
@@ -1177,17 +1233,12 @@ if (candidateNews.length < minimumRequired) {
     }
 // 우리금융 직접 관련 기사가 없는 날에는 subsidiary_news를 빈 배열로 둡니다.
 // 무관한 기사를 채우기 위해 넣지 않습니다.
-    for (const item of candidate.subsidiary_news || []) {
-  if (!isFromResearchStage(item.url, 'woori_media')) {
-    throw new Error(
-      `Subsidiary news must use a URL found by Woori Financial Group media research: ` +
-      `${item.title} URL: ${item.url}`
-    );
-  }
-
+for (const item of candidate.subsidiary_news || []) {
+  // 수집 단계와 무관하게 실제 기사 제목에 우리금융 계열사명이 있어야 합니다.
   if (!mentionsWooriSubsidiary(item)) {
     throw new Error(
-      `Subsidiary news must directly name a Woori Financial Group subsidiary in its article title and must not be a competitor article: ` +
+      `Subsidiary news must directly name a Woori Financial Group subsidiary ` +
+      `in its article title and must not be a competitor article: ` +
       `${item.title} URL: ${item.url}`
     );
   }
