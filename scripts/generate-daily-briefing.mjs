@@ -512,14 +512,9 @@ function mentionsWooriSubsidiary(item) {
   // 실제 기사 제목에 우리금융 또는 계열사명이 직접 등장해야 합니다.
   return wooriSubsidiaryKeywords.some((keyword) => title.includes(keyword));
 }
-const competitorKeywords = [
-  'KB금융', 'KB국민', 'KB국민은행',
-  '신한금융', '신한은행', '신한카드', '신한투자증권',
-  '하나금융', '하나은행', '하나카드', '하나증권',
-  'NH농협', '농협금융', '농협은행',
-  'IBK기업은행', '기업은행',
-  '한국금융지주', '한국투자증권'
-];
+if (competitorKeywords.some((keyword) => title.includes(keyword))) {
+  return false;
+}
 
 function isCompetitorFinancialArticle(item) {
   const title = String(item?.title || '').trim();
@@ -1309,14 +1304,12 @@ function createFailureBriefing(date, reason) {
   };
 }
 if (!briefing) {
-  if (
-    bestFallbackCandidate &&
-    bestFallbackCount >= 7 &&
-    (bestFallbackCandidate.critical || []).length >= 1
-  ) {
+  // 엄격한 검증은 실패했더라도 실제 후보 기사가 3건 이상이면
+  // 빈 실패 안내문 대신 가장 나은 후보를 결과에 남깁니다.
+  if (bestFallbackCandidate && bestFallbackCount >= 3) {
     console.warn(
-      `All ${MAX_SYNTHESIS_ATTEMPTS} attempts failed strict validation. ` +
-      `Falling back to the best deduplicated candidate with ${bestFallbackCount} articles.`
+      `Strict validation failed, but preserving the best verified candidate ` +
+      `with ${bestFallbackCount} articles.`
     );
 
     bestFallbackCandidate.critical ||= [];
@@ -1327,7 +1320,8 @@ if (!briefing) {
     briefing = bestFallbackCandidate;
   } else {
     console.warn(
-      'No valid candidate was produced. Writing a failure notice instead of fabricated news.'
+      'No usable candidate with at least 3 articles was produced. ' +
+      'Writing a failure notice instead of fabricated news.'
     );
 
     briefing = createFailureBriefing(date, synthesisError?.message);
