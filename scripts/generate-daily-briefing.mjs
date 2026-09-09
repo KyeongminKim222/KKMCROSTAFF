@@ -503,9 +503,9 @@ async function researchStage(label, scope, allowedDomains, minimumSources = 4) {
       max_tool_calls: 3,
       include: ['web_search_call.action.sources'],
       store: false,
-      reasoning: { effort: 'medium' },
+      reasoning: { effort: 'low' },
       text: { verbosity: 'medium' },
-      max_output_tokens: 6000
+      max_output_tokens: 12000
     });
     const narrative = extractOutputText(body);
     const sourceData = extractSourceData(body);
@@ -552,7 +552,7 @@ const domesticMedia = await researchStage(
   'Korean financial media research',
   `한국 주요 통신사·경제지·금융 전문매체 및 네이버뉴스의 일반 언론기사를 조사하라. 네이버뉴스(news.naver.com, finance.naver.com)의 검색 결과를 적극적으로 활용하라.
 금리·환율·유동성·부동산 PF·가계/기업 신용·자본규제·소비자보호·사이버·운영리스크와 금융회사 사건을 폭넓게 점검하라.
-정부기관 보도자료가 아니라 기자가 작성한 기사 원문을 후보로 최소 8건 최대 12건 제시하라. 같은 정책도 시장·금융회사 파급효과를 분석한 언론기사를 우선하라.`,
+정부기관 보도자료가 아니라 기자가 작성한 기사 원문을 후보로 최소 6건 최대 8건 제시하라. 같은 정책도 시장·금융회사 파급효과를 분석한 언론기사를 우선하라.`,
   null,
   5
 );
@@ -563,7 +563,7 @@ const wooriMedia = await researchStage(
   `한국 주요 통신사·경제지·금융 전문매체 및 네이버뉴스에서 우리금융그룹 및 계열사에 관한 일반 언론기사를 전용으로 조사하라. 네이버뉴스(news.naver.com, finance.naver.com)의 검색 결과를 적극적으로 활용하라.
 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 동양생명, ABL생명 관련 보도를 빠짐없이 점검하라.
 우리은행 해외지점 및 해외 현지법인인 우리아메리카은행, 우리소다라 등의 직접 관련 보도도 조사하라.
-기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최소 8건 최대 12건 제시하라.`,
+기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최소 6건 최대 8건 제시하라.`,
   koreanMediaDomains,
   5
 );
@@ -574,7 +574,7 @@ const peerMedia = await researchStage(
   `한국 주요 통신사·경제지·금융 전문매체 및 네이버뉴스에서 국내 주요 금융 경쟁사의 일반 언론기사를 전용으로 조사하라. 네이버뉴스(news.naver.com, finance.naver.com)의 검색 결과를 적극적으로 활용하라.
 KB금융, 신한금융, 하나금융, NH농협금융, IBK기업은행, 한국금융지주 및 주요 은행·증권·보험·카드사의 자본, 건전성, 유동성, 인수합병, 제재, 금융사고, 소비자보호, 실적과 리스크 변화를 점검하라.
 우리금융그룹 관련 기사는 이 조사 단계의 후보로 넣지 말고, 경쟁사 변화가 우리금융그룹의 자본·유동성·신용·시장·운영·준법·평판 리스크에 주는 시사점을 함께 적어라.
-기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최소 8건 최대 12건 제시하라.`,
+기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최소 6건 최대 8건 제시하라.`,
   koreanMediaDomains,
   5
 );
@@ -584,7 +584,7 @@ const globalMedia = await researchStage(
   'Global financial media research',
   `Reuters, Bloomberg, FT, WSJ, CNBC, AP, Nikkei 등 신뢰도 높은 글로벌 언론에서 우리금융그룹으로 전이될 수 있는 일반 금융기사를 조사하라.
 금리·달러·채권·주식·원자재·지정학·해외 상업용 부동산·은행 건전성·사이버·제재·AML 변화를 점검하라.
-기관 발표문 자체보다 기자가 취재·작성한 기사 원문을 후보로 최대 12건 제시하라.`,
+기관 발표문 자체보다 기자가 취재·작성한 기사 원문을 후보로 최대 8건 제시하라.`,
   globalMediaDomains,
   4
 );
