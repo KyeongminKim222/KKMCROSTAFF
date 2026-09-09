@@ -219,7 +219,82 @@ async function requestOpenAi(label, requestBody, maxAttempts = 3) {
   throw new Error(`${label} exhausted all retry attempts.`);
 }
 
-function parseStructuredOutput(body, label) {   const text = extractOutputText(body);   if (!text) {     const outputTypes = (body.output || []).map((item) => item.type).join(', ') || 'none';     const incompleteReason = body?.incomplete_details?.reason || body?.error?.message || 'not provided';     throw new Error(`${label} did not contain structured output (status=${body.status || 'unknown'}, output_types=${outputTypes}, reason=${incompleteReason}).`);   }   try {     return JSON.parse(text);   } catch {     const preview = text.length > 400 ? `${text.slice(0, 200)} ... (생략) ... ${text.slice(-200)}` : text;     throw new Error(`${label} returned invalid JSON (length=${text.length}). Preview: ${preview}`);   } }
+function normalizeJsonText(text) {
+  return String(text || '')
+    .trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+}
+
+function structuredOutputError(message, retryFeedback) {
+  const error = new Error(message);
+  error.retryFeedback = retryFeedback || message;
+  return error;
+}
+
+function parseStructuredOutput(body, label) {
+  const status = String(body?.status || 'unknown');
+  const incompleteReason = String(
+    body?.incomplete_details?.reason ||
+    body?.error?.message ||
+    ''
+  );
+
+  // 구조화 출력은 completed 상태일 때만 JSON 스키마 준수를 기대할 수 있습니다.
+  if (status === 'incomplete') {
+    console.error(`${label} response was incomplete.`);
+    console.error(`reason: ${incompleteReason || 'not provided'}`);
+    console.error(`usage: ${JSON.stringify(body?.usage || {})}`);
+
+    throw structuredOutputError(
+      `${label} response was incomplete: ${incompleteReason || 'unknown reason'}.`,
+      '이전 응답이 출력 도중 중단되었습니다. 기사 수와 서술 분량을 줄이고, 유효한 JSON 객체 하나만 처음부터 끝까지 완성하여 반환하십시오.'
+    );
+  }
+
+  if (status === 'failed') {
+    throw structuredOutputError(
+      `${label} response failed before completion.`,
+      '이전 응답 생성에 실패했습니다. 조사 근거만 사용하여 유효한 JSON 객체 하나를 다시 생성하십시오.'
+    );
+  }
+
+  const rawText = extractOutputText(body);
+
+  if (!rawText) {
+    const outputTypes = (body.output || [])
+      .map((item) => item.type)
+      .join(', ') || 'none';
+
+    throw structuredOutputError(
+      `${label} did not contain structured output (status=${status}, output_types=${outputTypes}, reason=${incompleteReason || 'not provided'}).`,
+      '이전 응답에 JSON 본문이 없었습니다. 설명이나 Markdown 없이 스키마에 맞는 JSON 객체 하나만 반환하십시오.'
+    );
+  }
+
+  const text = normalizeJsonText(rawText);
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    const preview = rawText.length > 1200
+      ? `${rawText.slice(0, 600)}\n... (생략) ...\n${rawText.slice(-600)}`
+      : rawText;
+
+    // 로그에는 남기되, 이 원문을 다음 모델 프롬프트에 다시 넣지는 않습니다.
+    console.error(`${label} JSON parse failed: ${error.message}`);
+    console.error(`${label} status: ${status}`);
+    console.error(`${label} output length: ${rawText.length}`);
+    console.error(`${label} raw output preview:\n${preview}`);
+
+    throw structuredOutputError(
+      `${label} returned invalid JSON.`,
+      '이전 응답의 JSON 문법이 올바르지 않았습니다. 설명, Markdown 코드블록, 주석을 포함하지 말고 스키마에 맞는 JSON 객체 하나만 반환하십시오.'
+    );
+  }
+}
 
 async function coolDown(label) {
   const milliseconds = Number.isFinite(cooldownMilliseconds) && cooldownMilliseconds >= 0
@@ -269,9 +344,9 @@ const schema = {
       maxItems: 4,
       items: { type: 'string' }
     },
-    critical: { type: 'array', minItems: 3, maxItems: 4, items: newsItem },
+    critical: { type: 'array', minItems: 1, maxItems: 2, items: newsItem },
     daily_news: { type: 'array', minItems: 5, maxItems: 6, items: newsItem },
-    subsidiary_news: { type: 'array', minItems: 2, maxItems: 6, items: newsItem },
+    subsidiary_news: { type: 'array', minItems: 2, maxItems: 5, items: newsItem },
     additional_news: { type: 'array', minItems: 0, maxItems: 2, items: newsItem },
     forward_looking_points: {
       type: 'array',
@@ -638,14 +713,14 @@ function buildSynthesisPrompt() {
 아래 네 조사팀의 웹 조사 메모와 검증 출처 URL만 사용하여 최종 데일리 브리핑을 작성하라. 조사 메모에 없는 사실과 수치를 새로 만들지 마라.
 
 우선순위: 1. 한국 금융시장 리스크 2. 한국 금융 규제·정책 변화 3. 국내 금융 경쟁사 동향 4. 글로벌 금융시장 및 해외 규제·정책 5. 우리금융그룹과 계열사 직접 영향은 범주와 관계없이 상향
-언어 규칙 (반드시 준수): - 원문이 영어 또는 다른 외국어 기사이더라도, title, summary, why_woori_cro, watchpoints, entity, channel, risk_type 등 모든 텍스트 필드는 반드시 자연스러운 한국어로 작성한다. 원문 제목이나 문장을 번역하지 않고 그대로 영어로 옮기는 것을 금지한다. - 고유명사(인명, 기관명, 기업명, 상품명)는 널리 쓰이는 한국어 표기(예: 로이터, 블룸버그, 연준)를 사용하고, 필요하면 괄호 안에 원어를 병기할 수 있다.
+언어 규칙 (반드시 준수): - summary, why_woori_cro, watchpoints, entity, channel, risk_type 등 분석 텍스트 필드는 반드시 자연스러운 한국어로 작성한다. - title은 URL별 실제 기사 제목 매핑에 있는 제목을 그대로 사용한다. 외국어 원문 제목은 임의로 번역하거나 바꾸지 마라. - 고유명사(인명, 기관명, 기업명, 상품명)는 널리 쓰이는 한국어 표기(예: 로이터, 블룸버그, 연준)를 사용하고, 필요하면 괄호 안에 원어를 병기할 수 있다.
 카테고리별 리서치 출처 우선순위 (daily_news 구성 시 반드시 준수): - daily_news는 korean_media와 peer_media 조사 결과를 우선적으로 사용한다. 우리금융그룹 및 계열사 직접 영향 기사는 woori_media 조사 결과를 우선 사용하되 subsidiary_news 배치를 먼저 검토한다. global_media(Reuters, Bloomberg, FT, CNBC 등) 기사는 daily_news 전체의 약 30% 이내로 제한한다. - global_media 기사는 한국 금융시장이나 우리금융그룹에 직접적인 영향이 있는 경우에만 선택하고, 단순 해외 시황 소개성 기사는 선택하지 않는다.
 
 최종 선정 규칙:
 - 전체 기사는 최소 10건을 목표로 선정한다. critical(크리티컬)은 최소 1건은 반드시 포함하고, 나머지는 daily_news, subsidiary_news, additional_news 사이에서 그날 확보된 조사 근거의 양과 질에 맞게 자유롭게 배분한다.
 - 특정 카테고리에 오늘 조건을 만족하는 기사가 부족하면 억지로 채우지 말고, 다른 카테고리에서 조건을 만족하는 기사를 더 선정해서 전체 합계 10건을 채운다.
 - subsidiary_news를 채울 때는 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사 관련 기사(오늘자 primary 우선, 부족하면 최근 7일 이내 related도 허용), (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사. (1)에서 오늘자 기사가 부족하면 최근 7일 이내 related 기사로 채워라. subsidiary_news에는 일반 시장 뉴스(금리, 환율, 증시, 투자심리, 은행 건전성 등)를 절대 배치하지 마라. subsidiary_news를 빈 배열로 제출하지 마라. 반드시 최소 2건 이상을 채워라.
-- 전체 기사는 반드시 10건 이상을 완성한다. 조사 근거 URL이 10개 이상 확보되었으므로 10건 미만으로는 제출하지 마라. 각 카테고리에 기사가 부족하면 다른 카테고리에서 추가로 선정하여 반드시 합계 10건을 채워라.
+- 전체 기사는 10건을 목표로 선정하되, 검증 가능한 서로 다른 사건이 부족하면 억지로 채우지 마라. 이 경우 최소 8건 이상을 선정하고, 존재하지 않는 기사나 중복 사건을 만들지 마라.
 - 우리금융그룹·계열사(subsidiary_news)에는 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명 등 국내 계열사 기사, 또는 우리은행 해외지점·현지법인(우리은행 캄보디아, 우리소다라, 우리아메리카은행) 기사만 선택한다. 캄보디아·인도네시아·미국 지역의 일반 금융권 기사(금리, 환율, 증시, 투자심리, 은행 건전성 등)는 subsidiary_news에 절대 포함하지 마라. 그런 기사는 daily_news에만 배치할 수 있다. KB금융, 신한금융, 하나금융, NH농협금융, 한국금융지주 등 다른 금융지주·경쟁사 기사도 subsidiary_news에는 절대 포함하지 마라.
 - subsidiary_news에는 우리금융그룹 계열사 또는 우리은행 해외지점·해외 현지법인에 직접 관련된 기사만 선정한다. 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사(우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명 등) 관련 기사(오늘자 primary 우선, 부족하면 최근 7일 이내 related도 허용), (2) 우리은행 해외지점·해외 현지법인(우리은행 캄보디아, 우리소다라, 우리아메리카은행 등) 관련 기사. subsidiary_news에는 절대로 일반 시장 뉴스(엔화, 환율, 증시, 투자심리, 금리, 은행 건전성 등)를 배치하지 마라. 해당 지역의 일반 금융권 기사는 daily_news에만 배치할 수 있다. subsidiary_news를 빈 배열로 제출하지 마라. 반드시 최소 2건 이상을 채워라.
 - 전체 기사 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 60% 이상 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 나머지 비중으로 선정한다.
@@ -663,7 +738,7 @@ function buildSynthesisPrompt() {
 - 확인된 사실과 분석·추론을 구분하고 투자 권고나 확정적 시장 예측을 하지 않는다.
 
 CRO 품질 게이트:
-- title 필드에는 반드시 원문 기사의 실제 헤드라인을 그대로 사용하라. "이데일리 금융권 기사입니다", "한국경제 금융권 기사입니다", "금융권 동향관련보도", "증권금융시장 관련보도", "우리은행 해외현지법인 관련보도", "계열사 관련보도" 같이 매체명·카테고리·그룹명만 조합한 문장을 title로 만들지 마라. "관련보도"나 "관련 보도"로 끝나는 제목을 절대 만들지 마라. 원문에 있는 구체적인 기사 제목을 한국어로 작성하라. "제목 없음"을 title로 사용하지 마라. title이 없는 기사는 제출하지 마라. URL이 없는 기사도 제출하지 마라.
+- title 필드에는 반드시 원문 기사의 실제 헤드라인을 그대로 사용하라. "이데일리 금융권 기사입니다", "한국경제 금융권 기사입니다", "금융권 동향관련보도", "증권금융시장 관련보도", "우리은행 해외현지법인 관련보도", "계열사 관련보도" 같이 매체명·카테고리·그룹명만 조합한 문장을 title로 만들지 마라. "관련보도"나 "관련 보도"로 끝나는 제목을 절대 만들지 마라. 원문에 있는 구체적인 기사 제목을 URL별 실제 기사 제목 매핑에 있는 형태 그대로 작성하라. "제목 없음"을 title로 사용하지 마라. title이 없는 기사는 제출하지 마라. URL이 없는 기사도 제출하지 마라.
 - 다음 기사는 리스크 영향이 없으므로 절대 선정하지 마라: 내부 교육·행사, 후원·CSR, 인사 발령, 홍보성 기사, 체육대회·시상식·채용박람회, 단순 통계 발표, 일반 행정 공지, 통화안정증권 경쟁입찰·정례모집, 금융위·한국은행·금감원 정기 보도자료, 기관 공식 보도자료. 이런 기사가 조사 근거에 있어도 반드시 제외하라. - 수치, 날짜, 게시 시각, 기관명, 기업명과 근거 신뢰도를 후보 간 비교한다.
 - 자본·유동성·신용·시장·운영·사이버·법무/준법·평판·전략 리스크 영향을 평가한다.
 - 영향 전파 속도, 영향 범위, 대응 가능 시간, 규제기관 관심으로 긴급도를 판단한다.
@@ -831,7 +906,23 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
   let candidate;
   try {
     candidate = parseStructuredOutput(synthesisBody, 'CRO quality-gate synthesis');
-  } catch (parseError) {     synthesisError = parseError;     synthesisFeedback = parseError.message;     console.warn(`${parseError.message} (attempt ${attempt}/${MAX_SYNTHESIS_ATTEMPTS}).`);     if (attempt < MAX_SYNTHESIS_ATTEMPTS) {       await coolDown('CRO quality-gate synthesis retry');     }     continue;   }
+  } catch (parseError) {
+    synthesisError = parseError;
+
+    // parseStructuredOutput()이 제공한 짧고 안전한 재시도 지시만 사용합니다.
+    synthesisFeedback = parseError.retryFeedback ||
+      '이전 응답의 형식 검증에 실패했습니다. 유효한 JSON 객체 하나만 반환하십시오.';
+
+    console.warn(
+      `${parseError.message} (attempt ${attempt}/${MAX_SYNTHESIS_ATTEMPTS}).`
+    );
+
+    if (attempt < MAX_SYNTHESIS_ATTEMPTS) {
+      await coolDown('CRO quality-gate synthesis retry');
+    }
+
+    continue;
+  }
 
   // Override fabricated titles and dates with actual values from research metadata
   for (const item of ['critical', 'daily_news', 'subsidiary_news', 'additional_news'].flatMap((k) => candidate[k] || [])) {
@@ -867,8 +958,15 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     if ((candidate.critical || []).length < 1) {
       throw new Error(`Critical (Priority Watch) contained 0 articles; at least 1 is required.`);
     }
-    const minimumRequired = attempt <= 2 ? 10 : 7;
-    if (candidateNews.length < minimumRequired) throw new Error(`Final briefing contained only ${candidateNews.length} articles; at least ${minimumRequired} are required. 조사 근거 URL에서 추가 기사를 찾아 합계 ${minimumRequired}건을 반드시 채워라.`);
+   const minimumRequired = attempt <= 2 ? 8 : 7;
+
+if (candidateNews.length < minimumRequired) {
+  throw new Error(
+    `Final briefing contained only ${candidateNews.length} articles; ` +
+    `at least ${minimumRequired} are required. ` +
+    `조사 근거 URL 안에서 서로 다른 실제 기사로 보완하십시오.`
+  );
+}
     const candidateUrls = new Set();
     for (const item of candidateNews) {
       let url;
@@ -990,17 +1088,69 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     }
   }
 }
-
+function createFailureBriefing(date, reason) {
+  return {
+    executive_judgment:
+      '오늘의 CRO 브리핑은 조사 출처를 수집했으나 최종 구조화 출력 검증에 실패하여 자동 생성하지 않았습니다. 검증되지 않은 기사나 수치를 임의로 포함하지 않았습니다.',
+    executive_judgment_bullets: [
+      '조사 단계는 수행되었으나 최종 합성 응답이 유효한 JSON 형식으로 완성되지 않았습니다. 따라서 기사 내용을 추정하거나 임의로 작성하지 않았습니다.',
+      '이번 결과는 기사 부재가 아니라 출력 형식 검증 실패에 따른 안전 조치입니다. 다음 자동 실행에서 재생성이 필요합니다.',
+      '운영 측면에서는 응답 상태, incomplete 사유, 출력 길이와 원본 출력 미리보기를 확인해야 합니다. 구조화 출력이 정상 완료되기 전에는 본 결과를 의사결정 자료로 사용하지 않아야 합니다.'
+    ],
+    critical: [],
+    daily_news: [],
+    subsidiary_news: [],
+    additional_news: [],
+    forward_looking_points: [],
+    insights: {
+      headline: '최종 구조화 출력 검증이 필요합니다.',
+      bullets: [
+        '최종 합성 응답이 유효한 JSON으로 완성되지 않았습니다.',
+        '검증되지 않은 기사 정보를 브리핑에 포함하지 않았습니다.',
+        '다음 실행에서 로그를 확인한 뒤 자동 생성을 다시 수행해야 합니다.'
+      ],
+      action_items: [
+        'GitHub Actions 로그에서 응답 상태와 incomplete 사유를 확인합니다.',
+        'raw output preview를 확인해 출력 중단 또는 문법 오류를 점검합니다.',
+        '기사 수와 기사별 서술 분량을 필요 시 추가로 줄입니다.'
+      ],
+      stance: '검증 가능한 구조화 출력이 생성될 때까지 자동 브리핑 내용을 의사결정에 사용하지 않아야 합니다.'
+    },
+    monitoring_points: [
+      `${date} KST 최종 합성 응답의 상태를 확인합니다.`,
+      '구조화 출력의 중단 사유를 확인합니다.',
+      '다음 자동 실행에서 정상 기사 배열 생성 여부를 확인합니다.',
+      `직전 실패 사유: ${String(reason || '확인되지 않았습니다.')}`
+    ],
+    meta: {
+      fallback_notice: true
+    }
+  };
+}
 if (!briefing) {
-  if (!bestFallbackCandidate || bestFallbackCount < 7 || (bestFallbackCandidate.critical || []).length < 1) {
-    throw synthesisError || new Error('CRO quality-gate synthesis failed without a result.');
+  if (
+    bestFallbackCandidate &&
+    bestFallbackCount >= 7 &&
+    (bestFallbackCandidate.critical || []).length >= 1
+  ) {
+    console.warn(
+      `All ${MAX_SYNTHESIS_ATTEMPTS} attempts failed strict validation. ` +
+      `Falling back to the best deduplicated candidate with ${bestFallbackCount} articles.`
+    );
+
+    bestFallbackCandidate.critical ||= [];
+    bestFallbackCandidate.daily_news ||= [];
+    bestFallbackCandidate.subsidiary_news ||= [];
+    bestFallbackCandidate.additional_news ||= [];
+
+    briefing = bestFallbackCandidate;
+  } else {
+    console.warn(
+      'No valid candidate was produced. Writing a failure notice instead of fabricated news.'
+    );
+
+    briefing = createFailureBriefing(date, synthesisError?.message);
   }
-  console.warn(`All ${MAX_SYNTHESIS_ATTEMPTS} attempts failed strict validation. Falling back to the best deduplicated candidate with ${bestFallbackCount} articles.`);
-  if (!bestFallbackCandidate.critical) bestFallbackCandidate.critical = [];
-  if (!bestFallbackCandidate.daily_news) bestFallbackCandidate.daily_news = [];
-  if (!bestFallbackCandidate.subsidiary_news) bestFallbackCandidate.subsidiary_news = [];
-  if (!bestFallbackCandidate.additional_news) bestFallbackCandidate.additional_news = [];
-  briefing = bestFallbackCandidate;
 }
 const allNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news'].flatMap((key) => briefing[key] || []);
 const urls = new Set();
@@ -1039,7 +1189,11 @@ for (const item of allNews) {
   if (urls.has(verifiedKey)) { console.warn(`Duplicate article URL after normalization, removing: ${item.url}`); continue; }
   urls.add(verifiedKey);
 }
-if (allNews.length < 3) throw new Error(`Fallback briefing contained only ${allNews.length} articles; at least 3 are required.`);
+if (allNews.length < 3 && !isFailureFallback) {
+  throw new Error(
+    `Fallback briefing contained only ${allNews.length} articles; at least 3 are required.`
+  );
+}
 // Check fallback quality (warn only, don't reject)
 const fallbackQualityError = narrativeQualityError(briefing, allNews);
 if (fallbackQualityError) {
@@ -1051,6 +1205,7 @@ briefing.subsidiary_news.forEach((item) => { item.critical = false; });
 briefing.additional_news.forEach((item) => { item.critical = false; });
 
 briefing.meta = {
+  fallback_notice: briefing?.meta?.fallback_notice === true,
   product: 'CRO Staff News & Critical Monitor',
   perspective: '우리금융그룹 CRO',
   mode: 'daily',
