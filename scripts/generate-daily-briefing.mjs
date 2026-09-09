@@ -488,32 +488,29 @@ const wooriSubsidiaryKeywords = [
 ];
 
 function mentionsWooriSubsidiary(item) {
-  // 모델이 만든 summary/why_woori_cro는 판정 근거로 사용하지 않습니다.
-  // 실제 기사 제목과 entity에 우리금융 계열사명이 있어야만 통과합니다.
-  const titleEntity = `${item.title || ''} ${item.entity || ''}`;
+  // subsidiary_news 판정은 모델이 만든 entity·summary가 아니라
+  // 실제 기사 제목만 기준으로 합니다.
+  const title = String(item.title || '').trim();
 
-  const hasWooriKeyword = wooriSubsidiaryKeywords.some((keyword) =>
-    titleEntity.includes(keyword)
-  );
-
-  if (!hasWooriKeyword) return false;
+  if (!title) return false;
 
   const competitorKeywords = [
-    'KB금융', 'KB국민', '신한금융', '신한은행', '하나금융', '하나은행',
-    'NH농협', '농협금융', 'IBK기업은행', '기업은행', '한국금융지주'
+    'KB금융', 'KB국민', 'KB국민은행',
+    '신한금융', '신한은행', '신한카드', '신한투자증권',
+    '하나금융', '하나은행', '하나카드', '하나증권',
+    'NH농협', '농협금융', '농협은행',
+    'IBK기업은행', '기업은행',
+    '한국금융지주', '한국투자증권'
   ];
 
-  const titleHasCompetitor = competitorKeywords.some((keyword) =>
-    titleEntity.includes(keyword)
-  );
+  // 경쟁사가 제목에 등장하면, 우리금융 관련 표현이 함께 있어도
+  // 계열사 뉴스가 아닌 daily_news 후보로만 처리합니다.
+  if (competitorKeywords.some((keyword) => title.includes(keyword))) {
+    return false;
+  }
 
-  const titleHasWoori = wooriSubsidiaryKeywords.some((keyword) =>
-    titleEntity.includes(keyword)
-  );
-
-  if (titleHasCompetitor && !titleHasWoori) return false;
-
-  return true;
+  // 실제 기사 제목에 우리금융 또는 계열사명이 직접 등장해야 합니다.
+  return wooriSubsidiaryKeywords.some((keyword) => title.includes(keyword));
 }
 
 function extractDateFromPublished(publishedText) {
@@ -791,7 +788,7 @@ function buildSynthesisPrompt() {
 
 - daily_news는 한국 기사 중심으로 구성하며, 5~6건 중 최소 3건은 네이버 메인뉴스·네이버 경제뉴스 직접 링크를 사용하라.
 - global_media 단독 출처 기사는 전체 기사 중 최대 20%까지만 허용한다. 글로벌 기사는 한국 금융시장, 원화·채권·유동성 또는 우리금융그룹에 직접 전이될 가능성이 높은 경우만 선택하라.
-- subsidiary_news에는 woori_media 조사 단계에서 수집된 URL 중 우리금융지주·우리은행·우리카드·우리금융캐피탈·우리투자증권·동양생명·ABL생명 등 우리금융 계열사가 기사 제목 또는 대상에 직접 등장하는 기사만 넣어라.
+- subsidiary_news에는 woori_media 조사 단계에서 수집된 URL 중 실제 기사 제목에 우리금융지주·우리은행·우리카드·우리금융캐피탈·우리투자증권·동양생명·ABL생명 등 우리금융 계열사명이 직접 등장하는 기사만 넣어라. - 신한금융·신한은행·KB금융·KB국민은행·하나금융·하나은행·NH농협·IBK기업은행·한국금융지주 등 경쟁사명이 기사 제목에 등장하면, 우리금융이 본문에서 언급되거나 비교 대상이어도 subsidiary_news에 넣지 마라. 해당 기사는 daily_news 후보로만 검토하라.
 - 해외 일반 기업, 해외 일반 사이버 공격, 해외 시장 동향, 경쟁사 단독 기사, 우리금융과 무관한 기업 기사는 subsidiary_news에 절대 넣지 마라.
 - 우리금융 직접 관련 기사가 없으면 subsidiary_news는 빈 배열([])로 제출하라. 기사의 수를 채우기 위해 무관한 뉴스를 넣는 것을 절대 금지한다.
 
@@ -1127,7 +1124,7 @@ if (candidateNews.length < minimumRequired) {
 
   if (!mentionsWooriSubsidiary(item)) {
     throw new Error(
-      `Subsidiary news must directly name a Woori Financial Group subsidiary in its title or entity: ` +
+      `Subsidiary news must directly name a Woori Financial Group subsidiary in its article title and must not be a competitor article: ` +
       `${item.title} URL: ${item.url}`
     );
   }
