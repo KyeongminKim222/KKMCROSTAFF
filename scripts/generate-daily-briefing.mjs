@@ -526,111 +526,104 @@ function moveMisplacedSubsidiaryNews(candidate) {
   candidate.subsidiary_news ||= [];
   candidate.additional_news ||= [];
 
-  const subsidiaryUrlKeys = new Set();
-  const validSubsidiaryNews = [];
-  const competitorItems = [];
-  const remainingDailyNews = [];
+  const seenUrls = new Set();
+  const subsidiaryNews = [];
+  const dailyNews = [];
+  const additionalNews = [];
 
-  // 1) 기존 subsidiary_news를 정리합니다.
-  for (const item of candidate.subsidiary_news) {
-    let urlKey = '';
-
+  const addUnique = (target, item) => {
     try {
-      urlKey = canonicalUrlKey(item.url);
+      const urlKey = canonicalUrlKey(item.url);
+
+      if (seenUrls.has(urlKey)) {
+        console.log(`Removed duplicate article during category cleanup: ${item.title}`);
+        return false;
+      }
+
+      item.critical = false;
+      seenUrls.add(urlKey);
+      target.push(item);
+      return true;
     } catch {
       console.log(
-        `Removed subsidiary article with invalid URL: ${item.title || '제목 미확인'}`
+        `Removed article with invalid URL during category cleanup: ${item.title || '제목 미확인'}`
       );
+      return false;
+    }
+  };
+
+  // critical 기사의 URL은 다른 섹션에 중복 배치되지 않도록 먼저 기록합니다.
+  for (const item of candidate.critical) {
+    try {
+      seenUrls.add(canonicalUrlKey(item.url));
+    } catch {}
+  }
+
+  // 1) 기존 계열사 뉴스: 우리금융 직접 기사만 유지합니다.
+  // 경쟁사 기사는 daily_news로 옮기고, 무관한 해외 기업 기사는 제거합니다.
+  for (const item of candidate.subsidiary_news) {
+    if (mentionsWooriSubsidiary(item)) {
+      addUnique(subsidiaryNews, item);
       continue;
     }
 
-    // 실제 제목에 우리금융 계열사가 직접 등장하는 기사만 유지합니다.
-    if (mentionsWooriSubsidiary(item)) {
-      if (!subsidiaryUrlKeys.has(urlKey)) {
-        item.critical = false;
-        validSubsidiaryNews.push(item);
-        subsidiaryUrlKeys.add(urlKey);
+    if (isCompetitorFinancialArticle(item)) {
+      if (addUnique(dailyNews, item)) {
+        console.log(
+          `Moved competitor article from subsidiary_news to daily_news: ${item.title}`
+        );
       }
       continue;
     }
 
-    // 신한·KB·하나 등 경쟁사 기사는 daily_news로 옮길 후보로 보관합니다.
-    if (isCompetitorFinancialArticle(item)) {
-      item.critical = false;
-      competitorItems.push(item);
-
-      console.log(
-        `Moved competitor article from subsidiary_news to daily_news: ${item.title}`
-      );
-      continue;
-    }
-
-    // 우리금융·경쟁사 어느 쪽도 아닌 기사는 계열사 뉴스에서 제외합니다.
     console.log(
       `Removed unrelated article from subsidiary_news: ${item.title || '제목 미확인'}`
     );
   }
 
-  // 2) daily_news에 들어간 우리금융 직접 기사를 subsidiary_news로 옮깁니다.
+  // 2) daily_news: 우리금융 직접 기사는 subsidiary_news로 이동합니다.
   for (const item of candidate.daily_news) {
-    let urlKey = '';
-
-    try {
-      urlKey = canonicalUrlKey(item.url);
-    } catch {
-      remainingDailyNews.push(item);
-      continue;
-    }
-
     if (mentionsWooriSubsidiary(item)) {
-      if (!subsidiaryUrlKeys.has(urlKey) && validSubsidiaryNews.length < 4) {
-        item.critical = false;
-        validSubsidiaryNews.push(item);
-        subsidiaryUrlKeys.add(urlKey);
-
+      if (addUnique(subsidiaryNews, item)) {
         console.log(
           `Moved direct Woori article from daily_news to subsidiary_news: ${item.title}`
         );
       }
-
-      // 우리금융 직접 기사는 daily_news에는 남기지 않습니다.
       continue;
     }
 
-    remainingDailyNews.push(item);
+    addUnique(dailyNews, item);
   }
 
-  // 3) 기존 daily_news와 계열사에서 이동한 경쟁사 기사를 합칩니다.
-  const dailyUrlKeys = new Set();
-  const finalDailyNews = [];
-
-  for (const item of [...remainingDailyNews, ...competitorItems]) {
-    try {
-      const urlKey = canonicalUrlKey(item.url);
-
-      // 같은 URL은 daily_news에 한 번만 둡니다.
-      if (dailyUrlKeys.has(urlKey)) continue;
-
-      // 스키마의 daily_news 최대 6건을 넘기지 않습니다.
-      if (finalDailyNews.length >= 6) {
+  // 3) additional_news: 우리금융 직접 기사는 subsidiary_news,
+  // 경쟁사 기사는 daily_news로 옮기며, 나머지는 additional_news에 유지합니다.
+  for (const item of candidate.additional_news) {
+    if (mentionsWooriSubsidiary(item)) {
+      if (addUnique(subsidiaryNews, item)) {
         console.log(
-          `Daily news limit reached; omitted competitor article: ${item.title}`
+          `Moved direct Woori article from additional_news to subsidiary_news: ${item.title}`
         );
-        continue;
       }
-
-      item.critical = false;
-      finalDailyNews.push(item);
-      dailyUrlKeys.add(urlKey);
-    } catch {
-      console.log(
-        `Removed daily article with invalid URL: ${item.title || '제목 미확인'}`
-      );
+      continue;
     }
+
+    if (isCompetitorFinancialArticle(item)) {
+      if (addUnique(dailyNews, item)) {
+        console.log(
+          `Moved competitor article from additional_news to daily_news: ${item.title}`
+        );
+      }
+      continue;
+    }
+
+    addUnique(additionalNews, item);
   }
 
-  candidate.subsidiary_news = validSubsidiaryNews;
-  candidate.daily_news = finalDailyNews;
+  // 기사 수를 인위적으로 4건·6건으로 자르지 않습니다.
+  // 구조화 출력에서 확보된 검증 기사를 보존하는 것이 우선입니다.
+  candidate.subsidiary_news = subsidiaryNews;
+  candidate.daily_news = dailyNews;
+  candidate.additional_news = additionalNews;
 }
 function extractDateFromPublished(publishedText) {
   const match = String(publishedText || '').match(/(\d{4})-(\d{2})-(\d{2})/);
@@ -1353,11 +1346,17 @@ function createFailureBriefing(date, reason) {
   };
 }
 if (!briefing) {
-  // 엄격한 검증은 실패했더라도 실제 후보 기사가 3건 이상이면
-  // 빈 실패 안내문 대신 가장 나은 후보를 결과에 남깁니다.
-  if (bestFallbackCandidate && bestFallbackCount >= 3) {
+  // fallback은 최소한 실사용 가능한 분량과 핵심 경보를 갖춘 경우에만 사용합니다.
+  // 3~4건짜리 불완전 후보가 저장되어 브리핑 품질을 떨어뜨리는 것을 막습니다.
+  const hasUsableFallback =
+    bestFallbackCandidate &&
+    bestFallbackCount >= 7 &&
+    (bestFallbackCandidate.critical || []).length >= 1 &&
+    (bestFallbackCandidate.daily_news || []).length >= 4;
+
+  if (hasUsableFallback) {
     console.warn(
-      `Strict validation failed, but preserving the best verified candidate ` +
+      `Strict validation failed, but preserving the best usable candidate ` +
       `with ${bestFallbackCount} articles.`
     );
 
@@ -1369,8 +1368,8 @@ if (!briefing) {
     briefing = bestFallbackCandidate;
   } else {
     console.warn(
-      'No usable candidate with at least 3 articles was produced. ' +
-      'Writing a failure notice instead of fabricated news.'
+      'No usable fallback candidate was produced. ' +
+      'Writing a failure notice instead of publishing an incomplete briefing.'
     );
 
     briefing = createFailureBriefing(date, synthesisError?.message);
