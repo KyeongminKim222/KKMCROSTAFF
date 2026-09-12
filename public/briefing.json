@@ -29,7 +29,7 @@
     "2026-09-13 KST 최종 합성 응답의 상태를 확인합니다.",
     "구조화 출력의 중단 사유를 확인합니다.",
     "다음 자동 실행에서 정상 기사 배열 생성 여부를 확인합니다.",
-    "직전 실패 사유: Final briefing contained only 4 articles; at least 7 are required. 조사 근거 URL 안에서 서로 다른 실제 기사로 보완하십시오."
+    "직전 실패 사유: Final briefing contained only 1 articles; at least 7 are required. 조사 근거 URL 안에서 서로 다른 실제 기사로 보완하십시오."
   ],
   "meta": {
     "fallback_notice": true,
@@ -37,7 +37,7 @@
     "perspective": "우리금융그룹 CRO",
     "mode": "daily",
     "briefing_date": "2026-09-13",
-    "generated_at": "2026-09-12T22:22:53.003Z",
+    "generated_at": "2026-09-12T22:52:03.673Z",
     "primary_window": "실행 시점 기준 최근 24시간 (KST), 부족분은 날짜가 표시된 최근 7일 유관·배경 자료",
     "research_method": "4 media research stages + independent CRO quality-gate synthesis",
     "source_mix": {
