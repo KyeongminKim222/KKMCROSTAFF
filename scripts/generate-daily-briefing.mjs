@@ -914,7 +914,7 @@ function buildSynthesisPrompt() {
 - 전체 기사 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 60% 이상 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 나머지 비중으로 선정한다.
 - 공식자료는 사실과 수치 검증에 적극 활용하되, 같은 사건의 언론기사가 있으면 독자가 맥락과 파급효과를 이해할 수 있는 언론기사를 대표 원문으로 우선 선정한다.
 - Gumloop 예시처럼 연합뉴스, 주요 경제지·금융 전문매체 및 Reuters·Bloomberg·FT·CNBC 등 신뢰도 높은 일반기사가 브리핑의 중심이 되어야 한다.
-- critical 기사는 반드시 window를 primary로 표시하며, 실행 시점 기준 최근 36시간 이내에 게시된 기사만 사용한다. published 필드에는 반드시 정확한 게시 시각(시:분 단위)을 KST 기준으로 적는다.
+- 모든 기사는 게시일시가 확인된 최근 7일 이내 기사만 사용하라. 최근 7일을 초과했거나 게시일시를 확인할 수 없는 기사는 절대 선택하지 마라. - critical 기사는 실행 시점 기준 최근 36시간 이내 기사이면 window를 primary로 표시하라. 최근 36시간 이내의 검증 가능한 핵심 기사가 부족하면 최근 7일 이내의 중요 기사도 critical에 넣을 수 있으며, 이 경우 반드시 window를 related로 표시하라. 36시간을 넘긴 기사를 primary로 표시하지 마라. - published 필드에는 확인 가능한 게시일시를 KST 기준으로 적어라.
 - daily_news와 subsidiary_news를 채우기 위해 related로 표시하는 기사는 최근 7일 이내여야 하며, 전체 기사 중 related는 최대 8건까지 허용한다.
 - "오늘자 검증 가능한 기사 없음" 같은 placeholder 문구를 title이나 다른 필드에 넣지 마라. 절대로 가짜 기사를 만들지 마라. 조사 근거 URL 목록에 없는 URL을 사용하지 마라. 10건을 채우기 위해 존재하지 않는 기사를 지어내지 마라. 그런 항목을 만들 수 없으면 조사 근거 안에서 실제로 존재하는 다른 기사로 대체하거나, additional_news에 한해서만 해당 카테고리를 빈 배열로 남긴다.
 - 동일 사건과 동일 URL을 제거하고 대표 원문 하나만 남긴다. 서로 다른 매체가 같은 사건(예: 같은 날 발표된 같은 통계, 같은 기관의 같은 공지, 같은 기업의 같은 이슈)을 각자 보도한 경우, URL이 다르더라도 반드시 동일 사건으로 간주하여 가장 상세하고 신뢰도 높은 원문 하나만 남기고 나머지는 절대 선택하지 마라. 예를 들어 "카드론 금리 상승"처럼 같은 주제를 다룬 여러 매체의 기사를 daily_news에 중복 포함시키지 마라. - 통화안정증권 경쟁입찰·정례모집, 금융위·한국은행·금감원 정기 보도자료, 기관 공식 보도자료는 절대 선정하지 마라. 오직 기자가 작성한 언론기사만 선정하라.
@@ -1190,40 +1190,74 @@ if (candidateNews.length < minimumRequired) {
       if (candidateUrls.has(verifiedKey)) throw new Error(`Duplicate article URL: ${item.url}`);
       candidateUrls.add(verifiedKey);
     }
-    const now = new Date();
-    for (const item of candidateNews) {
-      const parsedPublished = parsePublishedKst(item.published);
-      if (!parsedPublished.date) {
-        throw new Error(`Article had no verifiable date: ${item.title} (published: ${item.published || '미기재'}) URL: ${item.url}`);
-      }
-      if (item.window === 'primary') {
-        if (parsedPublished.hasTime) {
-          const hoursDiff = (now - parsedPublished.date) / (1000 * 60 * 60);
-          if (hoursDiff < -3 || hoursDiff > 36) {
-            throw new Error(`Primary article was not within the recent 36 hour window: ${item.title} (published: ${item.published || '미기재'}) URL: ${item.url}`);
-          }
-        } else {
-          const daysDiff = (now - parsedPublished.date) / (1000 * 60 * 60 * 24);
-          if (daysDiff < 0 || daysDiff > 1) {
-            throw new Error(`Primary article date was not within the recent 1-day window: ${item.title} (published: ${item.published || '미기재'}) URL: ${item.url}`);
-          }
-        }
-      } else {
-        const daysDiff = (now - parsedPublished.date) / (1000 * 60 * 60 * 24);
-        if (daysDiff < 0 || daysDiff > 7) {
-          throw new Error(`Related article was outside the allowed date range: ${item.title} (published: ${item.published}) URL: ${item.url}`);
-        }
-      }
-    }
-    const relatedCount = candidateNews.filter((item) => item.window !== 'primary').length;
-    if (relatedCount > 8) {
-      throw new Error(`Too many related (non-today) articles selected: ${relatedCount}. Limit is 8.`);
-    }
-    for (const item of candidate.critical || []) {
-      if (item.window !== 'primary') {
-        throw new Error(`Critical article must be dated today (window=primary): ${item.title} URL: ${item.url}`);
-      }
-    }
+const now = new Date();
+
+for (const item of candidateNews) {
+  const parsedPublished = parsePublishedKst(item.published);
+
+  if (!parsedPublished.date) {
+    throw new Error(
+      `Article had no verifiable date: ${item.title} ` +
+      `(published: ${item.published || '미기재'}) URL: ${item.url}`
+    );
+  }
+
+  const hoursDiff = (now - parsedPublished.date) / (1000 * 60 * 60);
+  const daysDiff = hoursDiff / 24;
+
+  // 미래 기사 또는 최근 7일을 초과한 기사는 최종 후보에서 제외합니다.
+  if (hoursDiff < -3 || daysDiff > 7) {
+    throw new Error(
+      `Article was outside the allowed 7-day date range: ${item.title} ` +
+      `(published: ${item.published || '미기재'}) URL: ${item.url}`
+    );
+  }
+
+  // 최근 7일 이내이지만 최근 36시간을 넘긴 기사가 primary로 표시되면
+  // 버리지 않고 related로만 보정합니다.
+  if (item.window === 'primary' && hoursDiff > 36) {
+    item.window = 'related';
+
+    console.log(
+      `Downgraded primary article to related: ${item.title} ` +
+      `(published: ${item.published || '미기재'})`
+    );
+  }
+
+  // 시각 없이 날짜만 있는 기사는 당일·전일까지만 primary를 허용합니다.
+  if (
+    item.window === 'primary' &&
+    !parsedPublished.hasTime &&
+    daysDiff > 1
+  ) {
+    item.window = 'related';
+
+    console.log(
+      `Downgraded date-only primary article to related: ${item.title} ` +
+      `(published: ${item.published || '미기재'})`
+    );
+  }
+}
+
+const relatedCount = candidateNews.filter(
+  (item) => item.window === 'related'
+).length;
+
+if (relatedCount > 0) {
+  console.log(
+    `Final briefing includes ${relatedCount} related article(s) within the allowed 7-day window.`
+  );
+}
+
+// critical은 primary 또는 related만 허용합니다.
+// 단, 7일 초과 기사는 위 검증에서 이미 탈락합니다.
+for (const item of candidate.critical || []) {
+  if (item.window !== 'primary' && item.window !== 'related') {
+    throw new Error(
+      `Critical article had an invalid window value: ${item.title} URL: ${item.url}`
+    );
+  }
+}
 // 우리금융 직접 관련 기사가 없는 날에는 subsidiary_news를 빈 배열로 둡니다.
 // 무관한 기사를 채우기 위해 넣지 않습니다.
 for (const item of candidate.subsidiary_news || []) {
