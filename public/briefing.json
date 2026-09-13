@@ -29,7 +29,7 @@
     "2026-09-14 KST 최종 합성 응답의 상태를 확인합니다.",
     "구조화 출력의 중단 사유를 확인합니다.",
     "다음 자동 실행에서 정상 기사 배열 생성 여부를 확인합니다.",
-    "직전 실패 사유: Primary article was not within the recent 36 hour window: 유안타證 \"증권주 조정 마무리 국면, 반등에 시간 필요…목표가↓\" (published: 2026-09-10 08:44) URL: https://www.yna.co.kr/view/AKR20260910027400008"
+    "직전 실패 사유: Primary article was not within the recent 36 hour window: 금감원장 모의해킹훈련 점검…\"사고 발생시 소비자보호 최우선\" (published: 2026-06-14 12:01) URL: https://www.fnnews.com/ampNews/202606141201195199"
   ],
   "meta": {
     "fallback_notice": true,
@@ -37,7 +37,7 @@
     "perspective": "우리금융그룹 CRO",
     "mode": "daily",
     "briefing_date": "2026-09-14",
-    "generated_at": "2026-09-13T22:23:49.851Z",
+    "generated_at": "2026-09-13T22:53:12.650Z",
     "primary_window": "실행 시점 기준 최근 24시간 (KST), 부족분은 날짜가 표시된 최근 7일 유관·배경 자료",
     "research_method": "4 media research stages + independent CRO quality-gate synthesis",
     "source_mix": {
