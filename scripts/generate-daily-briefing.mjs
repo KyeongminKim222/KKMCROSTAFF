@@ -841,6 +841,20 @@ function isNaverNewsUrl(rawUrl) {
     return false;
   }
 }
+
+function isGlobalMediaUrl(rawUrl) {
+  try {
+    const hostname = new URL(rawUrl).hostname
+      .toLowerCase()
+      .replace(/^www\./, '');
+
+    return globalMediaDomains.some((domain) =>
+      hostMatchesDomain(hostname, domain)
+    );
+  } catch {
+    return false;
+  }
+}
 const researchedUrlByCanonical = new Map();
 const researchedUrlsByPath = new Map();
 for (const sourceUrl of Object.values(researchEvidence).flatMap((evidence) => evidence.source_urls || [])) {
@@ -910,7 +924,7 @@ function buildSynthesisPrompt() {
 - subsidiary_news를 채울 때는 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사 관련 기사(오늘자 primary 우선, 부족하면 최근 7일 이내 related도 허용), (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사. (1)에서 오늘자 기사가 부족하면 최근 7일 이내 related 기사로 채워라. subsidiary_news에는 일반 시장 뉴스(금리, 환율, 증시, 투자심리, 은행 건전성 등)를 절대 배치하지 마라. subsidiary_news에는 우리금융그룹 또는 계열사에 직접 관련된 기사만 넣어라.조건에 맞는 실제 기사가 없으면 빈 배열([])로 제출하라.일반 시장 뉴스, 해외 일반 기업 뉴스, 단순 사이버 뉴스로 빈자리를 채우는 것은 절대 금지한다.
 - 전체 기사는 10건을 목표로 선정하되, 검증 가능한 서로 다른 사건이 부족하면 억지로 채우지 마라. 이 경우 최소 8건 이상을 선정하고, 존재하지 않는 기사나 중복 사건을 만들지 마라.
 - 우리금융그룹·계열사(subsidiary_news)에는 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명 등 국내 계열사 기사, 또는 우리은행 해외지점·현지법인(우리은행 캄보디아, 우리소다라, 우리아메리카은행) 기사만 선택한다. 캄보디아·인도네시아·미국 지역의 일반 금융권 기사(금리, 환율, 증시, 투자심리, 은행 건전성 등)는 subsidiary_news에 절대 포함하지 마라. 그런 기사는 daily_news에만 배치할 수 있다. KB금융, 신한금융, 하나금융, NH농협금융, 한국금융지주 등 다른 금융지주·경쟁사 기사도 subsidiary_news에는 절대 포함하지 마라.
-- subsidiary_news에는 우리금융그룹 계열사 또는 우리은행 해외지점·해외 현지법인에 직접 관련된 기사만 선정한다. 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사(우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명 등) 관련 기사(오늘자 primary 우선, 부족하면 최근 7일 이내 related도 허용), (2) 우리은행 해외지점·해외 현지법인(우리은행 캄보디아, 우리소다라, 우리아메리카은행 등) 관련 기사. subsidiary_news에는 절대로 일반 시장 뉴스(엔화, 환율, 증시, 투자심리, 금리, 은행 건전성 등)를 배치하지 마라. 해당 지역의 일반 금융권 기사는 daily_news에만 배치할 수 있다. subsidiary_news를 빈 배열로 제출하지 마라. 반드시 최소 2건 이상을 채워라.
+- subsidiary_news에는 우리금융그룹 계열사 또는 우리은행 해외지점·해외 현지법인에 직접 관련된 기사만 선정한다. 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사(우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명 등) 관련 기사(오늘자 primary 우선, 부족하면 최근 7일 이내 related도 허용), (2) 우리은행 해외지점·해외 현지법인(우리은행 캄보디아, 우리소다라, 우리아메리카은행 등) 관련 기사. subsidiary_news에는 절대로 일반 시장 뉴스(엔화, 환율, 증시, 투자심리, 금리, 은행 건전성 등)를 배치하지 마라. 해당 지역의 일반 금융권 기사는 daily_news에만 배치할 수 있다. subsidiary_news에는 우리금융그룹 또는 계열사에 직접 관련된 기사만 넣어라. 최근 7일 이내의 우리금융 직접 관련 기사가 없으면 빈 배열([])로 제출하라.
 - 전체 기사 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 60% 이상 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 나머지 비중으로 선정한다.
 - 공식자료는 사실과 수치 검증에 적극 활용하되, 같은 사건의 언론기사가 있으면 독자가 맥락과 파급효과를 이해할 수 있는 언론기사를 대표 원문으로 우선 선정한다.
 - Gumloop 예시처럼 연합뉴스, 주요 경제지·금융 전문매체 및 Reuters·Bloomberg·FT·CNBC 등 신뢰도 높은 일반기사가 브리핑의 중심이 되어야 한다.
@@ -936,7 +950,9 @@ CRO 품질 게이트:
 - 각 기사 summary는 3~5문장으로 작성한다. 첫 문장에서 매체명과 게시일을 밝히고, 이후 핵심 수치·당사자·발생 경위·현재 상태를 원문 범위 안에서 구체적으로 설명한다. 단순 헤드라인 재진술이나 2문장 요약은 금지한다.
 - why_woori_cro는 2~3문장으로 작성한다. 우리은행 또는 관련 계열사에 미치는 자본·유동성·신용·시장·운영·준법·평판·전략 영향과 30~90일 의사결정 포인트를 구체적으로 연결한다.
 - watchpoints는 기사마다 2~3개를 제시한다. 기관 발표 일정, 비율·스프레드·연체율·충당금·한도 등 실제로 확인할 지표나 질문으로 작성한다.
-- 오늘의 CRO STAFF 인사이트는 기사들을 나열하지 말고 공통 동인, 1차·2차 전이경로, 현재 판단을 뒤집을 조건, 1주·2주·90일 모니터링 행동을 연결한다.
+- 오늘의 CRO STAFF 인사이트는 기사들을 나열하지 말고 공통 동인, 1차·2차 전이경로, 현재 판단을 뒤집을 조건, 1주·2주·90일 모니터링 행동을 연결한다. 
+최우선 섹션 편성 규칙: - 이 규칙은 위에 있는 다른 규칙과 충돌하면 항상 우선한다. - 전체 기사 중 Reuters, AP, Bloomberg, FT, WSJ, CNBC 등 글로벌 언론 기사는 최대 2건만 선택하라. - daily_news에는 글로벌 기사를 최대 1건만 넣어라. 나머지는 반드시 korean_media 또는 peer_media의 국내 기사로 채워라. - additional_news에는 글로벌 기사를 최대 1건만 넣어라. 같은 유가·중동 분쟁·글로벌 금리 사건을 여러 해외 기사로 반복 선정하는 것을 절대 금지한다. - subsidiary_news에는 글로벌 일반 기사, 해외 일반 기업 기사, 해외 일반 사이버 기사, 경쟁사 단독 기사를 절대 넣지 마라. - woori_media 또는 korean_media 조사 근거에 제목상 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리투자증권, 동양생명, ABL생명 등 우리금융 계열사가 직접 등장하는 최근 7일 이내 기사가 하나라도 있으면, 그중 최소 1건을 subsidiary_news에 우선 배치하라. - subsidiary_news가 빈 배열일 수 있는 경우는 조사 근거 전체에 최근 7일 이내의 우리금융 직접 관련 기사가 전혀 없는 경우뿐이다. - 신한금융, KB금융, 하나금융, NH농협, IBK기업은행, 한국금융지주 등 경쟁사 직접 기사는 subsidiary_news가 아니라 daily_news에 배치하라. - daily_news는 국내 금융시장·규제·가계대출·부동산 PF·여신·자본·유동성·소비자보호·금융사고·경쟁사 관련 국내 기사 중심으로 구성하라. - 동일한 해외 유가·지정학·채권금리 사건은 전체 브리핑에서 대표 기사 1건만 남기고, 같은 사건의 Reuters·AP·Bloomberg 후속 기사들을 중복 선택하지 마라. 
+URL별 실제 기사 제목 매핑 (반드시 준수):
 
 URL별 실제 기사 제목 매핑 (반드시 준수):
 각 기사의 title 필드에는 반드시 아래 매핑에 있는 제목을 그대로 복사하라. 임의로 제목을 수정하거나 새로 만들지 마라. 제목이 매핑에 없는 URL은 조사 메모에서 해당 URL에 대응하는 실제 기사 제목을 찾아 사용하라. 매핑에 있는 제목에 언론사명이나 카테고리명이 포함된 경우, 그 부분만 제거하고 실제 기사 제목 부분을 사용하라.
@@ -1132,9 +1148,45 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
   }
   moveMisplacedSubsidiaryNews(candidate);
   try {
-    const dedupedFallback = dedupeCandidateNews(JSON.parse(JSON.stringify(candidate)));
+  try {
+    const dedupedFallback = dedupeCandidateNews(
+      JSON.parse(JSON.stringify(candidate))
+    );
+
     const fallbackCount = countNews(dedupedFallback);
-    if (fallbackCount > bestFallbackCount) {
+
+    const fallbackGlobalItems = [
+      ...(dedupedFallback.critical || []),
+      ...(dedupedFallback.daily_news || []),
+      ...(dedupedFallback.subsidiary_news || []),
+      ...(dedupedFallback.additional_news || [])
+    ].filter((item) => isGlobalMediaUrl(item.url));
+
+    const fallbackDailyGlobalItems = (dedupedFallback.daily_news || [])
+      .filter((item) => isGlobalMediaUrl(item.url));
+
+    const fallbackAdditionalGlobalItems = (dedupedFallback.additional_news || [])
+      .filter((item) => isGlobalMediaUrl(item.url));
+
+    const fallbackSubsidiaryGlobalItems = (dedupedFallback.subsidiary_news || [])
+      .filter((item) => isGlobalMediaUrl(item.url));
+
+    // 엄격 검증이 실패해도 해외 기사 과다 후보는 fallback으로 저장하지 않습니다.
+    const fallbackHasAcceptableGlobalMix =
+      fallbackGlobalItems.length <= 2 &&
+      fallbackDailyGlobalItems.length <= 1 &&
+      fallbackAdditionalGlobalItems.length <= 1 &&
+      fallbackSubsidiaryGlobalItems.length === 0;
+
+    if (!fallbackHasAcceptableGlobalMix) {
+      console.warn(
+        `Skipped fallback candidate because it contained too many global articles ` +
+        `(total=${fallbackGlobalItems.length}, ` +
+        `daily=${fallbackDailyGlobalItems.length}, ` +
+        `additional=${fallbackAdditionalGlobalItems.length}, ` +
+        `subsidiary=${fallbackSubsidiaryGlobalItems.length}).`
+      );
+    } else if (fallbackCount > bestFallbackCount) {
       bestFallbackCount = fallbackCount;
       bestFallbackCandidate = dedupedFallback;
     }
@@ -1282,24 +1334,52 @@ if (mediaCount < minimumMediaCount) {
 }
 
 // 전체 브리핑에서 global_media 단독 출처 기사는 최대 20%만 허용합니다.
-const globalOnlyItems = candidateNews.filter((item) => {
-  const isGlobal = isFromResearchStage(item.url, 'global_media');
+const globalItems = candidateNews.filter((item) =>
+  isGlobalMediaUrl(item.url)
+);
 
-  const isKoreanOrWooriOrPeer =
-    isFromResearchStage(item.url, 'korean_media') ||
-    isFromResearchStage(item.url, 'woori_media') ||
-    isFromResearchStage(item.url, 'peer_media');
+const globalDailyItems = (candidate.daily_news || []).filter((item) =>
+  isGlobalMediaUrl(item.url)
+);
 
-  return isGlobal && !isKoreanOrWooriOrPeer;
-});
+const globalAdditionalItems = (candidate.additional_news || []).filter((item) =>
+  isGlobalMediaUrl(item.url)
+);
 
-const maximumGlobalItems = Math.max(1, Math.floor(candidateNews.length * 0.2));
+const globalSubsidiaryItems = (candidate.subsidiary_news || []).filter((item) =>
+  isGlobalMediaUrl(item.url)
+);
 
-if (globalOnlyItems.length > maximumGlobalItems) {
+// 전체 8~10건 브리핑에서 해외 기사는 최대 2건만 허용합니다.
+if (globalItems.length > 2) {
   throw new Error(
-    `Too many global-media articles: ${globalOnlyItems.length}. ` +
-    `At most ${maximumGlobalItems} global-only articles are allowed. ` +
-    `Replace them with Korean or Naver financial-news articles.`
+    `Too many global-media articles: ${globalItems.length}. ` +
+    `At most 2 global articles are allowed across the entire briefing. ` +
+    `Replace the excess global articles with Korean financial, competitor, or Woori-related articles.`
+  );
+}
+
+// Daily News는 국내 금융 기사 중심이므로 해외 기사는 최대 1건만 허용합니다.
+if (globalDailyItems.length > 1) {
+  throw new Error(
+    `Daily News contained too many global articles: ${globalDailyItems.length}. ` +
+    `At most 1 global article is allowed in daily_news.`
+  );
+}
+
+// Additional News도 해외 기사는 최대 1건만 허용합니다.
+if (globalAdditionalItems.length > 1) {
+  throw new Error(
+    `Additional News contained too many global articles: ${globalAdditionalItems.length}. ` +
+    `At most 1 global article is allowed in additional_news.`
+  );
+}
+
+// 우리금융 계열사 섹션에는 해외 일반 언론 기사를 넣지 않습니다.
+if (globalSubsidiaryItems.length > 0) {
+  throw new Error(
+    `Subsidiary News contained global-media article(s): ${globalSubsidiaryItems.length}. ` +
+    `Subsidiary News must contain direct Woori Financial Group articles only.`
   );
 }
 
