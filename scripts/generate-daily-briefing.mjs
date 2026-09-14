@@ -1148,7 +1148,6 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
   }
   moveMisplacedSubsidiaryNews(candidate);
   try {
-  try {
     const dedupedFallback = dedupeCandidateNews(
       JSON.parse(JSON.stringify(candidate))
     );
