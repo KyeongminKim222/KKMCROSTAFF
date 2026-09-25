@@ -29,7 +29,7 @@
     "2026-09-25 KST 최종 합성 응답의 상태를 확인합니다.",
     "구조화 출력의 중단 사유를 확인합니다.",
     "다음 자동 실행에서 정상 기사 배열 생성 여부를 확인합니다.",
-    "직전 실패 사유: Article was outside the allowed 7-day date range: \"KB금융, 3분기 실적도 '역대 최대' 전망…목표가 상향\" (published: 2026-09-14 09:02) URL: https://www.fnnews.com/news/202609140755031791"
+    "직전 실패 사유: Article was outside the allowed 7-day date range: 공장지으려 달러 빌렸는데… 美금리 고공행진에 '울상' (published: 2026-09-16 17:52) URL: https://www.mk.co.kr/news/economy/12154561"
   ],
   "meta": {
     "fallback_notice": true,
@@ -37,7 +37,7 @@
     "perspective": "우리금융그룹 CRO",
     "mode": "daily",
     "briefing_date": "2026-09-25",
-    "generated_at": "2026-09-25T00:34:12.453Z",
+    "generated_at": "2026-09-25T00:52:36.141Z",
     "primary_window": "실행 시점 기준 최근 24시간 (KST), 부족분은 날짜가 표시된 최근 7일 유관·배경 자료",
     "research_method": "4 media research stages + independent CRO quality-gate synthesis",
     "source_mix": {
