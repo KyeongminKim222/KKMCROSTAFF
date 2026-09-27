@@ -1509,6 +1509,8 @@ function buildBackfillPool() {
         if (!researchedUrlByCanonical.has(key)) continue;
         if (previousCanonicalUrls.has(key)) continue;
         if (isLikelyListingUrl(sd.url)) continue;
+        const title = sd.title || researchedTitleByUrl.get(key) || '';
+        if (!title.trim()) continue; // 제목이 없는 후보는 백필에서 제외 (빈 제목 기사 방지)
         const published = sd.published || researchedDateByUrl.get(key) || '';
         const parsed = parsePublishedKst(published);
         let daysDiff = null;
@@ -1519,7 +1521,7 @@ function buildBackfillPool() {
         seen.add(key);
         pool.push({
           url: researchedUrlByCanonical.get(key),
-          title: sd.title || researchedTitleByUrl.get(key) || '',
+          title,
           published,
           source_name: '',
           summary: '',
