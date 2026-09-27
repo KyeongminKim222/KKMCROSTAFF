@@ -497,20 +497,23 @@ const competitorKeywords = [
 ];
 
 function mentionsWooriSubsidiary(item) {
-  // subsidiary_news 판정은 모델이 생성한 요약·entity가 아니라
-  // 실제 기사 제목만 기준으로 합니다.
+  // subsidiary_news 판정은 제목을 1순위로, 요약·entity를 보조로 사용합니다.
+  // 제목에 계열사명이 없어도 본문(요약)이 우리금융 계열사에 직접 관련되면 인정합니다.
   const title = String(item?.title || '').trim();
+  const summary = String(item?.summary || '').trim();
+  const entity = String(item?.entity || '').trim();
+  const haystack = [title, summary, entity].filter(Boolean).join(' ');
 
-  if (!title) return false;
+  if (!haystack) return false;
 
   // 경쟁사 기사는 우리금융이 비교 언급되어도 계열사 뉴스가 아닙니다.
-  if (competitorKeywords.some((keyword) => title.includes(keyword))) {
+  if (competitorKeywords.some((keyword) => haystack.includes(keyword))) {
     return false;
   }
 
-  // 실제 기사 제목에 우리금융 또는 계열사명이 직접 있어야 합니다.
+  // 제목·요약·entity 어디든 우리금융 또는 계열사명이 직접 등장하면 계열사 뉴스로 인정합니다.
   return wooriSubsidiaryKeywords.some((keyword) =>
-    title.includes(keyword)
+    haystack.includes(keyword)
   );
 }
 
@@ -764,9 +767,9 @@ await coolDown('Korean financial media research');
 const wooriMedia = await researchStage(
   'Woori Financial Group media research',
   `한국 주요 통신사·경제지·금융 전문매체 및 네이버뉴스에서 우리금융그룹 및 계열사에 관한 일반 언론기사를 전용으로 조사하라. 네이버뉴스(news.naver.com, finance.naver.com)의 검색 결과를 적극적으로 활용하라.
-우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 동양생명, ABL생명 관련 보도를 빠짐없이 점검하라.
-우리은행 해외지점 및 해외 현지법인인 우리아메리카은행, 우리소다라 등의 직접 관련 보도도 조사하라.
-기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최소 6건 최대 8건 제시하라.`,
+다음 계열사명을 각각 네이버 뉴스 검색으로 확인하라: 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명.
+우리은행 해외지점 및 해외 현지법인인 우리아메리카은행, 우리소다라, 우리은행 캄보디아, 우리은행 베트남, 우리은행 중국, 우리은행 브라질 등의 직접 관련 보도도 조사하라.
+각 계열사명을 검색했을 때 최근 7일 이내 기사가 있으면 반드시 후보에 포함하라. 기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최소 8건 최대 10건 제시하라.`,
   koreanMediaDomains,
   6
 );
@@ -951,7 +954,7 @@ CRO 품질 게이트:
 - why_woori_cro는 2~3문장으로 작성한다. 우리은행 또는 관련 계열사에 미치는 자본·유동성·신용·시장·운영·준법·평판·전략 영향과 30~90일 의사결정 포인트를 구체적으로 연결한다.
 - watchpoints는 기사마다 2~3개를 제시한다. 기관 발표 일정, 비율·스프레드·연체율·충당금·한도 등 실제로 확인할 지표나 질문으로 작성한다.
 - 오늘의 CRO STAFF 인사이트는 기사들을 나열하지 말고 공통 동인, 1차·2차 전이경로, 현재 판단을 뒤집을 조건, 1주·2주·90일 모니터링 행동을 연결한다. 
-최우선 섹션 편성 규칙: - 이 규칙은 위에 있는 다른 규칙과 충돌하면 항상 우선한다. - 전체 기사 중 Reuters, AP, Bloomberg, FT, WSJ, CNBC 등 글로벌 언론 기사는 최대 2건만 선택하라. - daily_news에는 글로벌 기사를 최대 1건만 넣어라. 나머지는 반드시 korean_media 또는 peer_media의 국내 기사로 채워라. - additional_news에는 글로벌 기사를 최대 1건만 넣어라. 같은 유가·중동 분쟁·글로벌 금리 사건을 여러 해외 기사로 반복 선정하는 것을 절대 금지한다. - subsidiary_news에는 글로벌 일반 기사, 해외 일반 기업 기사, 해외 일반 사이버 기사, 경쟁사 단독 기사를 절대 넣지 마라. - woori_media 또는 korean_media 조사 근거에 제목상 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리투자증권, 동양생명, ABL생명 등 우리금융 계열사가 직접 등장하는 최근 7일 이내 기사가 하나라도 있으면, 그중 최소 1건을 subsidiary_news에 우선 배치하라. - subsidiary_news가 빈 배열일 수 있는 경우는 조사 근거 전체에 최근 7일 이내의 우리금융 직접 관련 기사가 전혀 없는 경우뿐이다. - 신한금융, KB금융, 하나금융, NH농협, IBK기업은행, 한국금융지주 등 경쟁사 직접 기사는 subsidiary_news가 아니라 daily_news에 배치하라. - daily_news는 국내 금융시장·규제·가계대출·부동산 PF·여신·자본·유동성·소비자보호·금융사고·경쟁사 관련 국내 기사 중심으로 구성하라. - 동일한 해외 유가·지정학·채권금리 사건은 전체 브리핑에서 대표 기사 1건만 남기고, 같은 사건의 Reuters·AP·Bloomberg 후속 기사들을 중복 선택하지 마라. 
+최우선 섹션 편성 규칙: - 이 규칙은 위에 있는 다른 규칙과 충돌하면 항상 우선한다. - 전체 기사 중 Reuters, AP, Bloomberg, FT, WSJ, CNBC 등 글로벌 언론 기사는 최대 2건만 선택하라. - daily_news에는 글로벌 기사를 최대 1건만 넣어라. 나머지는 반드시 korean_media 또는 peer_media의 국내 기사로 채워라. - additional_news에는 글로벌 기사를 최대 1건만 넣어라. 같은 유가·중동 분쟁·글로벌 금리 사건을 여러 해외 기사로 반복 선정하는 것을 절대 금지한다. - subsidiary_news에는 글로벌 일반 기사, 해외 일반 기업 기사, 해외 일반 사이버 기사, 경쟁사 단독 기사를 절대 넣지 마라. - woori_media 또는 korean_media 조사 근거에 제목상 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리투자증권, 동양생명, ABL생명 등 우리금융 계열사가 직접 등장하는 최근 7일 이내 기사가 하나라도 있으면, 그중 최소 1건을 subsidiary_news에 우선 배치하라. - woori_media 조사 근거에 우리금융 계열사명이 제목·요약·entity에 등장하는 최근 7일 이내 기사가 2건 이상 있으면 subsidiary_news를 최소 2건, 가능하면 3~4건으로 채워라. 우리금융 직접 기사가 조사 근거에 존재하는데 subsidiary_news를 비우는 것은 금지한다. - subsidiary_news가 빈 배열일 수 있는 경우는 조사 근거 전체에 최근 7일 이내의 우리금융 직접 관련 기사가 전혀 없는 경우뿐이다. - 신한금융, KB금융, 하나금융, NH농협, IBK기업은행, 한국금융지주 등 경쟁사 직접 기사는 subsidiary_news가 아니라 daily_news에 배치하라. - daily_news는 국내 금융시장·규제·가계대출·부동산 PF·여신·자본·유동성·소비자보호·금융사고·경쟁사 관련 국내 기사 중심으로 구성하라. - 동일한 해외 유가·지정학·채권금리 사건은 전체 브리핑에서 대표 기사 1건만 남기고, 같은 사건의 Reuters·AP·Bloomberg 후속 기사들을 중복 선택하지 마라. 
 URL별 실제 기사 제목 매핑 (반드시 준수):
 
 URL별 실제 기사 제목 매핑 (반드시 준수):
