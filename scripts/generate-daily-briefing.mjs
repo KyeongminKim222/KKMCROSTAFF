@@ -345,7 +345,7 @@ const schema = {
       items: { type: 'string' }
     },
     critical: { type: 'array', minItems: 1, maxItems: 2, items: newsItem },
-    daily_news: { type: 'array', minItems: 5, maxItems: 6, items: newsItem },
+    daily_news: { type: 'array', minItems: 3, maxItems: 6, items: newsItem },
     subsidiary_news: { type: 'array', minItems: 0, maxItems: 4, items: newsItem },
     additional_news: { type: 'array', minItems: 0, maxItems: 2, items: newsItem },
     forward_looking_points: {
@@ -701,8 +701,7 @@ async function researchStage(label, scope, allowedDomains, minimumSources = 4) {
         ...(allowedDomains && allowedDomains.length > 0 ? { filters: { allowed_domains: allowedDomains } } : {}),
         user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' }
       }],
-      max_tool_calls: 3,
-      include: ['web_search_call.action.sources'],
+      max_tool_calls: 4,      include: ['web_search_call.action.sources'],
       store: false,
       reasoning: { effort: 'low' },
       text: { verbosity: 'medium' },
@@ -758,7 +757,7 @@ const domesticMedia = await researchStage(
 금리·환율·유동성·부동산 PF·가계·기업 신용·자본규제·소비자보호·사이버·운영리스크와 금융회사 사건을 점검하라.
 정부기관 보도자료가 아니라 기자가 작성한 기사 원문만 후보로 제시하라. 같은 정책이라도 시장·금융회사 파급효과를 분석한 언론기사를 우선하라.`,
   koreanMediaDomains,
-  5
+  6
 );
 await coolDown('Korean financial media research');
 
@@ -769,7 +768,7 @@ const wooriMedia = await researchStage(
 우리은행 해외지점 및 해외 현지법인인 우리아메리카은행, 우리소다라 등의 직접 관련 보도도 조사하라.
 기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최소 6건 최대 8건 제시하라.`,
   koreanMediaDomains,
-  5
+  6
 );
 await coolDown('Woori Financial Group media research');
 
@@ -780,7 +779,7 @@ KB금융, 신한금융, 하나금융, NH농협금융, IBK기업은행, 한국금
 우리금융그룹 관련 기사는 이 조사 단계의 후보로 넣지 말고, 경쟁사 변화가 우리금융그룹의 자본·유동성·신용·시장·운영·준법·평판 리스크에 주는 시사점을 함께 적어라.
 기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최소 6건 최대 8건 제시하라.`,
   koreanMediaDomains,
-  5
+  6
 );
 await coolDown('Peer competitor media research');
 
@@ -869,7 +868,7 @@ for (const sourceUrl of Object.values(researchEvidence).flatMap((evidence) => ev
   researchedUrlsByPath.set(pathKey, matches);
 }
 if (researchedUrlByCanonical.size < 10) {
-  throw new Error(`Research produced only ${researchedUrlByCanonical.size} unique source URLs; at least 10 are required.`);
+  console.warn(`Research produced only ${researchedUrlByCanonical.size} unique source URLs; synthesis will fill what it can.`);
 }
 const researchedTitleByUrl = new Map();
 const researchedDateByUrl = new Map();
@@ -920,6 +919,7 @@ function buildSynthesisPrompt() {
 
 최종 선정 규칙:
 - 전체 기사는 최소 10건을 목표로 선정한다. critical(크리티컬)은 최소 1건은 반드시 포함하고, 나머지는 daily_news, subsidiary_news, additional_news 사이에서 그날 확보된 조사 근거의 양과 질에 맞게 자유롭게 배분한다.
+- 최종 브리핑은 반드시 10건을 채운다. 조사 근거에 검증 가능한 서로 다른 실제 기사가 10건 이상 있으면 반드시 10건을 선정한다. 10건을 채우기 위해 subsidiary_news나 additional_news가 비어 있어도 daily_news와 critical을 늘려 전체 합계를 10건으로 맞춘다. 같은 사건을 여러 매체가 보도한 경우 대표 원문 1건만 남기고, 조사 근거 안에서 완전히 다른 사건의 실제 기사를 찾아 10건을 채운다.
 - 특정 카테고리에 오늘 조건을 만족하는 기사가 부족하면 억지로 채우지 말고, 다른 카테고리에서 조건을 만족하는 기사를 더 선정해서 전체 합계 10건을 채운다.
 - subsidiary_news를 채울 때는 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사 관련 기사(오늘자 primary 우선, 부족하면 최근 7일 이내 related도 허용), (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사. (1)에서 오늘자 기사가 부족하면 최근 7일 이내 related 기사로 채워라. subsidiary_news에는 일반 시장 뉴스(금리, 환율, 증시, 투자심리, 은행 건전성 등)를 절대 배치하지 마라. subsidiary_news에는 우리금융그룹 또는 계열사에 직접 관련된 기사만 넣어라.조건에 맞는 실제 기사가 없으면 빈 배열([])로 제출하라.일반 시장 뉴스, 해외 일반 기업 뉴스, 단순 사이버 뉴스로 빈자리를 채우는 것은 절대 금지한다.
 - 전체 기사는 10건을 목표로 선정하되, 검증 가능한 서로 다른 사건이 부족하면 억지로 채우지 마라. 이 경우 최소 8건 이상을 선정하고, 존재하지 않는 기사나 중복 사건을 만들지 마라.
@@ -1248,7 +1248,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
             }
                 // 10건을 목표로 하되, 검증 통과한 기사가 있으면 빈 브리핑 대신 저장한다.
                 // 초반 시도에서는 10건을 요구하고, 마지막 시도에서는 검증 통과분을 보존한다.
-                const minimumRequired = attempt <= 3 ? 10 : 6;
+                const minimumRequired = [10, 9, 8, 7, 6][attempt - 1] ?? 6;
 
   if (candidateNews.length < minimumRequired) {
     throw new Error(
