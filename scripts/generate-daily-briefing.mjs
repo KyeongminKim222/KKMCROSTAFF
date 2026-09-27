@@ -1211,22 +1211,9 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
     const fallbackSubsidiaryGlobalItems = (dedupedFallback.subsidiary_news || [])
       .filter((item) => isGlobalMediaUrl(item.url));
 
-    // 엄격 검증이 실패해도 해외 기사 과다 후보는 fallback으로 저장하지 않습니다.
-    const fallbackHasAcceptableGlobalMix =
-      fallbackGlobalItems.length <= 2 &&
-      fallbackDailyGlobalItems.length <= 1 &&
-      fallbackAdditionalGlobalItems.length <= 1 &&
-      fallbackSubsidiaryGlobalItems.length === 0;
-
-    if (!fallbackHasAcceptableGlobalMix) {
-      console.warn(
-        `Skipped fallback candidate because it contained too many global articles ` +
-        `(total=${fallbackGlobalItems.length}, ` +
-        `daily=${fallbackDailyGlobalItems.length}, ` +
-        `additional=${fallbackAdditionalGlobalItems.length}, ` +
-        `subsidiary=${fallbackSubsidiaryGlobalItems.length}).`
-      );
-    } else if (fallbackCount > bestFallbackCount) {
+    // 글로벌 기사 과다 후보도 fallback으로 저장합니다.
+    // 백필 단계에서 글로벌 기사를 상한에 맞게 정리하므로 여기서 버리지 않습니다.
+    if (fallbackCount > bestFallbackCount) {
       bestFallbackCount = fallbackCount;
       bestFallbackCandidate = dedupedFallback;
     }
@@ -1510,7 +1497,6 @@ function buildBackfillPool() {
         if (previousCanonicalUrls.has(key)) continue;
         if (isLikelyListingUrl(sd.url)) continue;
         const title = sd.title || researchedTitleByUrl.get(key) || '';
-        if (!title.trim()) continue; // 제목이 없는 후보는 백필에서 제외 (빈 제목 기사 방지)
         const published = sd.published || researchedDateByUrl.get(key) || '';
         const parsed = parsePublishedKst(published);
         let daysDiff = null;
@@ -1633,7 +1619,7 @@ async function enrichBackfilledArticles(b) {
   }));
   const body = await requestOpenAi('Backfill enrichment', {
     model,
-    input: `당신은 우리금융그룹 CRO를 지원하는 전략 비서다. 아래 백필 기사 각각에 대해 CRO 리스크 브리핑 품질의 요약을 작성하라.\n각 기사는 조사 단계에서 수집된 실제 기사다. 제목·URL·게시일을 근거로 summary(3~5문장, 첫 문장에 매체명과 게시일, 합니다체), why_woori_cro(2~3문장, 우리금융 계열사에 미치는 자본·유동성·신용·시장·운영·준법·평판·전략 영향과 30~90일 의사결정 포인트), watchpoints(2~3개), source_name(언론사명), risk_type을 채워라.\n모든 문장은 정중한 합니다체로 작성하라. 존재하지 않는 수치를 만들지 마라. 제목과 URL에 없는 사실을 지어내지 마라.\n\n기사 목록:\n${JSON.stringify(itemsForPrompt)}\n\n다음 JSON 배열만 반환하라:\n[{"idx":0,"summary":"...","why_woori_cro":"...","watchpoints":["...","..."],"source_name":"...","risk_type":"..."}]`,
+    input: `당신은 우리금융그룹 CRO를 지원하는 전략 비서다. 아래 백필 기사 각각에 대해 CRO 리스크 브리핑 품질의 요약을 작성하라.\n각 기사는 조사 단계에서 수집된 실제 기사다. 제목·URL·게시일을 근거로 title(제목이 비어있으면 URL과 게시일을 근거로 실제 기사 제목을 추정해 채우고, 이미 있으면 그대로 두라), summary(3~5문장, 첫 문장에 매체명과 게시일, 합니다체), why_woori_cro(2~3문장, 우리금융 계열사에 미치는 자본·유동성·신용·시장·운영·준법·평판·전략 영향과 30~90일 의사결정 포인트), watchpoints(2~3개), source_name(언론사명), risk_type을 채워라.\n모든 문장은 정중한 합니다체로 작성하라. 존재하지 않는 수치를 만들지 마라. 제목과 URL에 없는 사실을 지어내지 마라.\n\n기사 목록:\n${JSON.stringify(itemsForPrompt)}\n\n다음 JSON 배열만 반환하라:\n[{"idx":0,"title":"...","summary":"...","why_woori_cro":"...","watchpoints":["...","..."],"source_name":"...","risk_type":"..."}]`,
     store: false,
     reasoning: { effort: 'low' },
     text: { verbosity: 'medium' },
@@ -1649,6 +1635,7 @@ async function enrichBackfilledArticles(b) {
   for (const e of enriched) {
     const item = backfilled[e.idx];
     if (!item) continue;
+    if (e.title && !String(item.title || '').trim()) item.title = String(e.title).trim();
     if (e.summary) item.summary = String(e.summary).trim();
     if (e.why_woori_cro) item.why_woori_cro = String(e.why_woori_cro).trim();
     if (Array.isArray(e.watchpoints) && e.watchpoints.length) item.watchpoints = e.watchpoints.map(String).slice(0, 3);
