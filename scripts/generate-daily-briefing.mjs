@@ -1496,6 +1496,135 @@ if (!briefing) {
     briefing = createFailureBriefing(date, synthesisError?.message);
   }
 }
+// ===== Backfill: 모델이 빼먹은 우리금융 계열사 기사와 10건 부족분을 조사 근거에서 직접 보충합니다. =====
+function buildBackfillPool() {
+  const pool = [];
+  const seen = new Set();
+  const now = new Date();
+  for (const [stage, evidence] of Object.entries(researchEvidence)) {
+    for (const sd of evidence.source_data || []) {
+      try {
+        const key = canonicalUrlKey(sd.url);
+        if (seen.has(key)) continue;
+        if (!researchedUrlByCanonical.has(key)) continue;
+        if (previousCanonicalUrls.has(key)) continue;
+        if (isLikelyListingUrl(sd.url)) continue;
+        const parsed = parsePublishedKst(sd.published);
+        if (!parsed.date) continue;
+        const daysDiff = (now - parsed.date) / (1000 * 60 * 60 * 24);
+        if (daysDiff < -0.2 || daysDiff > 7) continue;
+        seen.add(key);
+        pool.push({
+          url: researchedUrlByCanonical.get(key),
+          title: sd.title || researchedTitleByUrl.get(key) || '',
+          published: sd.published || researchedDateByUrl.get(key) || '',
+          source_name: '',
+          summary: '',
+          why_woori_cro: '',
+          entity: '',
+          channel: '',
+          source_type: isOfficialUrl(sd.url) ? 'official' : 'media',
+          risk_type: '',
+          urgency: '중간',
+          confidence: '중간',
+          critical: false,
+          window: daysDiff <= 1.5 ? 'primary' : 'related',
+          watchpoints: [],
+          _stage: stage
+        });
+      } catch {}
+    }
+  }
+  return pool;
+}
+const backfillPool = buildBackfillPool();
+function usedUrlSet(b) {
+  const set = new Set();
+  for (const k of ['critical','daily_news','subsidiary_news','additional_news']) {
+    for (const it of (b[k] || [])) { try { set.add(canonicalUrlKey(it.url)); } catch {} }
+  }
+  return set;
+}
+function backfillBriefing(b) {
+  if (b?.meta?.fallback_notice === true) return b;
+  b.critical ||= []; b.daily_news ||= []; b.subsidiary_news ||= []; b.additional_news ||= [];
+  const used = usedUrlSet(b);
+  // 1) subsidiary_news가 비면 woori_media 조사 근거에서 우리금융 계열사 기사를 채운다.
+  if ((b.subsidiary_news || []).length === 0) {
+    const wooriCandidates = backfillPool.filter((c) =>
+      c._stage === 'woori_media' && mentionsWooriSubsidiary(c) && !used.has(canonicalUrlKey(c.url))
+    );
+    for (const c of wooriCandidates.slice(0, 3)) {
+      c.critical = false;
+      b.subsidiary_news.push(c);
+      used.add(canonicalUrlKey(c.url));
+      console.log(`Backfilled subsidiary_news from research: ${c.title}`);
+    }
+  }
+  // 2) 전체 10건 미만이면 daily_news를 조사 근거에서 보충한다.
+  const total = ['critical','daily_news','subsidiary_news','additional_news'].reduce((sum,k)=>sum+(b[k]||[]).length,0);
+  if (total < 10) {
+    const need = 10 - total;
+    const dailyCandidates = backfillPool.filter((c) =>
+      c._stage !== 'global_media' && !used.has(canonicalUrlKey(c.url))
+    );
+    for (const c of dailyCandidates.slice(0, need)) {
+      c.critical = false;
+      b.daily_news.push(c);
+      used.add(canonicalUrlKey(c.url));
+      console.log(`Backfilled daily_news to reach 10: ${c.title}`);
+    }
+  }
+  return b;
+}
+briefing = backfillBriefing(briefing);
+// ===== Enrich: 백필로 추가된 기사에 CRO 품질 요약을 LLM으로 채웁니다. =====
+async function enrichBackfilledArticles(b) {
+  const backfilled = ['critical','daily_news','subsidiary_news','additional_news']
+    .flatMap((k) => (b[k] || []))
+    .filter((it) => it && !String(it.summary || '').trim());
+  if (backfilled.length === 0) return b;
+  const itemsForPrompt = backfilled.map((it, i) => ({
+    idx: i,
+    title: it.title,
+    url: it.url,
+    published: it.published,
+    source_type: it.source_type
+  }));
+  const body = await requestOpenAi('Backfill enrichment', {
+    model,
+    input: `당신은 우리금융그룹 CRO를 지원하는 전략 비서다. 아래 백필 기사 각각에 대해 CRO 리스크 브리핑 품질의 요약을 작성하라.\n각 기사는 조사 단계에서 수집된 실제 기사다. 제목·URL·게시일을 근거로 summary(3~5문장, 첫 문장에 매체명과 게시일, 합니다체), why_woori_cro(2~3문장, 우리금융 계열사에 미치는 자본·유동성·신용·시장·운영·준법·평판·전략 영향과 30~90일 의사결정 포인트), watchpoints(2~3개), source_name(언론사명), risk_type을 채워라.\n모든 문장은 정중한 합니다체로 작성하라. 존재하지 않는 수치를 만들지 마라. 제목과 URL에 없는 사실을 지어내지 마라.\n\n기사 목록:\n${JSON.stringify(itemsForPrompt)}\n\n다음 JSON 배열만 반환하라:\n[{"idx":0,"summary":"...","why_woori_cro":"...","watchpoints":["...","..."],"source_name":"...","risk_type":"..."}]`,
+    store: false,
+    reasoning: { effort: 'low' },
+    text: { verbosity: 'medium' },
+    max_output_tokens: 12000
+  });
+  const raw = extractOutputText(body);
+  let enriched = [];
+  try { enriched = JSON.parse(normalizeJsonText(raw)); } catch (e) {
+    console.warn(`Backfill enrichment JSON parse failed: ${e.message}`);
+    return b;
+  }
+  if (!Array.isArray(enriched)) return b;
+  for (const e of enriched) {
+    const item = backfilled[e.idx];
+    if (!item) continue;
+    if (e.summary) item.summary = String(e.summary).trim();
+    if (e.why_woori_cro) item.why_woori_cro = String(e.why_woori_cro).trim();
+    if (Array.isArray(e.watchpoints) && e.watchpoints.length) item.watchpoints = e.watchpoints.map(String).slice(0, 3);
+    if (e.source_name) item.source_name = String(e.source_name).trim();
+    if (e.risk_type) item.risk_type = String(e.risk_type).trim();
+  }
+  console.log(`Enriched ${backfilled.length} backfilled article(s) with CRO-quality summaries.`);
+  return b;
+}
+try {
+  briefing = await enrichBackfilledArticles(briefing);
+} catch (enrichError) {
+  console.warn(`Backfill enrichment failed; continuing with backfilled articles as-is: ${enrichError.message}`);
+}
+
+
 const allNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news']
   .flatMap((key) => briefing[key] || []);
 
