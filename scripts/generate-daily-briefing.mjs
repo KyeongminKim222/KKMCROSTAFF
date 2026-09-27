@@ -954,7 +954,7 @@ CRO 품질 게이트:
 - why_woori_cro는 2~3문장으로 작성한다. 우리은행 또는 관련 계열사에 미치는 자본·유동성·신용·시장·운영·준법·평판·전략 영향과 30~90일 의사결정 포인트를 구체적으로 연결한다.
 - watchpoints는 기사마다 2~3개를 제시한다. 기관 발표 일정, 비율·스프레드·연체율·충당금·한도 등 실제로 확인할 지표나 질문으로 작성한다.
 - 오늘의 CRO STAFF 인사이트는 기사들을 나열하지 말고 공통 동인, 1차·2차 전이경로, 현재 판단을 뒤집을 조건, 1주·2주·90일 모니터링 행동을 연결한다. 
-최우선 섹션 편성 규칙: - 이 규칙은 위에 있는 다른 규칙과 충돌하면 항상 우선한다. - 전체 기사 중 Reuters, AP, Bloomberg, FT, WSJ, CNBC 등 글로벌 언론 기사는 최대 2건만 선택하라. - daily_news에는 글로벌 기사를 최대 1건만 넣어라. 나머지는 반드시 korean_media 또는 peer_media의 국내 기사로 채워라. - additional_news에는 글로벌 기사를 최대 1건만 넣어라. 같은 유가·중동 분쟁·글로벌 금리 사건을 여러 해외 기사로 반복 선정하는 것을 절대 금지한다. - subsidiary_news에는 글로벌 일반 기사, 해외 일반 기업 기사, 해외 일반 사이버 기사, 경쟁사 단독 기사를 절대 넣지 마라. - woori_media 또는 korean_media 조사 근거에 제목상 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리투자증권, 동양생명, ABL생명 등 우리금융 계열사가 직접 등장하는 최근 7일 이내 기사가 하나라도 있으면, 그중 최소 1건을 subsidiary_news에 우선 배치하라. - woori_media 조사 근거에 우리금융 계열사명이 제목·요약·entity에 등장하는 최근 7일 이내 기사가 2건 이상 있으면 subsidiary_news를 최소 2건, 가능하면 3~4건으로 채워라. 우리금융 직접 기사가 조사 근거에 존재하는데 subsidiary_news를 비우는 것은 금지한다. - subsidiary_news가 빈 배열일 수 있는 경우는 조사 근거 전체에 최근 7일 이내의 우리금융 직접 관련 기사가 전혀 없는 경우뿐이다. - 신한금융, KB금융, 하나금융, NH농협, IBK기업은행, 한국금융지주 등 경쟁사 직접 기사는 subsidiary_news가 아니라 daily_news에 배치하라. - daily_news는 국내 금융시장·규제·가계대출·부동산 PF·여신·자본·유동성·소비자보호·금융사고·경쟁사 관련 국내 기사 중심으로 구성하라. - 동일한 해외 유가·지정학·채권금리 사건은 전체 브리핑에서 대표 기사 1건만 남기고, 같은 사건의 Reuters·AP·Bloomberg 후속 기사들을 중복 선택하지 마라. 
+최우선 섹션 편성 규칙: - 이 규칙은 위에 있는 다른 규칙과 충돌하면 항상 우선한다. - 전체 기사 중 Reuters, AP, Bloomberg, FT, WSJ, CNBC 등 글로벌 언론 기사는 최대 2건만 선택하라. - daily_news에는 글로벌 기사를 최대 1건만 넣어라. 나머지는 반드시 korean_media 또는 peer_media의 국내 기사로 채워라. - additional_news에는 글로벌 기사를 최대 1건만 넣어라. 같은 유가·중동 분쟁·글로벌 금리 사건을 여러 해외 기사로 반복 선정하는 것을 절대 금지한다. - subsidiary_news에는 글로벌 일반 기사, 해외 일반 기업 기사, 해외 일반 사이버 기사, 경쟁사 단독 기사를 절대 넣지 마라. - woori_media 또는 korean_media 조사 근거에 제목상 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리투자증권, 동양생명, ABL생명 등 우리금융 계열사가 직접 등장하는 최근 7일 이내 기사가 하나라도 있으면, 그중 최소 1건을 subsidiary_news에 우선 배치하라. - subsidiary_news가 빈 배열일 수 있는 경우는 조사 근거 전체에 최근 7일 이내의 우리금융 직접 관련 기사가 전혀 없는 경우뿐이다. - 신한금융, KB금융, 하나금융, NH농협, IBK기업은행, 한국금융지주 등 경쟁사 직접 기사는 subsidiary_news가 아니라 daily_news에 배치하라. - daily_news는 국내 금융시장·규제·가계대출·부동산 PF·여신·자본·유동성·소비자보호·금융사고·경쟁사 관련 국내 기사 중심으로 구성하라. - 동일한 해외 유가·지정학·채권금리 사건은 전체 브리핑에서 대표 기사 1건만 남기고, 같은 사건의 Reuters·AP·Bloomberg 후속 기사들을 중복 선택하지 마라. 
 URL별 실제 기사 제목 매핑 (반드시 준수):
 
 URL별 실제 기사 제목 매핑 (반드시 준수):
@@ -1251,7 +1251,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
             }
                 // 10건을 목표로 하되, 검증 통과한 기사가 있으면 빈 브리핑 대신 저장한다.
                 // 초반 시도에서는 10건을 요구하고, 마지막 시도에서는 검증 통과분을 보존한다.
-                const minimumRequired = [10, 10, 10, 9, 8][attempt - 1] ?? 8;
+                const minimumRequired = [10, 9, 8, 7, 6][attempt - 1] ?? 6;
 
   if (candidateNews.length < minimumRequired) {
     throw new Error(
@@ -1472,7 +1472,7 @@ if (!briefing) {
   // 10건을 목표로 하되, 검증 통과한 기사가 6건 이상이면 빈 브리핑 대신 저장합니다.
   const hasUsableFallback =
     bestFallbackCandidate &&
-    bestFallbackCount >= 6 &&
+    bestFallbackCount >= 4 &&
     (bestFallbackCandidate.critical || []).length >= 1;
 
   if (hasUsableFallback) {
