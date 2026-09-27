@@ -1472,7 +1472,7 @@ if (!briefing) {
   // 10건을 목표로 하되, 검증 통과한 기사가 6건 이상이면 빈 브리핑 대신 저장합니다.
   const hasUsableFallback =
     bestFallbackCandidate &&
-    bestFallbackCount >= 4 &&
+    bestFallbackCount >= 1 &&
     (bestFallbackCandidate.critical || []).length >= 1;
 
   if (hasUsableFallback) {
@@ -1541,6 +1541,7 @@ function buildBackfillPool() {
   return pool;
 }
 const backfillPool = buildBackfillPool();
+console.log(`Backfill pool size: ${backfillPool.length} candidates (${backfillPool.filter((c)=>c._stage==='woori_media').length} woori_media).`);
 function usedUrlSet(b) {
   const set = new Set();
   for (const k of ['critical','daily_news','subsidiary_news','additional_news']) {
