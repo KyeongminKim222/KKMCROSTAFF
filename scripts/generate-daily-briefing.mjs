@@ -1509,15 +1509,18 @@ function buildBackfillPool() {
         if (!researchedUrlByCanonical.has(key)) continue;
         if (previousCanonicalUrls.has(key)) continue;
         if (isLikelyListingUrl(sd.url)) continue;
-        const parsed = parsePublishedKst(sd.published);
-        if (!parsed.date) continue;
-        const daysDiff = (now - parsed.date) / (1000 * 60 * 60 * 24);
-        if (daysDiff < -0.2 || daysDiff > 7) continue;
+        const published = sd.published || researchedDateByUrl.get(key) || '';
+        const parsed = parsePublishedKst(published);
+        let daysDiff = null;
+        if (parsed.date) {
+          daysDiff = (now - parsed.date) / (1000 * 60 * 60 * 24);
+          if (daysDiff < -0.2 || daysDiff > 7) continue;
+        }
         seen.add(key);
         pool.push({
           url: researchedUrlByCanonical.get(key),
           title: sd.title || researchedTitleByUrl.get(key) || '',
-          published: sd.published || researchedDateByUrl.get(key) || '',
+          published,
           source_name: '',
           summary: '',
           why_woori_cro: '',
@@ -1528,7 +1531,7 @@ function buildBackfillPool() {
           urgency: '중간',
           confidence: '중간',
           critical: false,
-          window: daysDiff <= 1.5 ? 'primary' : 'related',
+          window: (daysDiff !== null && daysDiff <= 1.5) ? 'primary' : 'related',
           watchpoints: [],
           _stage: stage
         });
@@ -1549,10 +1552,43 @@ function backfillBriefing(b) {
   if (b?.meta?.fallback_notice === true) return b;
   b.critical ||= []; b.daily_news ||= []; b.subsidiary_news ||= []; b.additional_news ||= [];
   const used = usedUrlSet(b);
-  // 1) subsidiary_news가 비면 woori_media 조사 근거에서 우리금융 계열사 기사를 채운다.
+  const isGlobal = (it) => { try { return isGlobalMediaUrl(it.url); } catch { return false; } };
+  // 1) 글로벌 기사 상한을 실제로 적용한다. (전체 2건, daily 1건, additional 1건, subsidiary 0건)
+  const trimGlobal = (arr, max) => {
+    const kept = [];
+    let globalCount = 0;
+    for (const it of arr) {
+      if (isGlobal(it)) {
+        if (globalCount >= max) { console.log(`Trimmed excess global article: ${it.title}`); continue; }
+        globalCount += 1;
+      }
+      kept.push(it);
+    }
+    return kept;
+  };
+  b.daily_news = trimGlobal(b.daily_news, 1);
+  b.additional_news = trimGlobal(b.additional_news, 1);
+  b.critical = trimGlobal(b.critical, 1);
+  b.subsidiary_news = (b.subsidiary_news || []).filter((it) => !isGlobal(it));
+  // 전체 글로벌 2건 상한: daily/additional/critical에서 초과분 제거
+  const allGlobal = ['critical','daily_news','subsidiary_news','additional_news']
+    .flatMap((k) => (b[k] || [])).filter(isGlobal);
+  if (allGlobal.length > 2) {
+    let over = allGlobal.length - 2;
+    for (const k of ['daily_news','additional_news','critical']) {
+      const arr = b[k] || [];
+      const kept = [];
+      for (const it of arr) {
+        if (over > 0 && isGlobal(it)) { console.log(`Trimmed global article to enforce 2-cap: ${it.title}`); over -= 1; continue; }
+        kept.push(it);
+      }
+      b[k] = kept;
+    }
+  }
+  // 2) subsidiary_news가 비면 조사 근거에서 우리금융 계열사 기사를 채운다.
   if ((b.subsidiary_news || []).length === 0) {
     const wooriCandidates = backfillPool.filter((c) =>
-      c._stage === 'woori_media' && mentionsWooriSubsidiary(c) && !used.has(canonicalUrlKey(c.url))
+      mentionsWooriSubsidiary(c) && !used.has(canonicalUrlKey(c.url))
     );
     for (const c of wooriCandidates.slice(0, 3)) {
       c.critical = false;
@@ -1561,7 +1597,7 @@ function backfillBriefing(b) {
       console.log(`Backfilled subsidiary_news from research: ${c.title}`);
     }
   }
-  // 2) 전체 10건 미만이면 daily_news를 조사 근거에서 보충한다.
+  // 3) 전체 10건 미만이면 국내 기사로 daily_news를 보충한다.
   const total = ['critical','daily_news','subsidiary_news','additional_news'].reduce((sum,k)=>sum+(b[k]||[]).length,0);
   if (total < 10) {
     const need = 10 - total;
@@ -1578,6 +1614,7 @@ function backfillBriefing(b) {
   return b;
 }
 briefing = backfillBriefing(briefing);
+
 // ===== Enrich: 백필로 추가된 기사에 CRO 품질 요약을 LLM으로 채웁니다. =====
 async function enrichBackfilledArticles(b) {
   const backfilled = ['critical','daily_news','subsidiary_news','additional_news']
