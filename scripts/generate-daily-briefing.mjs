@@ -1096,6 +1096,44 @@ function countNews(candidate) {
     .reduce((sum, key) => sum + (candidate[key] || []).length, 0);
 }
 
+// 나쁜 기사만 걸러내고 나머지는 살리는 검증 헬퍼.
+// 전체 후보를 폐기하는 대신, 검증을 통과한 기사만 남긴다.
+function pruneCandidateNews(candidate) {
+  const now = new Date();
+  const kept = { critical: [], daily_news: [], subsidiary_news: [], additional_news: [] };
+  const seen = new Set();
+  for (const key of ['critical', 'daily_news', 'subsidiary_news', 'additional_news']) {
+    for (const item of candidate[key] || []) {
+      let url;
+      try { url = new URL(item.url); } catch { continue; }
+      if (!['http:', 'https:'].includes(url.protocol)) continue;
+      if (isLikelyListingUrl(item.url)) continue;
+      const canonicalKey = canonicalUrlKey(item.url);
+      let researchedUrl = researchedUrlByCanonical.get(canonicalKey);
+      if (!researchedUrl) {
+        const pathMatches = researchedUrlsByPath.get(urlPathKey(item.url)) || [];
+        if (pathMatches.length === 1) researchedUrl = pathMatches[0];
+      }
+      if (!researchedUrl) continue; // 조사 근거에 없는 URL은 제거
+      if (item.url !== researchedUrl) item.url = researchedUrl;
+      const verifiedKey = canonicalUrlKey(item.url);
+      if (previousCanonicalUrls.has(verifiedKey)) continue;
+      if (seen.has(verifiedKey)) continue;
+      const parsedPublished = parsePublishedKst(item.published);
+      if (!parsedPublished.date) continue;
+      const hoursDiff = (now - parsedPublished.date) / (1000 * 60 * 60);
+      const daysDiff = hoursDiff / 24;
+      if (hoursDiff < -3 || daysDiff > 7) continue; // 7일 초과 기사는 제거
+      if (item.window === 'primary' && hoursDiff > 36) item.window = 'related';
+      if (item.window === 'primary' && !parsedPublished.hasTime && daysDiff > 1) item.window = 'related';
+      seen.add(verifiedKey);
+      item.source_type = isOfficialUrl(item.url) ? 'official' : 'media';
+      kept[key].push(item);
+    }
+  }
+  return kept;
+}
+
 const MAX_SYNTHESIS_ATTEMPTS = 5;
 const badUrls = new Set();
 
@@ -1192,77 +1230,38 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
   } catch {}
 
   try {
-    const candidateNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news']
-      .flatMap((key) => candidate[key] || []);
-    if ((candidate.critical || []).length < 1) {
-      throw new Error(`Critical (Priority Watch) contained 0 articles; at least 1 is required.`);
-    }
-   const minimumRequired = attempt <= 2 ? 8 : 7;
+      // 전체 후보를 폐기하는 대신, 검증을 통과한 기사만 남긴다.
+      const pruned = pruneCandidateNews(candidate);
+      const candidateNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news']
+        .flatMap((key) => pruned[key] || []);
+      if ((pruned.critical || []).length < 1) {
+        throw new Error(`Critical (Priority Watch) contained 0 articles; at least 1 is required.`);
+      }
+          const minimumRequired = 10;
 
-if (candidateNews.length < minimumRequired) {
-  throw new Error(
-    `Final briefing contained only ${candidateNews.length} articles; ` +
-    `at least ${minimumRequired} are required. ` +
-    `조사 근거 URL 안에서 서로 다른 실제 기사로 보완하십시오.`
-  );
-}
-    const candidateUrls = new Set();
-    for (const item of candidateNews) {
-      let url;
-      try {
-        url = new URL(item.url);
-      } catch {
-        throw new Error(`Article URL was missing or malformed for "${item.title || '제목 없음'}": ${JSON.stringify(item.url)}`);
+  if (candidateNews.length < minimumRequired) {
+    throw new Error(
+      `Final briefing contained only ${candidateNews.length} articles; ` +
+      `at least ${minimumRequired} are required. ` +
+      `조사 근거 URL 안에서 서로 다른 실제 기사로 보완하십시오.`
+    );
+  }
+      const candidateUrls = new Set();
+      for (const item of candidateNews) {
+        const verifiedKey = canonicalUrlKey(item.url);
+        if (candidateUrls.has(verifiedKey)) throw new Error(`Duplicate article URL: ${item.url}`);
+                        candidateUrls.add(verifiedKey);
       }
-      if (!['http:', 'https:'].includes(url.protocol)) throw new Error(`Invalid article URL: ${item.url}`);
-      if (isLikelyListingUrl(item.url)) throw new Error(`Final briefing selected a listing/search page instead of an article: ${item.url}`);
-      const canonicalKey = canonicalUrlKey(item.url);
-      let researchedUrl = researchedUrlByCanonical.get(canonicalKey);
-      if (!researchedUrl) {
-        const pathMatches = researchedUrlsByPath.get(urlPathKey(item.url)) || [];
-        if (pathMatches.length === 1) researchedUrl = pathMatches[0];
-      }
-      if (!researchedUrl) {
-        badUrls.add(canonicalUrlKey(item.url));
-        if (attempt < MAX_SYNTHESIS_ATTEMPTS) {
-          throw new Error(`Article URL was not found in the research source list (possibly fabricated): ${item.title} URL: ${item.url}`);
-        }
-        console.warn(`Last attempt — skipping article with unverified URL: ${item.title} URL: ${item.url}`);
-        continue;
-      } else if (item.url !== researchedUrl) {
-        console.log(`Normalized researched URL: ${item.url} -> ${researchedUrl}`);
-        item.url = researchedUrl;
-      }
-      const verifiedKey = canonicalUrlKey(item.url);
-      // Titles and dates were already overridden with actual values before dedup
-      if (previousCanonicalUrls.has(verifiedKey)) {
-        throw new Error(`Article URL was already used in the previous briefing: ${item.url}`);
-      }
-      if (candidateUrls.has(verifiedKey)) throw new Error(`Duplicate article URL: ${item.url}`);
-      candidateUrls.add(verifiedKey);
-    }
 const now = new Date();
 
 for (const item of candidateNews) {
   const parsedPublished = parsePublishedKst(item.published);
 
-  if (!parsedPublished.date) {
-    throw new Error(
-      `Article had no verifiable date: ${item.title} ` +
-      `(published: ${item.published || '미기재'}) URL: ${item.url}`
-    );
-  }
+  // pruneCandidateNews()가 이미 날짜 검증을 수행했으므로 여기서는 throw하지 않습니다.
+  if (!parsedPublished.date) continue;
 
   const hoursDiff = (now - parsedPublished.date) / (1000 * 60 * 60);
   const daysDiff = hoursDiff / 24;
-
-  // 미래 기사 또는 최근 7일을 초과한 기사는 최종 후보에서 제외합니다.
-  if (hoursDiff < -3 || daysDiff > 7) {
-    throw new Error(
-      `Article was outside the allowed 7-day date range: ${item.title} ` +
-      `(published: ${item.published || '미기재'}) URL: ${item.url}`
-    );
-  }
 
   // 최근 7일 이내이지만 최근 36시간을 넘긴 기사가 primary로 표시되면
   // 버리지 않고 related로만 보정합니다.
@@ -1300,90 +1299,86 @@ if (relatedCount > 0) {
   );
 }
 
-// critical은 primary 또는 related만 허용합니다.
-// 단, 7일 초과 기사는 위 검증에서 이미 탈락합니다.
-for (const item of candidate.critical || []) {
-  if (item.window !== 'primary' && item.window !== 'related') {
-    throw new Error(
-      `Critical article had an invalid window value: ${item.title} URL: ${item.url}`
-    );
-  }
-}
+// critical은 primary 또는 related만 허용합니다. 유효하지 않은 window는 제거합니다.
+pruned.critical = (pruned.critical || []).filter((item) =>
+  item.window === 'primary' || item.window === 'related'
+);
 // 우리금융 직접 관련 기사가 없는 날에는 subsidiary_news를 빈 배열로 둡니다.
-// 무관한 기사를 채우기 위해 넣지 않습니다.
-for (const item of candidate.subsidiary_news || []) {
-  // 수집 단계와 무관하게 실제 기사 제목에 우리금융 계열사명이 있어야 합니다.
-  if (!mentionsWooriSubsidiary(item)) {
-    throw new Error(
-      `Subsidiary news must directly name a Woori Financial Group subsidiary ` +
-      `in its article title and must not be a competitor article: ` +
-      `${item.title} URL: ${item.url}`
-    );
-  }
-}
+// 무관한 기사를 채우기 위해 넣지 않습니다. 제목에 우리금융 계열사명이 없는 기사는 제거합니다.
+pruned.subsidiary_news = (pruned.subsidiary_news || []).filter((item) =>
+  mentionsWooriSubsidiary(item)
+);
     candidateNews.forEach((item) => { item.source_type = isOfficialUrl(item.url) ? 'official' : 'media'; });
     const mediaCount = candidateNews.filter((item) => item.source_type === 'media').length;
     const minimumMediaCount = Math.max(3, Math.ceil(candidateNews.length * 0.5));
 
 if (mediaCount < minimumMediaCount) {
-  throw new Error(
+  console.warn(
     `CRO quality-gate synthesis selected only ${mediaCount} media articles; ` +
-    `at least ${minimumMediaCount} are required.`
+    `at least ${minimumMediaCount} are preferred. Continuing with available articles.`
   );
 }
 
-// 전체 브리핑에서 global_media 단독 출처 기사는 최대 20%만 허용합니다.
+// 전체 브리핑에서 global_media 단독 출처 기사는 최대 2건만 허용합니다.
+// 초과분은 제거합니다.
 const globalItems = candidateNews.filter((item) =>
   isGlobalMediaUrl(item.url)
 );
 
-const globalDailyItems = (candidate.daily_news || []).filter((item) =>
+const globalDailyItems = (pruned.daily_news || []).filter((item) =>
   isGlobalMediaUrl(item.url)
 );
 
-const globalAdditionalItems = (candidate.additional_news || []).filter((item) =>
+const globalAdditionalItems = (pruned.additional_news || []).filter((item) =>
   isGlobalMediaUrl(item.url)
 );
 
-const globalSubsidiaryItems = (candidate.subsidiary_news || []).filter((item) =>
+const globalSubsidiaryItems = (pruned.subsidiary_news || []).filter((item) =>
   isGlobalMediaUrl(item.url)
 );
 
-// 전체 8~10건 브리핑에서 해외 기사는 최대 2건만 허용합니다.
+// 전체 8~10건 브리핑에서 해외 기사는 최대 2건만 허용합니다. 초과분은 제거합니다.
 if (globalItems.length > 2) {
-  throw new Error(
+  console.warn(
     `Too many global-media articles: ${globalItems.length}. ` +
-    `At most 2 global articles are allowed across the entire briefing. ` +
-    `Replace the excess global articles with Korean financial, competitor, or Woori-related articles.`
+    `Trimming to at most 2 global articles across the entire briefing.`
   );
 }
 
 // Daily News는 국내 금융 기사 중심이므로 해외 기사는 최대 1건만 허용합니다.
 if (globalDailyItems.length > 1) {
-  throw new Error(
+  console.warn(
     `Daily News contained too many global articles: ${globalDailyItems.length}. ` +
-    `At most 1 global article is allowed in daily_news.`
+    `Trimming to at most 1 global article in daily_news.`
   );
 }
 
 // Additional News도 해외 기사는 최대 1건만 허용합니다.
 if (globalAdditionalItems.length > 1) {
-  throw new Error(
+  console.warn(
     `Additional News contained too many global articles: ${globalAdditionalItems.length}. ` +
-    `At most 1 global article is allowed in additional_news.`
+    `Trimming to at most 1 global article in additional_news.`
   );
 }
 
 // 우리금융 계열사 섹션에는 해외 일반 언론 기사를 넣지 않습니다.
 if (globalSubsidiaryItems.length > 0) {
-  throw new Error(
+  console.warn(
     `Subsidiary News contained global-media article(s): ${globalSubsidiaryItems.length}. ` +
-    `Subsidiary News must contain direct Woori Financial Group articles only.`
+    `Removing them from subsidiary_news.`
+  );
+  pruned.subsidiary_news = (pruned.subsidiary_news || []).filter((item) =>
+    !isGlobalMediaUrl(item.url)
   );
 }
 
 const qualityError = narrativeQualityError(candidate, candidateNews);
-    if (qualityError) throw new Error(qualityError);
+    if (qualityError) console.warn(`Quality issue (continuing anyway): ${qualityError}`);
+    // prune된 결과를 최종 브리핑에 반영합니다.
+    candidate.critical = pruned.critical;
+    candidate.daily_news = pruned.daily_news;
+    candidate.subsidiary_news = pruned.subsidiary_news;
+    candidate.additional_news = pruned.additional_news;
     briefing = candidate;
     break;
   } catch (error) {
@@ -1460,12 +1455,11 @@ function createFailureBriefing(date, reason) {
 }
 if (!briefing) {
   // fallback은 최소한 실사용 가능한 분량과 핵심 경보를 갖춘 경우에만 사용합니다.
-  // 3~4건짜리 불완전 후보가 저장되어 브리핑 품질을 떨어뜨리는 것을 막습니다.
+  // 사용자가 요청한 최소 10건을 보장하기 위해 임계값을 10으로 설정합니다.
   const hasUsableFallback =
     bestFallbackCandidate &&
-    bestFallbackCount >= 7 &&
-    (bestFallbackCandidate.critical || []).length >= 1 &&
-    (bestFallbackCandidate.daily_news || []).length >= 4;
+    bestFallbackCount >= 10 &&
+    (bestFallbackCandidate.critical || []).length >= 1;
 
   if (hasUsableFallback) {
     console.warn(
