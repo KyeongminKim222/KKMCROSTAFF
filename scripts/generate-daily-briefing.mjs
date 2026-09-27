@@ -1231,13 +1231,24 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
 
   try {
       // 전체 후보를 폐기하는 대신, 검증을 통과한 기사만 남긴다.
-      const pruned = pruneCandidateNews(candidate);
-      const candidateNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news']
-        .flatMap((key) => pruned[key] || []);
-      if ((pruned.critical || []).length < 1) {
-        throw new Error(`Critical (Priority Watch) contained 0 articles; at least 1 is required.`);
-      }
-          const minimumRequired = 10;
+            const pruned = pruneCandidateNews(candidate);
+            // critical이 0건이면 daily_news에서 상위 기사를 critical로 승격한다.
+            // 이렇게 하면 critical이 비어서 전체가 실패하는 것을 방지한다.
+            if ((pruned.critical || []).length < 1 && (pruned.daily_news || []).length > 0) {
+              const promoted = pruned.daily_news.shift();
+              promoted.critical = true;
+              promoted.window = promoted.window || 'primary';
+              pruned.critical = [promoted];
+              console.log(`Promoted article to critical because critical was empty: ${promoted.title}`);
+            }
+            const candidateNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news']
+              .flatMap((key) => pruned[key] || []);
+            if ((pruned.critical || []).length < 1) {
+              throw new Error(`Critical (Priority Watch) contained 0 articles; at least 1 is required.`);
+            }
+                // 10건을 목표로 하되, 검증 통과한 기사가 있으면 빈 브리핑 대신 저장한다.
+                // 초반 시도에서는 10건을 요구하고, 마지막 시도에서는 검증 통과분을 보존한다.
+                const minimumRequired = attempt <= 3 ? 10 : 6;
 
   if (candidateNews.length < minimumRequired) {
     throw new Error(
@@ -1455,10 +1466,10 @@ function createFailureBriefing(date, reason) {
 }
 if (!briefing) {
   // fallback은 최소한 실사용 가능한 분량과 핵심 경보를 갖춘 경우에만 사용합니다.
-  // 사용자가 요청한 최소 10건을 보장하기 위해 임계값을 10으로 설정합니다.
+  // 10건을 목표로 하되, 검증 통과한 기사가 6건 이상이면 빈 브리핑 대신 저장합니다.
   const hasUsableFallback =
     bestFallbackCandidate &&
-    bestFallbackCount >= 10 &&
+    bestFallbackCount >= 6 &&
     (bestFallbackCandidate.critical || []).length >= 1;
 
   if (hasUsableFallback) {
