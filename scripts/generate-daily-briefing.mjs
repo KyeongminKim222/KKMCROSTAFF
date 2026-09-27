@@ -1577,7 +1577,7 @@ function backfillBriefing(b) {
   // 2) subsidiary_news가 비면 조사 근거에서 우리금융 계열사 기사를 채운다.
   if ((b.subsidiary_news || []).length === 0) {
     const wooriCandidates = backfillPool.filter((c) =>
-      mentionsWooriSubsidiary(c) && !used.has(canonicalUrlKey(c.url))
+      mentionsWooriSubsidiary(c) && String(c.title || '').trim() && !used.has(canonicalUrlKey(c.url))
     );
     for (const c of wooriCandidates.slice(0, 3)) {
       c.critical = false;
@@ -1591,7 +1591,7 @@ function backfillBriefing(b) {
   if (total < 10) {
     const need = 10 - total;
     const dailyCandidates = backfillPool.filter((c) =>
-      c._stage !== 'global_media' && !used.has(canonicalUrlKey(c.url))
+      c._stage !== 'global_media' && String(c.title || '').trim() && !used.has(canonicalUrlKey(c.url))
     );
     for (const c of dailyCandidates.slice(0, need)) {
       c.critical = false;
