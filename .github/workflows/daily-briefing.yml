@@ -27,13 +27,38 @@ jobs:
         with:
           node-version: '22'
 
+      # Prevent duplicate emails: if today's briefing already exists on main,
+      # skip the whole pipeline (including the email step). This makes the
+      # two cron schedules act as failover (first success wins) without
+      # sending more than one email per day.
+      - name: Skip if today's briefing already exists
+        id: dupguard
+        run: |
+          TODAY=$(TZ=Asia/Seoul date +%F)
+          SKIP=true
+          if [ ! -f public/briefing.json ]; then
+            echo "No briefing.json found on main. Proceeding."
+            SKIP=false
+          else
+            EXISTING=$(node -e "const b=require('./public/briefing.json'); console.log((b.meta&&b.meta.briefing_date)||'')")
+            if [ "$EXISTING" != "$TODAY" ]; then
+              echo "No briefing for $TODAY yet (current: $EXISTING). Proceeding."
+              SKIP=false
+            else
+              echo "Briefing for $TODAY already exists. Skipping the rest to avoid a duplicate email."
+            fi
+          fi
+          echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
+
       - name: Generate researched briefing
+        if: steps.dupguard.outputs.skip != 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-5.4-mini' }}
         run: node scripts/generate-daily-briefing.mjs
 
       - name: Commit briefing data
+        if: steps.dupguard.outputs.skip != 'true'
         run: |
           git config user.name "CRO Staff Automation"
           git config user.email "actions@users.noreply.github.com"
@@ -42,6 +67,7 @@ jobs:
           git push
 
       - name: Wait for Render auto-deploy
+        if: steps.dupguard.outputs.skip != 'true'
         env:
           RENDER_HEALTH_URL: https://kkmcrostaff.onrender.com/healthz
         run: |
@@ -60,7 +86,7 @@ jobs:
           exit 1
 
       - name: Wait until 07:00 KST for scheduled delivery
-        if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' && steps.dupguard.outputs.skip != 'true'
         run: |
           TODAY_KST=$(TZ=Asia/Seoul date +%F)
           TARGET=$(TZ=Asia/Seoul date -d "$TODAY_KST 07:00:00" +%s)
@@ -74,6 +100,7 @@ jobs:
           fi
 
       - name: Send Gmail briefing email
+        if: steps.dupguard.outputs.skip != 'true'
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
