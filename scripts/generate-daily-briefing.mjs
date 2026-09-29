@@ -704,7 +704,8 @@ async function researchStage(label, scope, allowedDomains, minimumSources = 4) {
         ...(allowedDomains && allowedDomains.length > 0 ? { filters: { allowed_domains: allowedDomains } } : {}),
         user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' }
       }],
-      max_tool_calls: 4,      include: ['web_search_call.action.sources'],
+      max_tool_calls: 4,
+      include: ['web_search_call.action.sources'],
       store: false,
       reasoning: { effort: 'low' },
       text: { verbosity: 'medium' },
@@ -1499,11 +1500,11 @@ function buildBackfillPool() {
         const title = sd.title || researchedTitleByUrl.get(key) || '';
         const published = sd.published || researchedDateByUrl.get(key) || '';
         const parsed = parsePublishedKst(published);
-        let daysDiff = null;
-        if (parsed.date) {
-          daysDiff = (now - parsed.date) / (1000 * 60 * 60 * 24);
-          if (daysDiff < -0.2 || daysDiff > 7) continue;
-        }
+        // 품질 게이트: 게시일시를 확인할 수 없거나 최근 7일을 초과한 후보는
+        // 백필에서 반드시 제외한다. 과거 기사·placeholder가 브리핑에 들어가는 것을 차단한다.
+        if (!parsed.date) continue;
+        const daysDiff = (now - parsed.date) / (1000 * 60 * 60 * 24);
+        if (daysDiff < -0.2 || daysDiff > 7) continue;
         seen.add(key);
         pool.push({
           url: researchedUrlByCanonical.get(key),
@@ -1519,7 +1520,7 @@ function buildBackfillPool() {
           urgency: '중간',
           confidence: '중간',
           critical: false,
-          window: (daysDiff !== null && daysDiff <= 1.5) ? 'primary' : 'related',
+          window: (daysDiff <= 1.5) ? 'primary' : 'related',
           watchpoints: [],
           _stage: stage
         });
@@ -1705,6 +1706,41 @@ if (allNews.length < 3 && !isFailureFallback) {
 const fallbackQualityError = narrativeQualityError(briefing, allNews);
 if (fallbackQualityError) {
   console.warn(`Fallback briefing had quality issues (continuing anyway): ${fallbackQualityError}`);
+}
+// ===== 하드 품질 게이트: 최종 브리핑에서 옛날 기사·날짜 미확인·placeholder 제목을 제거한다.
+// 숫자를 채우는 것보다 품질을 지키는 것이 우선이다. 통과한 기사만 남긴다.
+const HARD_PLACEHOLDER = [
+  '확인 불가', '원문 제목 확인', '원문 제목 미확인', '제목 없음', '보도(원문 제목',
+  '금융권 기사입니다', '금융권 동향관련보도', '관련보도', '관련 보도',
+  '해당없음', '해당 없음', '해당사항없음', '해당 사항 없음', 'placeholder', 'Placeholder', 'N/A', 'n/a'
+];
+const hardGateNow = new Date();
+for (const key of ['critical', 'daily_news', 'subsidiary_news', 'additional_news']) {
+  const kept = [];
+  for (const it of (briefing[key] || [])) {
+    const parsed = parsePublishedKst(it.published);
+    if (!parsed.date) {
+      console.log(`Dropped article with unverifiable date: ${it.title || it.url}`);
+      continue;
+    }
+    const daysDiff = (hardGateNow - parsed.date) / (1000 * 60 * 60 * 24);
+    if (daysDiff < -0.2 || daysDiff > 7) {
+      console.log(`Dropped stale article (${daysDiff.toFixed(1)}d): ${it.title || it.url}`);
+      continue;
+    }
+    const title = String(it.title || '').trim();
+    const summary = String(it.summary || '').trim();
+    if (!title || !summary) {
+      console.log(`Dropped article missing title/summary: ${it.url}`);
+      continue;
+    }
+    if (HARD_PLACEHOLDER.some((p) => title.includes(p) || summary.includes(p))) {
+      console.log(`Dropped placeholder article: ${title}`);
+      continue;
+    }
+    kept.push(it);
+  }
+  briefing[key] = kept;
 }
 briefing.critical.forEach((item) => { item.critical = true; });
 briefing.daily_news.forEach((item) => { item.critical = false; });
