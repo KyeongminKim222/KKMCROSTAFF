@@ -634,16 +634,31 @@ function extractDateFromPublished(publishedText) {
 }
 
 function parsePublishedKst(publishedText) {
-  const text = String(publishedText || '');
-  const dateMatch = text.match(/(\d{4})-(\d{2})-(\d{2})/);
-  if (!dateMatch) return { date: null, hasTime: false };
-  const datePart = dateMatch[0];
-  const timeMatch = text.match(/(\d{2}):(\d{2})/);
+  const text = String(publishedText || '').trim();
+  let year = null;
+  let month = null;
+  let day = null;
+  let m;
+  // YYYY-MM-DD | YYYY.MM.DD | YYYY/MM/DD
+  if ((m = text.match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/))) {
+    year = +m[1]; month = +m[2]; day = +m[3];
+  // YYYYMMDD (8 digits)
+  } else if ((m = text.match(/(\d{4})(\d{2})(\d{2})/))) {
+    year = +m[1]; month = +m[2]; day = +m[3];
+  // YYYY년 M월 D일
+  } else if ((m = text.match(/(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/))) {
+    year = +m[1]; month = +m[2]; day = +m[3];
+  // M월 D일 (연도는 현재 연도로 간주 — 이후 7일 게이트가 옛 기사를 걸러낸다)
+  } else if ((m = text.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/))) {
+    year = new Date().getFullYear(); month = +m[1]; day = +m[2];
+  }
+  if (!year || !month || !day) return { date: null, hasTime: false };
+  const timeMatch = text.match(/(\d{1,2}):(\d{2})/);
   if (timeMatch) {
-    const withTime = new Date(`${datePart}T${timeMatch[0]}:00+09:00`);
+    const withTime = new Date(year, month - 1, day, +timeMatch[1], +timeMatch[2], 0);
     if (!Number.isNaN(withTime.getTime())) return { date: withTime, hasTime: true };
   }
-  const dateOnly = new Date(`${datePart}T00:00:00+09:00`);
+  const dateOnly = new Date(year, month - 1, day);
   if (!Number.isNaN(dateOnly.getTime())) return { date: dateOnly, hasTime: false };
   return { date: null, hasTime: false };
 }
@@ -1239,7 +1254,7 @@ for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
             }
                 // 10건을 목표로 하되, 검증 통과한 기사가 있으면 빈 브리핑 대신 저장한다.
                 // 초반 시도에서는 10건을 요구하고, 마지막 시도에서는 검증 통과분을 보존한다.
-                const minimumRequired = [10, 9, 8, 7, 6][attempt - 1] ?? 6;
+                const minimumRequired = [8, 7, 6, 5, 5][attempt - 1] ?? 5;
 
   if (candidateNews.length < minimumRequired) {
     throw new Error(
@@ -1457,7 +1472,14 @@ function createFailureBriefing(date, reason) {
 }
 if (!briefing) {
   // fallback은 최소한 실사용 가능한 분량과 핵심 경보를 갖춘 경우에만 사용합니다.
-  // 10건을 목표로 하되, 검증 통과한 기사가 6건 이상이면 빈 브리핑 대신 저장합니다.
+  // 10건을 목표로 하되, 검증 통과한 기사가 5건 이상이면 빈 브리핑 대신 저장합니다.
+  // critical이 비어 있으면 daily_news에서 하나를 승격하여 fallback을 유효화합니다.
+  if (bestFallbackCandidate && (bestFallbackCandidate.critical || []).length < 1 && (bestFallbackCandidate.daily_news || []).length > 0) {
+    const promoted = bestFallbackCandidate.daily_news.shift();
+    promoted.critical = true;
+    bestFallbackCandidate.critical = [promoted];
+    console.log(`Promoted article to critical in fallback: ${promoted.title}`);
+  }
   const hasUsableFallback =
     bestFallbackCandidate &&
     bestFallbackCount >= 1 &&
