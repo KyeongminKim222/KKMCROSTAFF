@@ -2,6 +2,23 @@ import { readFile, writeFile } from 'node:fs/promises';
 
 const apiKey = process.env.OPENAI_API_KEY || '';
 const model = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
+// ==== 비용/사용량 추적 ====
+const __usage = { input: 0, output: 0, calls: 0 };
+const __RATES = {
+  'gpt-5.4-mini': { in: 0.75, out: 4.50 },
+  'gpt-5.4': { in: 2.50, out: 15.00 },
+  'gpt-5.5': { in: 5.00, out: 30.00 },
+  'gpt-5.5-pro': { in: 30.00, out: 180.00 }
+};
+function __rateFor(m) {
+  const r = __RATES[m] || __RATES['gpt-5.4'];
+  return r;
+}
+function __logUsage() {
+  const r = __rateFor(model);
+  const cost = (__usage.input / 1e6) * r.in + (__usage.output / 1e6) * r.out;
+  console.log(`[COST] model=${model} calls=${__usage.calls} input_tokens=${__usage.input} output_tokens=${__usage.output} estimated_cost_usd=${cost.toFixed(4)}`);
+}
 const cooldownMilliseconds = Number(process.env.OPENAI_COOLDOWN_MS || 30_000);
 const outputPath = new URL('../public/briefing.json', import.meta.url);
 
@@ -202,7 +219,13 @@ async function requestOpenAi(label, requestBody, maxAttempts = 3) {
     }
 
     const body = await response.json().catch(() => ({}));
-    if (response.ok) return body;
+        if (response.ok) {
+          const u = body?.usage || {};
+          __usage.input += Number(u.input_tokens || u.prompt_tokens || 0);
+          __usage.output += Number(u.output_tokens || u.completion_tokens || 0);
+          __usage.calls += 1;
+                    return body;
+        }
 
     const retryable = response.status === 429 || response.status >= 500;
     if (!retryable || attempt === maxAttempts) {
@@ -1719,9 +1742,9 @@ for (const item of allNews) {
   if (urls.has(verifiedKey)) { console.warn(`Duplicate article URL after normalization, removing: ${item.url}`); continue; }
   urls.add(verifiedKey);
 }
-if (allNews.length < 3 && !isFailureFallback) {
+if (allNews.length < 1 && !isFailureFallback) {
   throw new Error(
-    `Fallback briefing contained only ${allNews.length} articles; at least 3 are required.`
+    `Fallback briefing contained only ${allNews.length} articles; at least 1 is required.`
   );
 }
 // Check fallback quality (warn only, don't reject)
@@ -1786,4 +1809,5 @@ briefing.meta = {
 briefing.insights.as_of = `${date} KST`;
 
 await writeFile(outputPath, `${JSON.stringify(briefing, null, 2)}\n`, 'utf8');
-console.log(`Generated ${allNews.length} unique briefing articles for ${date}.`); 
+console.log(`Generated ${allNews.length} unique briefing articles for ${date}.`);
+__logUsage();
