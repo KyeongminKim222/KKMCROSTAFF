@@ -468,6 +468,7 @@ primary 후보가 부족하면 맥락 이해에 직접 필요한 최근 7일 이
 [[/SOURCE_METADATA]]
 title은 반드시 원문 기사의 실제 헤드라인을 그대로 적어라. "금융권 동향관련보도" 같은 요약형 제목을 만들지 마라. published는 반드시 정확한 게시일시를 적어라. 이 메타데이터는 후보 선정에 직접 사용되므로 정확성이 매우 중요하다.
 모든 후보 기사에 게시일시를 반드시 정확히 적어라. 게시일시를 확인할 수 없는 기사는 후보에서 제외하라. 날짜가 없는 후보는 최종 선정에서 자동 제외되므로, 반드시 각 후보의 실제 게시일시를 SOURCE_METADATA에 포함하라. 최근 7일 이내 기사가 부족하면, 검색을 더 수행해서 최근 7일 이내 기사를 추가로 찾아라. 후보 수를 채우기 위해 날짜 없는 기사나 오래된 기사를 넣지 마라.
+검색을 충분히 많이 수행하라. 각 계열사·기관·주제·리스크 유형별로 개별 검색을 돌려라(예: "우리은행 최근 7일", "우리카드 리스크", "KB금융 건전성", "신한금융 제재", "금융위원회 규제" 등). 검색 쿼리에 반드시 "최근 7일" 또는 "이번 주" 같은 최신 기간을 명시하고, 검색 결과에서 게시일시가 최근 7일 이내인 기사를 우선 선정하라. 최소 15회 이상의 개별 검색을 수행하여 최근 7일 이내 기사를 최대한 많이 확보하라.
 `;
 
 const koreanMediaDomains = [
@@ -743,7 +744,7 @@ async function researchStage(label, scope, allowedDomains, minimumSources = 4) {
         ...(allowedDomains && allowedDomains.length > 0 ? { filters: { allowed_domains: allowedDomains } } : {}),
         user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' }
               }],
-              max_tool_calls: 6,
+              max_tool_calls: 15,
               include: ['web_search_call.action.sources'],
       store: false,
       reasoning: { effort: 'low' },
