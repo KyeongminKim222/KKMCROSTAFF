@@ -1631,7 +1631,7 @@ function buildBackfillPool() {
           urgency: '중간',
           confidence: '중간',
           critical: false,
-          window: (daysDiff <= 1.5) ? 'primary' : 'related',
+          window: 'primary',
           watchpoints: [],
           _stage: stage
         });
