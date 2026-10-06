@@ -455,7 +455,7 @@ URL은 실제 검색으로 확인한 개별 기사 또는 개별 공식 발표�
 확인된 사실과 CRO 관점의 분석을 구분하고, 수치·날짜·기관명·기업명을 검증하라.
 자본·유동성·신용·시장·운영·사이버·법무/준법·평판·전략 리스크 영향을 평가하라.
 신뢰할 만한 후보가 부족하면 숫자를 채우지 말고 조사 메모에 이유를 적어라.
-primary 후보가 부족하면 맥락 이해에 직접 필요한 전날(어제) 유관·배경 자료를 추가 조사하되 반드시 related라고 표시하고 날짜를 명확히 적어라.
+primary 후보가 부족하면 맥락 이해에 직접 필요한 어제·오늘 유관·배경 자료를 추가 조사하되 반드시 related라고 표시하고 날짜를 명확히 적어라.
 이전 브리핑에 이미 사용된 URL은 후보에서 절대 제외하라: ${JSON.stringify([...previousCanonicalUrls])}
 이전 브리핑 제목은 중대한 신규 사실이 있을 때만 다시 후보에 포함하라: ${JSON.stringify(previousTitles)}
 이전 브리핑의 사건·주제와 사실상 같은 경우에는 URL과 언론사가 달라도 후보에서 제외하라. 예를 들어 같은 기업의 같은 제재·사고·실적·자본조달·정책발표·통계발표를 다른 매체가 보도한 기사는 새로운 기사로 보지 마라. 이전 브리핑 주제 참고 자료: ${JSON.stringify(previousTopics)}
@@ -467,8 +467,8 @@ primary 후보가 부족하면 맥락 이해에 직접 필요한 전날(어제) 
 [{"url":"실제URL","title":"원문 기사의 실제 헤드라인","published":"게시일시(YYYY-MM-DD 또는 YYYY-MM-DD HH:MM)"}]
 [[/SOURCE_METADATA]]
 title은 반드시 원문 기사의 실제 헤드라인을 그대로 적어라. "금융권 동향관련보도" 같은 요약형 제목을 만들지 마라. published는 반드시 정확한 게시일시를 적어라. 이 메타데이터는 후보 선정에 직접 사용되므로 정확성이 매우 중요하다.
-모든 후보 기사에 게시일시를 반드시 정확히 적어라. 게시일시를 확인할 수 없는 기사는 후보에서 제외하라. 날짜가 없는 후보는 최종 선정에서 자동 제외되므로, 반드시 각 후보의 실제 게시일시를 SOURCE_METADATA에 포함하라. 전날(어제) 기사가 부족하면, 검색을 더 수행해서 전날(어제) 기사를 추가로 찾아라. 후보 수를 채우기 위해 날짜 없는 기사나 오래된 기사를 넣지 마라.
-검색을 충분히 많이 수행하라. 각 계열사·기관·주제·리스크 유형별로 개별 검색을 돌려라(예: "우리은행 전날(어제)", "우리카드 리스크", "KB금융 건전성", "신한금융 제재", "금융위원회 규제" 등). 검색 쿼리에 반드시 "전날(어제)" 또는 "이번 주" 같은 최신 기간을 명시하고, 검색 결과에서 게시일시가 전날(어제)인 기사를 우선 선정하라. 최소 15회 이상의 개별 검색을 수행하여 전날(어제) 기사를 최대한 많이 확보하라.
+모든 후보 기사에 게시일시를 반드시 정확히 적어라. 게시일시를 확인할 수 없는 기사는 후보에서 제외하라. 날짜가 없는 후보는 최종 선정에서 자동 제외되므로, 반드시 각 후보의 실제 게시일시를 SOURCE_METADATA에 포함하라. 어제·오늘 기사가 부족하면, 검색을 더 수행해서 어제·오늘 기사를 추가로 찾아라. 후보 수를 채우기 위해 날짜 없는 기사나 오래된 기사를 넣지 마라.
+검색을 충분히 많이 수행하라. 각 계열사·기관·주제·리스크 유형별로 개별 검색을 돌려라(예: "우리은행 어제·오늘", "우리카드 리스크", "KB금융 건전성", "신한금융 제재", "금융위원회 규제" 등). 검색 쿼리에 반드시 "어제·오늘" 또는 "이번 주" 같은 최신 기간을 명시하고, 검색 결과에서 게시일시가 어제·오늘인 기사를 우선 선정하라. 최소 15회 이상의 개별 검색을 수행하여 어제·오늘 기사를 최대한 많이 확보하라.
 `;
 
 const koreanMediaDomains = [
@@ -688,13 +688,14 @@ function parsePublishedKst(publishedText) {
   return { date: null, hasTime: false };
 }
 
-function isPreviousDayKst(publishedText) {
+function isYesterdayOrTodayKst(publishedText) {
   const parsed = parsePublishedKst(publishedText);
   if (!parsed.date) return false;
   const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
   const pubKst = fmt.format(parsed.date);
+  const todayKst = fmt.format(new Date());
   const yKst = fmt.format(new Date(Date.now() - 24 * 3600 * 1000));
-  return pubKst === yKst;
+  return pubKst === todayKst || pubKst === yKst;
 }
 
 function hostMatchesDomain(hostname, domain) {
@@ -820,7 +821,7 @@ const wooriMedia = await researchStage(
   `한국 주요 통신사·경제지·금융 전문매체 및 네이버뉴스에서 우리금융그룹 및 계열사에 관한 일반 언론기사를 전용으로 조사하라. 네이버뉴스(news.naver.com, finance.naver.com)의 검색 결과를 적극적으로 활용하라.
 다음 계열사명을 각각 네이버 뉴스 검색으로 확인하라: 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명.
 우리은행 해외지점 및 해외 현지법인인 우리아메리카은행, 우리소다라, 우리은행 캄보디아, 우리은행 베트남, 우리은행 중국, 우리은행 브라질 등의 직접 관련 보도도 조사하라.
-각 계열사명을 검색했을 때 전날(어제) 기사가 있으면 반드시 후보에 포함하라. 기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최소 8건 최대 10건 제시하라.`,
+각 계열사명을 검색했을 때 어제·오늘 기사가 있으면 반드시 후보에 포함하라. 기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최소 8건 최대 10건 제시하라.`,
   koreanMediaDomains,
   6
 );
@@ -956,9 +957,9 @@ function getResearchedMeta(itemUrl) {
 }
 
 console.log(`Extracted ${researchedTitleByUrl.size} article titles and ${researchedDateByUrl.size} article dates from research sources.`);
-// ===== B: 날짜 미확인 후보 일괄 검증 — 전날(어제) 기사 풀을 확대한다. =====
+// ===== B: 날짜 미확인 후보 일괄 검증 — 어제·오늘 기사 풀을 확대한다. =====
 // 연구가 URL은 많이 모았지만 날짜가 비어 있어 백필에서 제외되는 후보를,
-// 한 번의 LLM(web_search) 호출로 일괄 검증해 전날(어제)이면 풀에 살린다.
+// 한 번의 LLM(web_search) 호출로 일괄 검증해 어제·오늘이면 풀에 살린다.
 async function verifyUndatedSourceDates() {
   const undated = [];
   const seen = new Set();
@@ -985,7 +986,7 @@ async function verifyUndatedSourceDates() {
   try {
     const body = await requestOpenAi('Backfill date verification', {
       model,
-      input: `다음 기사들의 게시일시를 웹 검색으로 확인하라. 각 기사가 전날(어제)(오늘 ${date} KST 기준) 게시되었는지 판단하라.\n\n${list}\n\n각 항목에 대해 다음 형식으로만 답하라:\n번호. URL | 게시일시(YYYY-MM-DD) 또는 '오래됨' 또는 '확인불가'`,
+      input: `다음 기사들의 게시일시를 웹 검색으로 확인하라. 각 기사가 어제·오늘(오늘 ${date} KST 기준) 게시되었는지 판단하라.\n\n${list}\n\n각 항목에 대해 다음 형식으로만 답하라:\n번호. URL | 게시일시(YYYY-MM-DD) 또는 '오래됨' 또는 '확인불가'`,
       tools: [{ type: 'web_search', search_context_size: 'high', user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' } }],
       max_tool_calls: 8,
       include: ['web_search_call.action.sources'],
@@ -1033,15 +1034,15 @@ function buildSynthesisPrompt() {
 - 전체 기사는 최소 10건을 목표로 선정한다. critical(크리티컬)은 최소 1건은 반드시 포함하고, 나머지는 daily_news, subsidiary_news, additional_news 사이에서 그날 확보된 조사 근거의 양과 질에 맞게 자유롭게 배분한다.
 - 최종 브리핑은 반드시 10건을 채운다. 조사 근거에 검증 가능한 서로 다른 실제 기사가 10건 이상 있으면 반드시 10건을 선정한다. 검증 단계에서 중복·날짜·URL 검사로 일부가 제외될 수 있으므로, 최종 10건이 남도록 조사 근거에서 서로 다른 실제 기사 12건 이상을 선정하라. 10건을 채우기 위해 subsidiary_news나 additional_news가 비어 있어도 daily_news와 critical을 늘려 전체 합계를 10건으로 맞춘다. 같은 사건을 여러 매체가 보도한 경우 대표 원문 1건만 남기고, 조사 근거 안에서 완전히 다른 사건의 실제 기사를 찾아 10건을 채운다.
 - 특정 카테고리에 오늘 조건을 만족하는 기사가 부족하면 억지로 채우지 말고, 다른 카테고리에서 조건을 만족하는 기사를 더 선정해서 전체 합계 10건을 채운다.
-- subsidiary_news를 채울 때는 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사 관련 기사(오늘자 primary 우선, 부족하면 전날(어제) related도 허용), (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사. (1)에서 오늘자 기사가 부족하면 전날(어제) related 기사로 채워라. subsidiary_news에는 일반 시장 뉴스(금리, 환율, 증시, 투자심리, 은행 건전성 등)를 절대 배치하지 마라. subsidiary_news에는 우리금융그룹 또는 계열사에 직접 관련된 기사만 넣어라.조건에 맞는 실제 기사가 없으면 빈 배열([])로 제출하라.일반 시장 뉴스, 해외 일반 기업 뉴스, 단순 사이버 뉴스로 빈자리를 채우는 것은 절대 금지한다.
+- subsidiary_news를 채울 때는 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사 관련 기사(오늘자 primary 우선, 부족하면 어제·오늘 related도 허용), (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사. (1)에서 오늘자 기사가 부족하면 어제·오늘 related 기사로 채워라. subsidiary_news에는 일반 시장 뉴스(금리, 환율, 증시, 투자심리, 은행 건전성 등)를 절대 배치하지 마라. subsidiary_news에는 우리금융그룹 또는 계열사에 직접 관련된 기사만 넣어라.조건에 맞는 실제 기사가 없으면 빈 배열([])로 제출하라.일반 시장 뉴스, 해외 일반 기업 뉴스, 단순 사이버 뉴스로 빈자리를 채우는 것은 절대 금지한다.
 - 전체 기사는 10건을 목표로 선정하되, 검증 가능한 서로 다른 사건이 부족하면 억지로 채우지 마라. 이 경우 최소 8건 이상을 선정하고, 존재하지 않는 기사나 중복 사건을 만들지 마라.
 - 우리금융그룹·계열사(subsidiary_news)에는 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명 등 국내 계열사 기사, 또는 우리은행 해외지점·현지법인(우리은행 캄보디아, 우리소다라, 우리아메리카은행) 기사만 선택한다. 캄보디아·인도네시아·미국 지역의 일반 금융권 기사(금리, 환율, 증시, 투자심리, 은행 건전성 등)는 subsidiary_news에 절대 포함하지 마라. 그런 기사는 daily_news에만 배치할 수 있다. KB금융, 신한금융, 하나금융, NH농협금융, 한국금융지주 등 다른 금융지주·경쟁사 기사도 subsidiary_news에는 절대 포함하지 마라.
-- subsidiary_news에는 우리금융그룹 계열사 또는 우리은행 해외지점·해외 현지법인에 직접 관련된 기사만 선정한다. 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사(우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명 등) 관련 기사(오늘자 primary 우선, 부족하면 전날(어제) related도 허용), (2) 우리은행 해외지점·해외 현지법인(우리은행 캄보디아, 우리소다라, 우리아메리카은행 등) 관련 기사. subsidiary_news에는 절대로 일반 시장 뉴스(엔화, 환율, 증시, 투자심리, 금리, 은행 건전성 등)를 배치하지 마라. 해당 지역의 일반 금융권 기사는 daily_news에만 배치할 수 있다. subsidiary_news에는 우리금융그룹 또는 계열사에 직접 관련된 기사만 넣어라. 전날(어제)의 우리금융 직접 관련 기사가 없으면 빈 배열([])로 제출하라.
+- subsidiary_news에는 우리금융그룹 계열사 또는 우리은행 해외지점·해외 현지법인에 직접 관련된 기사만 선정한다. 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사(우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명 등) 관련 기사(오늘자 primary 우선, 부족하면 어제·오늘 related도 허용), (2) 우리은행 해외지점·해외 현지법인(우리은행 캄보디아, 우리소다라, 우리아메리카은행 등) 관련 기사. subsidiary_news에는 절대로 일반 시장 뉴스(엔화, 환율, 증시, 투자심리, 금리, 은행 건전성 등)를 배치하지 마라. 해당 지역의 일반 금융권 기사는 daily_news에만 배치할 수 있다. subsidiary_news에는 우리금융그룹 또는 계열사에 직접 관련된 기사만 넣어라. 어제·오늘의 우리금융 직접 관련 기사가 없으면 빈 배열([])로 제출하라.
 - 전체 기사 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 60% 이상 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 나머지 비중으로 선정한다.
 - 공식자료는 사실과 수치 검증에 적극 활용하되, 같은 사건의 언론기사가 있으면 독자가 맥락과 파급효과를 이해할 수 있는 언론기사를 대표 원문으로 우선 선정한다.
 - Gumloop 예시처럼 연합뉴스, 주요 경제지·금융 전문매체 및 Reuters·Bloomberg·FT·CNBC 등 신뢰도 높은 일반기사가 브리핑의 중심이 되어야 한다.
-- 모든 기사는 게시일시가 확인된 전날(어제) 기사만 사용하라. 전날(어제)을 초과했거나 게시일시를 확인할 수 없는 기사는 절대 선택하지 마라. - critical 기사는 실행 시점 기준 최근 36시간 이내 기사이면 window를 primary로 표시하라. 최근 36시간 이내의 검증 가능한 핵심 기사가 부족하면 전날(어제)의 중요 기사도 critical에 넣을 수 있으며, 이 경우 반드시 window를 related로 표시하라. 36시간을 넘긴 기사를 primary로 표시하지 마라. - published 필드에는 확인 가능한 게시일시를 KST 기준으로 적어라.
-- daily_news와 subsidiary_news를 채우기 위해 related로 표시하는 기사는 전날(어제)여야 하며, 전체 기사 중 related는 최대 8건까지 허용한다.
+- 모든 기사는 게시일시가 확인된 어제·오늘 기사만 사용하라. 어제·오늘을 초과했거나 게시일시를 확인할 수 없는 기사는 절대 선택하지 마라. - critical 기사는 실행 시점 기준 최근 36시간 이내 기사이면 window를 primary로 표시하라. 최근 36시간 이내의 검증 가능한 핵심 기사가 부족하면 어제·오늘의 중요 기사도 critical에 넣을 수 있으며, 이 경우 반드시 window를 related로 표시하라. 36시간을 넘긴 기사를 primary로 표시하지 마라. - published 필드에는 확인 가능한 게시일시를 KST 기준으로 적어라.
+- daily_news와 subsidiary_news를 채우기 위해 related로 표시하는 기사는 어제·오늘여야 하며, 전체 기사 중 related는 최대 8건까지 허용한다.
 - "오늘자 검증 가능한 기사 없음" 같은 placeholder 문구를 title이나 다른 필드에 넣지 마라. 절대로 가짜 기사를 만들지 마라. 조사 근거 URL 목록에 없는 URL을 사용하지 마라. 10건을 채우기 위해 존재하지 않는 기사를 지어내지 마라. 그런 항목을 만들 수 없으면 조사 근거 안에서 실제로 존재하는 다른 기사로 대체하거나, additional_news에 한해서만 해당 카테고리를 빈 배열로 남긴다.
 - 동일 사건과 동일 URL을 제거하고 대표 원문 하나만 남긴다. 서로 다른 매체가 같은 사건(예: 같은 날 발표된 같은 통계, 같은 기관의 같은 공지, 같은 기업의 같은 이슈)을 각자 보도한 경우, URL이 다르더라도 반드시 동일 사건으로 간주하여 가장 상세하고 신뢰도 높은 원문 하나만 남기고 나머지는 절대 선택하지 마라. 예를 들어 "카드론 금리 상승"처럼 같은 주제를 다룬 여러 매체의 기사를 daily_news에 중복 포함시키지 마라. - 통화안정증권 경쟁입찰·정례모집, 금융위·한국은행·금감원 정기 보도자료, 기관 공식 보도자료는 절대 선정하지 마라. 오직 기자가 작성한 언론기사만 선정하라.
 - critical, daily_news, subsidiary_news, additional_news 네 카테고리를 통틀어 같은 URL이나 같은 게시물 번호(seq, id 등)를 가진 기사를 두 번 이상 선택하지 마라. 카테고리를 넘나드는 중복도 동일 사건 중복으로 간주하고 반드시 제거하라.
@@ -1063,7 +1064,7 @@ CRO 품질 게이트:
 - why_woori_cro는 2~3문장으로 작성한다. 우리은행 또는 관련 계열사에 미치는 자본·유동성·신용·시장·운영·준법·평판·전략 영향과 30~90일 의사결정 포인트를 구체적으로 연결한다.
 - watchpoints는 기사마다 2~3개를 제시한다. 기관 발표 일정, 비율·스프레드·연체율·충당금·한도 등 실제로 확인할 지표나 질문으로 작성한다.
 - 오늘의 CRO STAFF 인사이트는 기사들을 나열하지 말고 공통 동인, 1차·2차 전이경로, 현재 판단을 뒤집을 조건, 1주·2주·90일 모니터링 행동을 연결한다. 
-최우선 섹션 편성 규칙: - 이 규칙은 위에 있는 다른 규칙과 충돌하면 항상 우선한다. - 전체 기사 중 Reuters, AP, Bloomberg, FT, WSJ, CNBC 등 글로벌 언론 기사는 최대 2건만 선택하라. - daily_news에는 글로벌 기사를 최대 1건만 넣어라. 나머지는 반드시 korean_media 또는 peer_media의 국내 기사로 채워라. - additional_news에는 글로벌 기사를 최대 1건만 넣어라. 같은 유가·중동 분쟁·글로벌 금리 사건을 여러 해외 기사로 반복 선정하는 것을 절대 금지한다. - subsidiary_news에는 글로벌 일반 기사, 해외 일반 기업 기사, 해외 일반 사이버 기사, 경쟁사 단독 기사를 절대 넣지 마라. - woori_media 또는 korean_media 조사 근거에 제목상 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리투자증권, 동양생명, ABL생명 등 우리금융 계열사가 직접 등장하는 전날(어제) 기사가 하나라도 있으면, 그중 최소 1건을 subsidiary_news에 우선 배치하라. - subsidiary_news가 빈 배열일 수 있는 경우는 조사 근거 전체에 전날(어제)의 우리금융 직접 관련 기사가 전혀 없는 경우뿐이다. - 신한금융, KB금융, 하나금융, NH농협, IBK기업은행, 한국금융지주 등 경쟁사 직접 기사는 subsidiary_news가 아니라 daily_news에 배치하라. - daily_news는 국내 금융시장·규제·가계대출·부동산 PF·여신·자본·유동성·소비자보호·금융사고·경쟁사 관련 국내 기사 중심으로 구성하라. - 동일한 해외 유가·지정학·채권금리 사건은 전체 브리핑에서 대표 기사 1건만 남기고, 같은 사건의 Reuters·AP·Bloomberg 후속 기사들을 중복 선택하지 마라. 
+최우선 섹션 편성 규칙: - 이 규칙은 위에 있는 다른 규칙과 충돌하면 항상 우선한다. - 전체 기사 중 Reuters, AP, Bloomberg, FT, WSJ, CNBC 등 글로벌 언론 기사는 최대 2건만 선택하라. - daily_news에는 글로벌 기사를 최대 1건만 넣어라. 나머지는 반드시 korean_media 또는 peer_media의 국내 기사로 채워라. - additional_news에는 글로벌 기사를 최대 1건만 넣어라. 같은 유가·중동 분쟁·글로벌 금리 사건을 여러 해외 기사로 반복 선정하는 것을 절대 금지한다. - subsidiary_news에는 글로벌 일반 기사, 해외 일반 기업 기사, 해외 일반 사이버 기사, 경쟁사 단독 기사를 절대 넣지 마라. - woori_media 또는 korean_media 조사 근거에 제목상 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리투자증권, 동양생명, ABL생명 등 우리금융 계열사가 직접 등장하는 어제·오늘 기사가 하나라도 있으면, 그중 최소 1건을 subsidiary_news에 우선 배치하라. - subsidiary_news가 빈 배열일 수 있는 경우는 조사 근거 전체에 어제·오늘의 우리금융 직접 관련 기사가 전혀 없는 경우뿐이다. - 신한금융, KB금융, 하나금융, NH농협, IBK기업은행, 한국금융지주 등 경쟁사 직접 기사는 subsidiary_news가 아니라 daily_news에 배치하라. - daily_news는 국내 금융시장·규제·가계대출·부동산 PF·여신·자본·유동성·소비자보호·금융사고·경쟁사 관련 국내 기사 중심으로 구성하라. - 동일한 해외 유가·지정학·채권금리 사건은 전체 브리핑에서 대표 기사 1건만 남기고, 같은 사건의 Reuters·AP·Bloomberg 후속 기사들을 중복 선택하지 마라. 
 URL별 실제 기사 제목 매핑 (반드시 준수):
 
 URL별 실제 기사 제목 매핑 (반드시 준수):
@@ -1193,7 +1194,7 @@ function dedupeCandidateNews(candidate) {
       const parsedPublished = parsePublishedKst(item.published);
       if (!parsedPublished.date) continue; // 날짜를 확인할 수 없는 기사는 fallback에서도 제외
       const daysDiff = (now - parsedPublished.date) / (1000 * 60 * 60 * 24);
-      if (!isPreviousDayKst(item.published)) continue; // 전날 기사만 fallback에 포함
+      if (!isYesterdayOrTodayKst(item.published)) continue; // 전날 기사만 fallback에 포함
       seen.add(normalizedKey);
       item.source_type = isOfficialUrl(item.url) ? 'official' : 'media';
       keptItems.push(item);
@@ -1235,7 +1236,7 @@ function pruneCandidateNews(candidate) {
       if (!parsedPublished.date) continue;
       const hoursDiff = (now - parsedPublished.date) / (1000 * 60 * 60);
       const daysDiff = hoursDiff / 24;
-      if (!isPreviousDayKst(item.published)) continue; // 전날 기사만 유지
+      if (!isYesterdayOrTodayKst(item.published)) continue; // 전날 기사만 유지
       if (item.window === 'primary' && hoursDiff > 36) item.window = 'related';
       if (item.window === 'primary' && !parsedPublished.hasTime && daysDiff > 1) item.window = 'related';
       seen.add(verifiedKey);
@@ -1373,7 +1374,7 @@ for (const item of candidateNews) {
   const hoursDiff = (now - parsedPublished.date) / (1000 * 60 * 60);
   const daysDiff = hoursDiff / 24;
 
-  // 전날(어제)이지만 최근 36시간을 넘긴 기사가 primary로 표시되면
+  // 어제·오늘이지만 최근 36시간을 넘긴 기사가 primary로 표시되면
   // 버리지 않고 related로만 보정합니다.
   if (item.window === 'primary' && hoursDiff > 36) {
     item.window = 'related';
@@ -1614,8 +1615,8 @@ function buildBackfillPool() {
         if (isLikelyListingUrl(sd.url)) continue;
         const title = sd.title || researchedTitleByUrl.get(key) || '';
         const published = sd.published || researchedDateByUrl.get(key) || '';
-        // 품질 게이트: 전날(어제) 하루치 기사만 백필에 포함한다.
-        if (!isPreviousDayKst(published)) continue;
+        // 품질 게이트: 어제·오늘 하루치 기사만 백필에 포함한다.
+        if (!isYesterdayOrTodayKst(published)) continue;
         seen.add(key);
         pool.push({
           url: researchedUrlByCanonical.get(key),
@@ -1834,7 +1835,7 @@ for (const key of ['critical', 'daily_news', 'subsidiary_news', 'additional_news
       console.log(`Dropped article with unverifiable date: ${it.title || it.url}`);
       continue;
     }
-    if (!isPreviousDayKst(it.published)) {
+    if (!isYesterdayOrTodayKst(it.published)) {
       console.log(`Dropped non-previous-day article: ${it.title || it.url}`);
       continue;
     }
@@ -1864,7 +1865,7 @@ briefing.meta = {
   mode: 'daily',
   briefing_date: date,
   generated_at: new Date().toISOString(),
-  primary_window: '실행 시점 기준 최근 24시간 (KST), 부족분은 날짜가 표시된 전날(어제) 유관·배경 자료',
+  primary_window: '실행 시점 기준 최근 24시간 (KST), 부족분은 날짜가 표시된 어제·오늘 유관·배경 자료',
   research_method: '4 media research stages + independent CRO quality-gate synthesis',
   source_mix: {
     media: allNews.filter((item) => item.source_type === 'media').length,
