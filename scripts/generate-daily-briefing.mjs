@@ -83,7 +83,7 @@ function extractSourceData(response) {
             sourceMap.set(key, {
               url: value.url,
               title: String(value.title || '').trim(),
-              published: String(value.published_date || value.publish_date || value.date || value.published || '').trim()
+              published: String(value.publishedAt || value.datePublished || value.publishDate || value.published_date || value.publish_date || value.created || value.date || value.published || '').trim()
             });
           }
         }
@@ -974,14 +974,13 @@ async function verifyUndatedSourceDates() {
         if (isLikelyListingUrl(sd.url)) continue;
         const published = sd.published || researchedDateByUrl.get(key) || '';
         if (parsePublishedKst(published).date) continue; // 이미 날짜 있음
-        const title = sd.title || researchedTitleByUrl.get(key) || '';
-        if (!title || title.length < 5) continue; // 제목 없는 건 검증 가치 낮음
+        const title = sd.title || researchedTitleByUrl.get(key) || '(제목없음)';
         undated.push({ url: researchedUrlByCanonical.get(key), title, stage });
       } catch {}
     }
   }
   if (undated.length === 0) return;
-  const targets = undated.slice(0, 15); // 비용 제한: 최대 15개만 검증
+  const targets = undated.slice(0, 20); // 비용 제한: 최대 20개만 검증
   const list = targets.map((t, i) => `${i + 1}. ${t.title} (${t.url})`).join('\n');
   try {
     const body = await requestOpenAi('Backfill date verification', {
