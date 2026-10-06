@@ -467,6 +467,7 @@ primary 후보가 부족하면 맥락 이해에 직접 필요한 최근 7일 이
 [{"url":"실제URL","title":"원문 기사의 실제 헤드라인","published":"게시일시(YYYY-MM-DD 또는 YYYY-MM-DD HH:MM)"}]
 [[/SOURCE_METADATA]]
 title은 반드시 원문 기사의 실제 헤드라인을 그대로 적어라. "금융권 동향관련보도" 같은 요약형 제목을 만들지 마라. published는 반드시 정확한 게시일시를 적어라. 이 메타데이터는 후보 선정에 직접 사용되므로 정확성이 매우 중요하다.
+모든 후보 기사에 게시일시를 반드시 정확히 적어라. 게시일시를 확인할 수 없는 기사는 후보에서 제외하라. 날짜가 없는 후보는 최종 선정에서 자동 제외되므로, 반드시 각 후보의 실제 게시일시를 SOURCE_METADATA에 포함하라. 최근 7일 이내 기사가 부족하면, 검색을 더 수행해서 최근 7일 이내 기사를 추가로 찾아라. 후보 수를 채우기 위해 날짜 없는 기사나 오래된 기사를 넣지 마라.
 `;
 
 const koreanMediaDomains = [
@@ -741,9 +742,9 @@ async function researchStage(label, scope, allowedDomains, minimumSources = 4) {
         search_context_size: 'high',
         ...(allowedDomains && allowedDomains.length > 0 ? { filters: { allowed_domains: allowedDomains } } : {}),
         user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' }
-      }],
-      max_tool_calls: 4,
-      include: ['web_search_call.action.sources'],
+              }],
+              max_tool_calls: 6,
+              include: ['web_search_call.action.sources'],
       store: false,
       reasoning: { effort: 'low' },
       text: { verbosity: 'medium' },
@@ -944,6 +945,64 @@ function getResearchedMeta(itemUrl) {
 }
 
 console.log(`Extracted ${researchedTitleByUrl.size} article titles and ${researchedDateByUrl.size} article dates from research sources.`);
+// ===== B: 날짜 미확인 후보 일괄 검증 — 최근 7일 기사 풀을 확대한다. =====
+// 연구가 URL은 많이 모았지만 날짜가 비어 있어 백필에서 제외되는 후보를,
+// 한 번의 LLM(web_search) 호출로 일괄 검증해 최근 7일이면 풀에 살린다.
+async function verifyUndatedSourceDates() {
+  const undated = [];
+  const seen = new Set();
+  for (const [stage, evidence] of Object.entries(researchEvidence)) {
+    for (const sd of evidence.source_data || []) {
+      try {
+        const key = canonicalUrlKey(sd.url);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (!researchedUrlByCanonical.has(key)) continue;
+        if (previousCanonicalUrls.has(key)) continue;
+        if (isLikelyListingUrl(sd.url)) continue;
+        const published = sd.published || researchedDateByUrl.get(key) || '';
+        if (parsePublishedKst(published).date) continue; // 이미 날짜 있음
+        const title = sd.title || researchedTitleByUrl.get(key) || '';
+        if (!title || title.length < 5) continue; // 제목 없는 건 검증 가치 낮음
+        undated.push({ url: researchedUrlByCanonical.get(key), title, stage });
+      } catch {}
+    }
+  }
+  if (undated.length === 0) return;
+  const targets = undated.slice(0, 15); // 비용 제한: 최대 15개만 검증
+  const list = targets.map((t, i) => `${i + 1}. ${t.title} (${t.url})`).join('\n');
+  try {
+    const body = await requestOpenAi('Backfill date verification', {
+      model,
+      input: `다음 기사들의 게시일시를 웹 검색으로 확인하라. 각 기사가 최근 7일 이내(오늘 ${date} KST 기준) 게시되었는지 판단하라.\n\n${list}\n\n각 항목에 대해 다음 형식으로만 답하라:\n번호. URL | 게시일시(YYYY-MM-DD) 또는 '오래됨' 또는 '확인불가'`,
+      tools: [{ type: 'web_search', search_context_size: 'high', user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' } }],
+      max_tool_calls: 8,
+      include: ['web_search_call.action.sources'],
+      store: false,
+      reasoning: { effort: 'low' },
+      text: { verbosity: 'medium' },
+      max_output_tokens: 6000
+    });
+    const text = extractOutputText(body);
+    let verified = 0;
+    for (const line of String(text || '').split('\n')) {
+      const dm = line.match(/(\d{4})-(\d{2})-(\d{2})/);
+      const um = line.match(/https?:\/\/[^\s|]+/);
+      if (!dm || !um) continue;
+      try {
+        const key = canonicalUrlKey(um[0]);
+        if (researchedUrlByCanonical.has(key) && !researchedDateByUrl.has(key)) {
+          researchedDateByUrl.set(key, `${dm[1]}-${dm[2]}-${dm[3]}`);
+          verified += 1;
+        }
+      } catch {}
+    }
+    console.log(`Date verification: checked ${targets.length} undated sources, verified ${verified} recent dates.`);
+  } catch (e) {
+    console.warn(`Date verification failed (continuing): ${e.message}`);
+  }
+}
+await verifyUndatedSourceDates();
 function buildSynthesisPrompt() {
   return `
 당신은 우리금융그룹 전체 CRO를 지원하는 전략 비서 CRO STAFF다. 실행일은 ${date} KST다.
