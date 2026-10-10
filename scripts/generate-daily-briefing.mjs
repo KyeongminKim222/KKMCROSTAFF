@@ -1200,7 +1200,7 @@ function dedupeCandidateNews(candidate) {
       const parsedPublished = parsePublishedKst(item.published);
       if (!parsedPublished.date) continue; // 날짜를 확인할 수 없는 기사는 fallback에서도 제외
       const daysDiff = (now - parsedPublished.date) / (1000 * 60 * 60 * 24);
-      if (!isRecentWithinDaysKst(item.published, 7)) continue; // 최근 7일 fallback에 포함
+      if (!isRecentWithinDaysKst(item.published, 3)) continue; // 최근 3일 fallback에 포함
       seen.add(normalizedKey);
       item.source_type = isOfficialUrl(item.url) ? 'official' : 'media';
       keptItems.push(item);
@@ -1242,7 +1242,7 @@ function pruneCandidateNews(candidate) {
       if (!parsedPublished.date) continue;
       const hoursDiff = (now - parsedPublished.date) / (1000 * 60 * 60);
       const daysDiff = hoursDiff / 24;
-      if (!isRecentWithinDaysKst(item.published, 7)) continue; // 최근 7일 유지
+      if (!isRecentWithinDaysKst(item.published, 3)) continue; // 최근 3일 유지
       if (item.window === 'primary' && hoursDiff > 36) item.window = 'related';
       if (item.window === 'primary' && !parsedPublished.hasTime && daysDiff > 1) item.window = 'related';
       seen.add(verifiedKey);
@@ -1622,7 +1622,7 @@ function buildBackfillPool() {
         const title = sd.title || researchedTitleByUrl.get(key) || '';
         const published = sd.published || researchedDateByUrl.get(key) || '';
         // 품질 게이트: 최근 7일 이내 기사만 백필에 포함. 어제·오늘=primary, 그 외 최근=related.
-        if (!isRecentWithinDaysKst(published, 7)) continue;
+        if (!isRecentWithinDaysKst(published, 3)) continue;
         seen.add(key);
         pool.push({
           url: researchedUrlByCanonical.get(key),
@@ -1842,7 +1842,7 @@ for (const key of ['critical', 'daily_news', 'subsidiary_news', 'additional_news
       console.log(`Dropped article with unverifiable date: ${it.title || it.url}`);
       continue;
     }
-    if (!isRecentWithinDaysKst(it.published, 7)) {
+    if (!isRecentWithinDaysKst(it.published, 3)) {
       console.log(`Dropped non-recent article: ${it.title || it.url}`);
       continue;
     }
@@ -1872,7 +1872,7 @@ briefing.meta = {
   mode: 'daily',
   briefing_date: date,
   generated_at: new Date().toISOString(),
-  primary_window: '어제·오늘(KST) 우선, 부족 시 최근 7일 이내 유관·배경 자료',
+  primary_window: '어제·오늘(KST) 우선, 부족 시 최근 3일 이내 유관·배경 자료',
   research_method: '4 media research stages + independent CRO quality-gate synthesis',
   source_mix: {
     media: allNews.filter((item) => item.source_type === 'media').length,
