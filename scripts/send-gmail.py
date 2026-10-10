@@ -32,6 +32,14 @@ meta = briefing.get("meta", {})
 date = meta.get("briefing_date", "")
 headline = briefing.get("insights", {}).get("headline") or briefing.get("executive_judgment", "오늘의 CRO STAFF 브리핑")
 
+# ===== 안전장치: 기사가 너무 적으면 28명에게 발송하지 않는다 =====
+# 얇은(1~2건) 브리핑이 전 수신자에게 가는 사고(2026-10-11) 재발 방지.
+MIN_TO_SEND = 5
+article_count = sum(len(briefing.get(k, [])) for k in ("critical", "daily_news", "subsidiary_news", "additional_news"))
+if article_count < MIN_TO_SEND:
+    print(f"SKIPPED email to recipients: only {article_count} articles (below MIN_TO_SEND={MIN_TO_SEND}). Not broadcasting to {len(recipients)} recipients.")
+    raise SystemExit(0)
+
 URGENCY_COLOR = {"높음": "#d92d20", "중간": "#dc6803", "낮음": "#667085"}
 
 
