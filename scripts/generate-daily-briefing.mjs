@@ -1047,8 +1047,8 @@ function buildSynthesisPrompt() {
 - 전체 기사 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 60% 이상 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 나머지 비중으로 선정한다.
 - 공식자료는 사실과 수치 검증에 적극 활용하되, 같은 사건의 언론기사가 있으면 독자가 맥락과 파급효과를 이해할 수 있는 언론기사를 대표 원문으로 우선 선정한다.
 - Gumloop 예시처럼 연합뉴스, 주요 경제지·금융 전문매체 및 Reuters·Bloomberg·FT·CNBC 등 신뢰도 높은 일반기사가 브리핑의 중심이 되어야 한다.
-- 모든 기사는 게시일시가 확인된 어제·오늘 기사만 사용하라. 어제·오늘을 초과했거나 게시일시를 확인할 수 없는 기사는 절대 선택하지 마라. - critical 기사는 실행 시점 기준 최근 36시간 이내 기사이면 window를 primary로 표시하라. 최근 36시간 이내의 검증 가능한 핵심 기사가 부족하면 어제·오늘의 중요 기사도 critical에 넣을 수 있으며, 이 경우 반드시 window를 related로 표시하라. 36시간을 넘긴 기사를 primary로 표시하지 마라. - published 필드에는 확인 가능한 게시일시를 KST 기준으로 적어라.
-- daily_news와 subsidiary_news를 채우기 위해 related로 표시하는 기사는 어제·오늘여야 하며, 전체 기사 중 related는 최대 8건까지 허용한다.
+- 모든 기사는 게시일시가 확인된 최근 3일(KST) 이내 기사만 사용하라. 어제·오늘 기사를 우선하되, 10건을 채우지 못하면 최근 3일 이내 기사로 채워라. 3일을 초과했거나 게시일시를 확인할 수 없는 기사는 절대 선택하지 마라. - critical 기사는 실행 시점 기준 최근 36시간 이내 기사이면 window를 primary로 표시하라. 최근 36시간 이내의 검증 가능한 핵심 기사가 부족하면 어제·오늘의 중요 기사도 critical에 넣을 수 있으며, 이 경우 반드시 window를 related로 표시하라. 36시간을 넘긴 기사를 primary로 표시하지 마라. - published 필드에는 확인 가능한 게시일시를 KST 기준으로 적어라.
+- daily_news와 subsidiary_news를 채우기 위해 related로 표시하는 기사는 최근 3일 이내여야 하며, 전체 기사 중 related는 최대 8건까지 허용한다.
 - "오늘자 검증 가능한 기사 없음" 같은 placeholder 문구를 title이나 다른 필드에 넣지 마라. 절대로 가짜 기사를 만들지 마라. 조사 근거 URL 목록에 없는 URL을 사용하지 마라. 10건을 채우기 위해 존재하지 않는 기사를 지어내지 마라. 그런 항목을 만들 수 없으면 조사 근거 안에서 실제로 존재하는 다른 기사로 대체하거나, additional_news에 한해서만 해당 카테고리를 빈 배열로 남긴다.
 - 동일 사건과 동일 URL을 제거하고 대표 원문 하나만 남긴다. 서로 다른 매체가 같은 사건(예: 같은 날 발표된 같은 통계, 같은 기관의 같은 공지, 같은 기업의 같은 이슈)을 각자 보도한 경우, URL이 다르더라도 반드시 동일 사건으로 간주하여 가장 상세하고 신뢰도 높은 원문 하나만 남기고 나머지는 절대 선택하지 마라. 예를 들어 "카드론 금리 상승"처럼 같은 주제를 다룬 여러 매체의 기사를 daily_news에 중복 포함시키지 마라. - 통화안정증권 경쟁입찰·정례모집, 금융위·한국은행·금감원 정기 보도자료, 기관 공식 보도자료는 절대 선정하지 마라. 오직 기자가 작성한 언론기사만 선정하라.
 - critical, daily_news, subsidiary_news, additional_news 네 카테고리를 통틀어 같은 URL이나 같은 게시물 번호(seq, id 등)를 가진 기사를 두 번 이상 선택하지 마라. 카테고리를 넘나드는 중복도 동일 사건 중복으로 간주하고 반드시 제거하라.
@@ -1065,7 +1065,11 @@ CRO 품질 게이트:
 - 영향 전파 속도, 영향 범위, 대응 가능 시간, 규제기관 관심으로 긴급도를 판단한다.
 - 기사 간 연결고리, 리스크 전이 경로, 오늘 확인할 지표·질문, 단기 모니터링 포인트를 도출한다.
 - 모든 문장은 예외 없이 정중한 합니다체를 사용한다. '한다·이다·있다·된다·필요하다·전망된다' 같은 해라체 종결은 금지하고 '합니다·입니다·있습니다·됩니다·필요합니다·전망됩니다'로 쓴다.
-- executive_judgment_bullets는 Gumloop 예시처럼 3~4개로 작성한다. 각 항목은 (1) 무슨 변화가 확인되었는지 (2) 그 핵심 수치·맥락은 무엇인지 (3) 그룹 리스크 관점에서 어떤 의미인지를 자연스럽게 이어지는 2문장의 완결된 문장으로 서술한다. "확인된 변화는", "핵심 수치는" 같은 정형화된 라벨 단어를 문장 맨 앞에 그대로 반복해서 쓰지 말고, 자연스러운 문장으로 풀어서 작성한다. executive_judgment에는 이 판단을 충분한 문단으로 종합한다.
+- executive_judgment_bullets는 Gumloop 예시처럼 3~4개로 작성한다. 각 항목은 (1) 무슨 변화가 확인되었는지 (2) 그 핵심 수치·맥락은 무엇인지 (3) 그룹 리스크 관점에서 어떤 의미인지를 자연스럽게 이어지는 2문장의 완결된 문장으로 서술한다. "확인된 변화는", "핵심 수치는" 같은 정형화된 라벨 단어를 문장 맨 앞에 그대로 반복해서 쓰지 말고, 자연스러운 문장으로 풀어서 작성한다. executive_judgment에는 이 판단을 충분한 문단으로 종합한다. executive_judgment와 bullets·insights는 CRO가 읽는 결론 문장이다. '검증 가능한 풀', '조사 근거', '기사가 부족', '엄격히 적용하면', '확인된 기사만' 등 브리핑 작성 과정·데이터 수집 상황에 대한 언급을 절대 쓰지 말고, 첫 문장부터 오늘 가장 중요한 리스크 판단으로 시작하라.
+- 같은 회사(예: 하나금융, KB금융, 신한금융, BNK금융, IBK기업은행)에 대한 기사는 전체 브리핑에서 1건만 선택하라. 실적 기사와 그 실적에 대한 증권사 분석 기사도 같은 사건으로 본다.
+- 정치인 발언 모음, 선거·정쟁, 칼럼·사설·인터뷰성 기사는 선택하지 마라. 유가·금리·환율 리스크는 시장 데이터·중앙은행 결정을 직접 다룬 기사를 우선하라.
+- 증권사·신용평가사 분석을 인용할 때는 summary에 '○○증권은 …라고 분석했습니다'처럼 분석 주체를 반드시 밝히고, 회사가 직접 밝힌 사실처럼 쓰지 마라.
+- summary·why_woori_cro·watchpoints에 URL, 마크다운 링크, 괄호 속 도메인 표기를 넣지 마라.
 - 각 기사 summary는 3~5문장으로 작성한다. 첫 문장에서 매체명과 게시일을 밝히고, 이후 핵심 수치·당사자·발생 경위·현재 상태를 원문 범위 안에서 구체적으로 설명한다. 단순 헤드라인 재진술이나 2문장 요약은 금지한다.
 - why_woori_cro는 2~3문장으로 작성한다. 우리은행 또는 관련 계열사에 미치는 자본·유동성·신용·시장·운영·준법·평판·전략 영향과 30~90일 의사결정 포인트를 구체적으로 연결한다.
 - watchpoints는 기사마다 2~3개를 제시한다. 기관 발표 일정, 비율·스프레드·연체율·충당금·한도 등 실제로 확인할 지표나 질문으로 작성한다.
@@ -1859,6 +1863,48 @@ for (const key of ['critical', 'daily_news', 'subsidiary_news', 'additional_news
     kept.push(it);
   }
   briefing[key] = kept;
+}
+
+// ── 최종 품질 후처리: 마크다운 링크 제거, 메타 문장 제거, 같은 회사 중복 제거, 빈 entity 보정 ──
+const MD_LINK_RE = /\s*\(\[[^\]]*\]\([^)]*\)\)|\[([^\]]*)\]\((https?:[^)]*)\)/g;
+const cleanText = (v) => typeof v === 'string'
+  ? v.replace(MD_LINK_RE, (m, label) => (label ? label : '')).replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim()
+  : v;
+const META_PATTERNS = ['검증 가능한', '검증 가능', '조사 근거', '기사 풀', '기사가 부족', '엄격히 적용', '확인된 어제·오늘 기사', '생각보다 좁'];
+const dropMetaSentences = (text) => {
+  if (typeof text !== 'string') return text;
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  const kept = sentences.filter((sentence) => !META_PATTERNS.some((p) => sentence.includes(p)));
+  return (kept.length ? kept : sentences).join(' ').replace(/^(그럼에도 불구하고|그럼에도|하지만|다만),?\s*/, '').trim();
+};
+briefing.executive_judgment = dropMetaSentences(cleanText(briefing.executive_judgment));
+briefing.executive_judgment_bullets = (briefing.executive_judgment_bullets || []).map((b) => dropMetaSentences(cleanText(b)));
+if (briefing.insights) {
+  briefing.insights.headline = dropMetaSentences(cleanText(briefing.insights.headline));
+  briefing.insights.bullets = (briefing.insights.bullets || []).map((b) => dropMetaSentences(cleanText(b)));
+}
+const COMPANY_KEYS = ['하나금융', 'KB금융', '신한금융', 'BNK금융', 'DGB금융', 'iM금융', 'JB금융', 'NH농협금융', 'IBK기업은행', '카카오뱅크', '케이뱅크', '토스뱅크', '한국금융지주'];
+const companyOf = (item) => {
+  const t = String(item.title || '').replace(/하나은행/g, '하나금융').replace(/KB국민은행|국민은행/g, 'KB금융').replace(/신한은행/g, '신한금융').replace(/기업은행/g, 'IBK기업은행').replace(/IBKIBK/g, 'IBK');
+  return COMPANY_KEYS.find((k) => t.includes(k)) || '';
+};
+const seenCompanies = new Set();
+for (const key of ['critical', 'subsidiary_news', 'daily_news', 'additional_news']) {
+  briefing[key] = (briefing[key] || []).filter((item) => {
+    for (const f of ['summary', 'why_woori_cro']) item[f] = cleanText(item[f]);
+    if (Array.isArray(item.watchpoints)) item.watchpoints = item.watchpoints.map(cleanText);
+    const company = companyOf(item);
+    if (!item.entity && company) item.entity = company;
+    if (!item.channel) item.channel = key === 'subsidiary_news' ? '우리금융그룹 계열사' : (company ? '경쟁사 동향' : '금융시장');
+    if (company && key !== 'subsidiary_news') {
+      if (seenCompanies.has(company)) {
+        console.log(`Dropped same-company duplicate (${company}): ${item.title}`);
+        return false;
+      }
+      seenCompanies.add(company);
+    }
+    return true;
+  });
 }
 briefing.critical.forEach((item) => { item.critical = true; });
 briefing.daily_news.forEach((item) => { item.critical = false; });
