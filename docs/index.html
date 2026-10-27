@@ -1032,7 +1032,7 @@ body.chat-open .chat-fab { display: none; }
 @media(max-width:859px){.chat-robot,.chat-robot img.rf{width:132px;height:132px}}
 @media(prefers-reduced-motion:reduce){.chat-robot,.chat-robot.is-talk{animation:none!important}}
 </style>
-</head>
+<style id="herologo-off">.hero-logo{display:none!important}</style></head>
 <body>
   <div id="app"></div>
   <script>
@@ -1669,7 +1669,6 @@ function renderHero(data, groups, counts) {
   return [
     '<section class="hero" id="top">',
     '  <div class="hero-photo" aria-hidden="true"></div>',
-    '  <div class="hero-logo" aria-hidden="true"><div class="wrap"><img src="./assets/woori_group_kr_white.png" alt=""></div></div>',
     '  <div class="wrap hero-inner">',
     '    <p class="hero-kicker">Woori Financial Group · Risk Management</p>',
     '    <h1 class="hero-title">일일 리스크 브리핑</h1>',
