@@ -464,8 +464,7 @@ def build_html(ed):
           <tr><td style="padding:0 0 10px;font-family:{FONT};color:{INK}">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
               {sections_html}
-              <!-- (5) 푸터 CTA -->
-              <tr><td style="padding:22px 20px 6px">{cta_button(this_report_url, on_dark=False)}</td></tr>
+              <!-- (5) 푸터 안내 (CTA 버튼은 최상단 1개만) -->
               <tr><td align="center" style="padding:0 20px 14px;font-family:{FONT};font-size:11.5px;color:{MUTED};line-height:1.6">기사 요약·시사점·체크포인트는 웹 리포트에서 확인</td></tr>
             </table>
           </td></tr>
