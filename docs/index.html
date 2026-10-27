@@ -1000,11 +1000,11 @@ body.chat-open .chat-fab { display: none; }
 @keyframes rb-idle{0%,100%{transform:translateY(0) rotate(0)}8%{transform:translateY(-14px) rotate(-2deg)}16%{transform:translateY(0) rotate(1.5deg)}22%{transform:translateY(-7px) rotate(0)}30%,70%{transform:translateY(0) rotate(0)}78%{transform:translateY(-4px) rotate(2deg)}86%{transform:translateY(0) rotate(-1deg)}}
 .chat-robot.is-talk{animation:rb-talk .9s ease-in-out 2}
 @keyframes rb-talk{0%,100%{transform:translateY(0) scale(1)}35%{transform:translateY(-18px) scale(1.04)}65%{transform:translateY(0) scale(.99)}}
-.chat-bubble{position:absolute;right:6px;bottom:100%;margin-bottom:4px;width:max-content;max-width:240px;box-sizing:border-box;background:#fff;color:#0B2A4A;font-size:14px;font-weight:700;line-height:1.45;padding:11px 15px;border-radius:18px 18px 4px 18px;border:1px solid #D7E3F0;box-shadow:0 10px 26px rgba(6,27,51,.2);opacity:0;transform:translateY(8px) scale(.92);transform-origin:100% 100%;transition:opacity .25s,transform .25s;pointer-events:none;white-space:normal;word-break:keep-all;text-align:left}
-.chat-bubble.on{opacity:1;transform:none}
-.chat-bubble::after{content:"";position:absolute;right:46px;bottom:-7px;width:12px;height:12px;background:#fff;border-right:1px solid #D7E3F0;border-bottom:1px solid #D7E3F0;transform:rotate(45deg)}
-.chat-fab:hover .chat-bubble{opacity:1;transform:none}
-@media(max-width:859px){.chat-robot,.chat-robot img{width:128px}.chat-bubble{max-width:190px;font-size:13px}}
+.fab-speech{position:absolute;right:6px;bottom:100%;margin-bottom:4px;width:max-content;max-width:240px;box-sizing:border-box;background:#fff;color:#0B2A4A;font-size:14px;font-weight:700;line-height:1.45;padding:11px 15px;border-radius:18px 18px 4px 18px;border:1px solid #D7E3F0;box-shadow:0 10px 26px rgba(6,27,51,.2);opacity:0;transform:translateY(8px) scale(.92);transform-origin:100% 100%;transition:opacity .25s,transform .25s;pointer-events:none;white-space:normal;word-break:keep-all;text-align:left}
+.fab-speech.on{opacity:1;transform:none}
+.fab-speech::after{content:"";position:absolute;right:46px;bottom:-7px;width:12px;height:12px;background:#fff;border-right:1px solid #D7E3F0;border-bottom:1px solid #D7E3F0;transform:rotate(45deg)}
+.chat-fab:hover .fab-speech{opacity:1;transform:none}
+@media(max-width:859px){.chat-robot,.chat-robot img{width:128px}.fab-speech{max-width:190px;font-size:13px}}
 @media(prefers-reduced-motion:reduce){.chat-robot,.chat-robot.is-talk{animation:none!important}}
 /* 계열사 로고: 세로로 쌓기 */
 .ltab-logos,.ltab-logos.n2,.ltab-logos.n3{flex-direction:column!important;flex-wrap:nowrap!important;gap:5px!important;align-items:center}
@@ -1283,7 +1283,7 @@ document.addEventListener('DOMContentLoaded', function () {
     '  <div class="foot-text" id="footText"><b>우리금융그룹 리스크관리부문 · CRO Staff</b> · 내부 참고용</div>',
     '</div></footer>',
     '<button type="button" class="chat-fab" id="chatFab" aria-label="AI에게 질문" aria-expanded="false" aria-controls="chatPanel">',
-    '  <span class="chat-fab-label" id="chatFabLabel">리스크 AI에게 질문</span><span class="chat-bubble" id="chatBubble" aria-hidden="true"></span>',
+    '  <span class="chat-fab-label" id="chatFabLabel">리스크 AI에게 질문</span><span class="fab-speech" id="chatBubble" aria-hidden="true"></span>',
     '  <span class=\"chat-robot\" aria-hidden=\"true\"><img class=\"rf on\" data-f=\"idle\" alt=\"\" src=\"./assets/char/idle.webp\" width=\"168\" height=\"168\" draggable=\"false\"><img class=\"rf\" data-f=\"blink\" alt=\"\" src=\"./assets/char/blink.webp\" width=\"168\" height=\"168\" draggable=\"false\"><img class=\"rf\" data-f=\"talk\" alt=\"\" src=\"./assets/char/talk.webp\" width=\"168\" height=\"168\" draggable=\"false\"><img class=\"rf\" data-f=\"wave\" alt=\"\" src=\"./assets/char/wave.webp\" width=\"168\" height=\"168\" draggable=\"false\"></span>',
     '</button>',
     '<div class="chat-panel" id="chatPanel" role="dialog" aria-label="AI에게 질문" aria-hidden="true"></div>'
@@ -1443,7 +1443,7 @@ function groupNews(data) {
 function splitSentences(text) {
   var raw = String(text || '').trim();
   if (!raw) return [];
-  var parts = raw.split(/(?<=[.?!])\s+/).map(function (x) { return x.trim(); }).filter(Boolean);
+  var parts = raw.replace(/([.?!])\s+/g,'$1').split('').map(function (x) { return x.trim(); }).filter(Boolean);
   return parts;
 }
 
