@@ -1,151 +1,177 @@
-import { readFile, writeFile } from 'node:fs/promises';
+// =====================================================================================
+// CRO STAFF 데일리 브리핑 생성 파이프라인 (v3-sectors)
+//
+// 목표: 실패 없이, 고품질로, 매일 '전체본 1 + 업권본 5'를 만든다.
+//   - 공통(그룹 공통, sector=group): 7건(6~8). 지주 관점 — 감독당국·거시·지주·경쟁 금융그룹·해외법인 소재국.
+//   - 업권(bank / card_capital / savings / insurance / securities_am): 각 3건(2~4). 해당 계열사 관점.
+//   - 총량 약 20~23건. 업권 정의는 config/sectors.json 이 가진다 (코드가 읽는다).
+//
+// 단계 개요
+//   0. 설정·환경변수 로드 (OPENAI_MODEL_RESEARCH / SCORING / WRITING, DRY_RUN, FORCE_REGENERATE) + sectors.json
+//   1. 이전 브리핑 이력 로드 (public/briefing_history/*.json + public/briefing.json, 최근 3개; 공통+업권 기사 모두)
+//   2. 수집: researchStage() 8회 = 기존 5 (국내 언론 / 우리금융 계열사 / 경쟁사 / 글로벌 / 감독당국·공식자료)
+//      + 업권 3 (여전·저축은행 / 보험 / 증권·운용; sectors.json 의 keywords·companies·sources_hint 를 프롬프트에 주입)
+//      → 각 stage는 조사 메모 + [[SOURCE_METADATA]] (url,title,published) 를 돌려준다.
+//   3. 날짜 검증: published가 비어 있는 후보를 web_search 1회로 보강한다.
+//   4. 채점(CRO scoring): 후보 전체를 LLM이 채점한다 (axis / sector / score / event_key / promo·political 플래그 /
+//      one_line_fact / cro_hook / sector_hook). json_schema strict. 실패 시 휴리스틱 채점으로 대체한다.
+//   5. 확정(selectArticles): 코드가 결정론적으로 선정한다.
+//      공통: sector=group 후보 → 3일 윈도우 → promo·political·저점수 제외 → 사건 중복 제거(event_key+제목 유사도,
+//            이전 3개 브리핑과 비교) → 축별 슬롯 보장 → 점수순 채움(목표 7, 최소 6, 최대 8, 글로벌 단독 ≤2)
+//            → 폴백 사다리(4일 윈도우 → 점수 임계 25 → 업권 고득점 기사 승격) → critical 판정(≤2) → 카테고리 배치.
+//      업권: sector=X 후보 중 공통에 안 들어간 것 → 같은 필터·중복 제거(공통/다른 업권 선정분과도 비교)
+//            → 자사 계열사 기사 1건 우선 → 점수순(목표 3, 최소 2, 최대 4) → 폴백 사다리(4일 → 임계 25)
+//            → 그래도 부족하면 적게 싣고 meta.sector_shortfall[sector] 기록. score≥90 & severity 면 섹션 내 critical:true.
+//   6. 작성(CRO writing): 공통 1회(summary / why_woori_cro / watchpoints / executive_judgment / insights 등)
+//      + 업권 2회 묶음 호출(bank+card_capital+savings / insurance+securities_am; 기사 작성 + sector judgment 2문장).
+//      각 호출은 json_schema strict. 품질 위반(금지어·해라체·누락) 시 해당 호출만 1회 재요청, 그래도 실패하면
+//      one_line_fact / cro_hook / sector_hook 으로 코드가 조립한다 (실패 종료 금지).
+//   7. 후처리: 마크다운·URL 제거, 금지어 문장 제거, url/title/published 강제 덮어쓰기, 플래그 정리.
+//   8. 메타·이력: meta(pipeline_version, slots, sector_counts, sector_shortfall, models, usage, changes) 기록,
+//      public/briefing.json 저장, public/briefing_history/<date>.json 사본 저장(30일 유지).
+//
+// 출력 JSON (하위 호환):
+//   - 기존 최상위 키(executive_judgment, critical, daily_news, subsidiary_news, additional_news, insights …)에는
+//     **공통 기사만** 들어간다. 기존 웹/메일은 그대로 전체본의 공통부를 렌더한다. newsItem 에 sector/sector_hook 추가.
+//   - 신규 `sectors`: { bank: {label_ko, label_en, companies, judgment, news[], shortfall_reason}, card_capital, … }
+//   - 신규 `editions`: [{id:'all', label_ko:'전체본', sections:['common','bank',…]}, {id:'bank', sections:['common','bank']}, …]
+//
+// 테스트: DRY_RUN=1 이면 OpenAI 호출을 scripts/dry-run-fixtures.mjs 의 목 응답으로 대체하고
+//         결과를 public/briefing.dryrun.json 에 저장한다 (briefing.json은 건드리지 않는다).
+// =====================================================================================
 
+import { readFile, writeFile, mkdir, readdir, unlink } from 'node:fs/promises';
+
+// ---------------------------------------------------------------------------------
+// 0. 설정 · 환경변수
+// ---------------------------------------------------------------------------------
+const DRY_RUN = process.env.DRY_RUN === '1';
+const FORCE_REGENERATE = process.env.FORCE_REGENERATE === '1';
 const apiKey = process.env.OPENAI_API_KEY || '';
-const model = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
-// ==== 비용/사용량 추적 ====
-const __usage = { input: 0, output: 0, calls: 0 };
-const __RATES = {
+const baseModel = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
+const MODELS = {
+  research: process.env.OPENAI_MODEL_RESEARCH || baseModel,
+  scoring: process.env.OPENAI_MODEL_SCORING || 'gpt-5.4-mini',
+  writing: process.env.OPENAI_MODEL_WRITING || 'gpt-5.4',
+  writing_fallback: baseModel
+};
+const cooldownMilliseconds = DRY_RUN ? 0 : Number(process.env.OPENAI_COOLDOWN_MS || 30_000);
+
+const outputPath = new URL(DRY_RUN ? '../public/briefing.dryrun.json' : '../public/briefing.json', import.meta.url);
+const liveBriefingPath = new URL('../public/briefing.json', import.meta.url);
+const historyDir = new URL('../public/briefing_history/', import.meta.url);
+
+// 공통(그룹 공통) 확정 목표
+const COMMON_TARGET = 7;
+const COMMON_MIN = 6;
+const COMMON_MAX = 8;
+const HIGH_VALUE_SCORE = 80; // 목표를 넘겨 최대치까지 추가하는 기준
+const MAX_GLOBAL_ONLY = 2; // 공통 7건 중 글로벌 단독 기사 상한 (v2의 10건 중 3건과 같은 비율)
+const MAX_CRITICAL = 2;
+const PROMOTE_MIN_SCORE = 70; // 공통이 최소치에 못 미칠 때 업권 후보를 공통으로 승격하는 하한
+// 업권별 확정 목표
+const SECTOR_TARGET = 3;
+const SECTOR_MIN = 2;
+const SECTOR_MAX = 4;
+const SECTOR_CRITICAL_SCORE = 90; // 업권 섹션 내 critical 표시 기준 (score≥90 & severity_flag)
+const CATEGORY_CAPS = { critical: 2, daily_news: 8, subsidiary_news: 5, additional_news: 3 };
+const HISTORY_RETENTION_DAYS = 30;
+const HISTORY_COMPARE_COUNT = 3;
+const PIPELINE_VERSION = 'v3-sectors';
+
+if (!DRY_RUN && !apiKey.startsWith('sk-')) throw new Error('OPENAI_API_KEY is missing.');
+
+// ==== 업권 정의 (config/sectors.json) ====
+const sectorConfig = JSON.parse(await readFile(new URL('../config/sectors.json', import.meta.url), 'utf8'));
+const GROUP_DEF = sectorConfig.group;
+const SECTORS = sectorConfig.sectors; // 순서 = 출력 순서
+const SECTOR_IDS = SECTORS.map((s) => s.id);
+const SECTOR_ENUM = ['group', ...SECTOR_IDS];
+const sectorById = Object.fromEntries(SECTORS.map((s) => [s.id, s]));
+const SECTOR_WRITING_BATCHES = [['bank', 'card_capital', 'savings'], ['insurance', 'securities_am']]
+  .map((ids) => ids.filter((id) => sectorById[id]));
+for (const id of SECTOR_IDS) if (!SECTOR_WRITING_BATCHES.some((b) => b.includes(id))) SECTOR_WRITING_BATCHES[SECTOR_WRITING_BATCHES.length - 1].push(id);
+const EDITIONS = [
+  { id: 'all', label_ko: GROUP_DEF.edition_label_ko || '전체본', sections: ['common', ...SECTOR_IDS] },
+  ...SECTORS.map((s) => ({ id: s.id, label_ko: s.edition_label_ko || `${s.label_ko}본`, sections: ['common', s.id] }))
+];
+function sectorLabel(id) { return id === 'group' ? GROUP_DEF.label_ko : (sectorById[id]?.label_ko || id); }
+function sectorCompanies(id) { return id === 'group' ? GROUP_DEF.companies : (sectorById[id]?.companies || []); }
+
+// ==== 비용/사용량 추적 (모델별) ====
+const usageByModel = {};
+const RATES = {
   'gpt-5.4-mini': { in: 0.75, out: 4.50 },
   'gpt-5.4': { in: 2.50, out: 15.00 },
   'gpt-5.5': { in: 5.00, out: 30.00 },
   'gpt-5.5-pro': { in: 30.00, out: 180.00 }
 };
-function __rateFor(m) {
-  const r = __RATES[m] || __RATES['gpt-5.4'];
-  return r;
+function recordUsage(model, usage) {
+  const slot = usageByModel[model] ||= { input: 0, output: 0, calls: 0 };
+  slot.input += Number(usage?.input_tokens || usage?.prompt_tokens || 0);
+  slot.output += Number(usage?.output_tokens || usage?.completion_tokens || 0);
+  slot.calls += 1;
 }
-function __logUsage() {
-  const r = __rateFor(model);
-  const cost = (__usage.input / 1e6) * r.in + (__usage.output / 1e6) * r.out;
-  console.log(`[COST] model=${model} calls=${__usage.calls} input_tokens=${__usage.input} output_tokens=${__usage.output} estimated_cost_usd=${cost.toFixed(4)}`);
-}
-const cooldownMilliseconds = Number(process.env.OPENAI_COOLDOWN_MS || 30_000);
-const outputPath = new URL('../public/briefing.json', import.meta.url);
-
-if (!apiKey.startsWith('sk-')) throw new Error('OPENAI_API_KEY is missing.');
-
-function kstDate() {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).format(new Date());
-}
-
-function extractOutputText(response) {
-  const parts = [];
-  for (const item of response.output || []) {
-    if (item.type !== 'message') continue;
-    for (const content of item.content || []) {
-      if (content.type === 'output_text' && content.text) parts.push(content.text);
-    }
+function usageSummary() {
+  const total = { input: 0, output: 0, calls: 0, estimated_cost_usd: 0 };
+  for (const [model, u] of Object.entries(usageByModel)) {
+    const r = RATES[model] || RATES['gpt-5.4'];
+    const cost = (u.input / 1e6) * r.in + (u.output / 1e6) * r.out;
+    total.input += u.input; total.output += u.output; total.calls += u.calls; total.estimated_cost_usd += cost;
+    console.log(`[COST] model=${model} calls=${u.calls} input_tokens=${u.input} output_tokens=${u.output} estimated_cost_usd=${cost.toFixed(4)}`);
   }
-  return parts.join('\n').trim();
+  console.log(`[COST] total calls=${total.calls} input_tokens=${total.input} output_tokens=${total.output} estimated_cost_usd=${total.estimated_cost_usd.toFixed(4)}`);
+  total.estimated_cost_usd = Number(total.estimated_cost_usd.toFixed(4));
+  return { by_model: usageByModel, total };
 }
 
-function extractSourceUrls(response) {
-  const urls = new Set();
-  const visit = (value) => {
-    if (Array.isArray(value)) {
-      value.forEach(visit);
-      return;
-    }
-    if (!value || typeof value !== 'object') return;
-    if (typeof value.url === 'string') {
-      try {
-        const url = new URL(value.url);
-        if (['http:', 'https:'].includes(url.protocol) && !isLikelyListingUrl(value.url)) {
-          urls.add(value.url);
-        }
-      } catch {}
-    }
-    Object.values(value).forEach(visit);
-  };
-  visit(response.output || []);
-  return [...urls];
+// ---------------------------------------------------------------------------------
+// 1. 날짜 · URL · 텍스트 유틸
+// ---------------------------------------------------------------------------------
+const KST_FMT = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
+function kstDate() { return KST_FMT.format(new Date()); }
+
+// 실행일. 테스트 목적으로만 BRIEFING_DATE 로 덮어쓸 수 있다 (운영에서는 설정하지 않는다).
+const date = /^\d{4}-\d{2}-\d{2}$/.test(process.env.BRIEFING_DATE || '') ? process.env.BRIEFING_DATE : kstDate();
+
+function dateToUtcDays(ymd) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return Math.floor(Date.UTC(y, m - 1, d) / 86_400_000);
+}
+function shiftDate(ymd, days) {
+  const t = (dateToUtcDays(ymd) + days) * 86_400_000;
+  return new Date(t).toISOString().slice(0, 10);
 }
 
-function extractSourceData(response) {
-  const sourceMap = new Map();
-  const visit = (value) => {
-    if (Array.isArray(value)) {
-      value.forEach(visit);
-      return;
-    }
-    if (!value || typeof value !== 'object') return;
-    if (typeof value.url === 'string') {
-      try {
-        const url = new URL(value.url);
-        if (['http:', 'https:'].includes(url.protocol) && !isLikelyListingUrl(value.url)) {
-          const key = canonicalUrlKey(value.url);
-          if (!sourceMap.has(key)) {
-            sourceMap.set(key, {
-              url: value.url,
-              title: String(value.title || '').trim(),
-              published: String(value.publishedAt || value.datePublished || value.publishDate || value.published_date || value.publish_date || value.created || value.date || value.published || '').trim()
-            });
-          }
-        }
-      } catch {}
-    }
-    Object.values(value).forEach(visit);
-  };
-  visit(response.output || []);
-  return [...sourceMap.values()];
+function parsePublishedKst(publishedText) {
+  const text = String(publishedText || '').trim();
+  let year = null; let month = null; let day = null; let m;
+  if ((m = text.match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/))) { year = +m[1]; month = +m[2]; day = +m[3]; }
+  else if ((m = text.match(/(\d{4})(\d{2})(\d{2})/))) { year = +m[1]; month = +m[2]; day = +m[3]; }
+  else if ((m = text.match(/(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/))) { year = +m[1]; month = +m[2]; day = +m[3]; }
+  else if ((m = text.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/))) { year = Number(date.slice(0, 4)); month = +m[1]; day = +m[2]; }
+  if (!year || !month || !day || month < 1 || month > 12 || day < 1 || day > 31) return { ymd: '', time: '' };
+  const ymd = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const timeMatch = text.match(/(\d{1,2}):(\d{2})/);
+  const time = timeMatch ? `${String(+timeMatch[1]).padStart(2, '0')}:${timeMatch[2]}` : '';
+  return { ymd, time };
 }
-
-function parseSourceMappingFromNarrative(narrative) {
-  const mappings = [];
-  const text = String(narrative || '');
-  const blockMatch = text.match(/\[\[SOURCE_METADATA\]\]([\s\S]*?)\[\[\/SOURCE_METADATA\]\]/);
-  if (blockMatch) {
-    try {
-      const parsed = JSON.parse(blockMatch[1].trim());
-      if (Array.isArray(parsed)) {
-        for (const item of parsed) {
-          if (item.url && item.title) {
-            mappings.push({
-              url: String(item.url).trim(),
-              title: String(item.title).trim(),
-              published: String(item.published || item.publish_date || item.date || '').trim()
-            });
-          }
-        }
-      }
-    } catch {}
-  }
-  const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    try {
-      const parsed = JSON.parse(jsonMatch[1].trim());
-      if (Array.isArray(parsed)) {
-        for (const item of parsed) {
-          if (item.url && item.title) {
-            try {
-              const key = canonicalUrlKey(item.url);
-              if (!mappings.find((m) => { try { return canonicalUrlKey(m.url) === key; } catch { return false; } })) {
-                mappings.push({
-                  url: String(item.url).trim(),
-                  title: String(item.title).trim(),
-                  published: String(item.published || item.publish_date || item.date || '').trim()
-                });
-              }
-            } catch {}
-          }
-        }
-      }
-    } catch {}
-  }
-  return mappings;
+function normalizePublished(publishedText) {
+  const { ymd, time } = parsePublishedKst(publishedText);
+  if (!ymd) return '';
+  return time ? `${ymd} ${time}` : ymd;
+}
+// 실행일 기준 며칠 전 기사인지 (0=오늘, 1=어제). 날짜 없으면 null.
+function ageInDays(publishedText) {
+  const { ymd } = parsePublishedKst(publishedText);
+  if (!ymd) return null;
+  return dateToUtcDays(date) - dateToUtcDays(ymd);
 }
 
 const disposableQueryParams = new Set([
-  'curpage', 'page', 'pageno', 'pageindex',
-  'srchbegindt', 'srchctgry', 'srchenddt', 'srchkey', 'srchtext',
-  'source', 'ref', 'referrer'
+  'curpage', 'page', 'pageno', 'pageindex', 'srchbegindt', 'srchctgry', 'srchenddt', 'srchkey', 'srchtext',
+  'source', 'ref', 'referrer', 'trc'
 ]);
-
 function canonicalUrlKey(rawUrl) {
   const url = new URL(rawUrl);
   url.hash = '';
@@ -153,1780 +179,1306 @@ function canonicalUrlKey(rawUrl) {
   for (const key of [...url.searchParams.keys()]) {
     const lower = key.toLowerCase();
     const value = url.searchParams.get(key);
-    if (!value || lower.startsWith('utm_') || disposableQueryParams.has(lower)) {
-      url.searchParams.delete(key);
-    }
+    if (!value || lower.startsWith('utm_') || disposableQueryParams.has(lower)) url.searchParams.delete(key);
   }
   url.searchParams.sort();
   const pathname = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, '') : url.pathname;
   const query = url.searchParams.toString();
   return `${url.protocol}//${url.hostname}${url.port ? `:${url.port}` : ''}${pathname}${query ? `?${query}` : ''}`;
 }
+function safeCanonical(rawUrl) { try { return canonicalUrlKey(rawUrl); } catch { return ''; } }
+function hostMatchesDomain(hostname, domain) { return hostname === domain || hostname.endsWith(`.${domain}`); }
+function hostnameOf(rawUrl) { try { return new URL(rawUrl).hostname.toLowerCase().replace(/^www\./, ''); } catch { return ''; } }
 
-function urlPathKey(rawUrl) {
-  const url = new URL(rawUrl);
-  const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
-  const pathname = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, '') : url.pathname;
-  return `${hostname}${pathname}`;
+function isLikelyListingUrl(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    if (!['http:', 'https:'].includes(url.protocol)) return true;
+    const path = url.pathname.replace(/\/+$/, '');
+    const hasArticleId = /\d{4,}/.test(path) || [...url.searchParams.keys()].some((key) =>
+      /^(idx|id|no|seq|article|article_id|nttId|bbsId|rcpNo|rcp_no)$/i.test(key) && url.searchParams.get(key));
+    const looksLikeSearch = !hasArticleId && [...url.searchParams.keys()].some((key) =>
+      /^(query|keyword|search|searchword|srchtext|srchkey)$/i.test(key) && url.searchParams.get(key));
+    const knownBoardRoot = /\/(no\d{6}|po\d{6})$/i.test(path);
+    return looksLikeSearch || knownBoardRoot || (!hasArticleId && /\/(news|search|list|bbs)$/i.test(path));
+  } catch { return true; }
 }
 
+const koreanMediaDomains = [
+  'n.news.naver.com', 'news.naver.com', 'finance.naver.com', 'yna.co.kr', 'news1.kr', 'hankyung.com', 'mk.co.kr',
+  'sedaily.com', 'edaily.co.kr', 'mt.co.kr', 'news.bizwatch.co.kr', 'biz.chosun.com', 'fnnews.com', 'asiae.co.kr',
+  'etoday.co.kr', 'ytn.co.kr', 'infomax.co.kr', 'heraldcorp.com', 'donga.com', 'joongang.co.kr'
+];
+const globalMediaDomains = [
+  'reuters.com', 'bloomberg.com', 'ft.com', 'wsj.com', 'cnbc.com', 'apnews.com', 'nikkei.com', 'economist.com',
+  'marketwatch.com', 'finance.yahoo.com'
+];
+const officialResearchDomains = ['fss.or.kr', 'fsc.go.kr', 'bok.or.kr', 'dart.fss.or.kr', 'kdic.or.kr'];
+const officialDomains = [
+  ...officialResearchDomains, 'moef.go.kr', 'kofia.or.kr', 'krx.co.kr', 'woorifg.com', 'wooribank.com',
+  'bis.org', 'fsb.org', 'imf.org', 'federalreserve.gov', 'ecb.europa.eu'
+];
+function isOfficialUrl(rawUrl) {
+  const hostname = hostnameOf(rawUrl);
+  if (!hostname) return false;
+  return hostname.endsWith('.go.kr') || hostname.endsWith('.gov') || officialDomains.some((d) => hostMatchesDomain(hostname, d));
+}
+function isGlobalMediaUrl(rawUrl) {
+  const hostname = hostnameOf(rawUrl);
+  return Boolean(hostname) && globalMediaDomains.some((d) => hostMatchesDomain(hostname, d));
+}
+const sourceNameByHost = {
+  'n.news.naver.com': '네이버뉴스', 'news.naver.com': '네이버뉴스', 'finance.naver.com': '네이버금융', 'yna.co.kr': '연합뉴스',
+  'news1.kr': '뉴스1', 'hankyung.com': '한국경제', 'mk.co.kr': '매일경제', 'sedaily.com': '서울경제', 'edaily.co.kr': '이데일리',
+  'mt.co.kr': '머니투데이', 'news.bizwatch.co.kr': '비즈워치', 'biz.chosun.com': '조선비즈', 'fnnews.com': '파이낸셜뉴스',
+  'asiae.co.kr': '아시아경제', 'etoday.co.kr': '이투데이', 'ytn.co.kr': 'YTN', 'infomax.co.kr': '연합인포맥스',
+  'heraldcorp.com': '헤럴드경제', 'donga.com': '동아일보', 'joongang.co.kr': '중앙일보', 'reuters.com': '로이터',
+  'bloomberg.com': '블룸버그', 'ft.com': '파이낸셜타임스', 'wsj.com': '월스트리트저널', 'cnbc.com': 'CNBC', 'apnews.com': 'AP',
+  'nikkei.com': '닛케이', 'dart.fss.or.kr': 'DART 전자공시', 'fss.or.kr': '금융감독원', 'fsc.go.kr': '금융위원회', 'bok.or.kr': '한국은행',
+  'kdic.or.kr': '예금보험공사'
+};
+function guessSourceName(rawUrl) {
+  const hostname = hostnameOf(rawUrl);
+  for (const [host, name] of Object.entries(sourceNameByHost)) if (hostMatchesDomain(hostname, host)) return name;
+  return hostname || '출처 미확인';
+}
+
+const wooriSubsidiaryKeywords = [
+  '우리금융', '우리금융지주', '우리은행', '우리카드', '우리금융캐피탈', '우리종합금융', '우리자산운용', '우리금융저축은행',
+  '우리투자증권', '우리에프아이에스', '우리글로벌자산운용', '동양생명', 'ABL생명', '우리아메리카', 'Woori America', '우리소다라',
+  'Woori Saudara', 'Bank Woori Saudara', '우리은행 캄보디아', '우리은행 브라질', '우리은행 중국', '베트남우리은행', 'Woori Bank', 'Woori'
+];
+const competitorKeywords = [
+  'KB금융', 'KB국민', 'KB국민은행', '국민은행', '신한금융', '신한은행', '신한카드', '신한투자증권', '하나금융', '하나은행', '하나카드',
+  '하나증권', 'NH농협', '농협금융', '농협은행', 'IBK기업은행', '기업은행', '한국금융지주', '한국투자증권', 'BNK금융', 'iM금융', 'DGB금융',
+  'JB금융', '카카오뱅크', '케이뱅크', '토스뱅크'
+];
+function mentionsWooriSubsidiary(text) {
+  const haystack = String(text || '');
+  if (!haystack) return false;
+  if (competitorKeywords.some((k) => haystack.includes(k))) return false;
+  return wooriSubsidiaryKeywords.some((k) => haystack.includes(k));
+}
+function competitorOf(text) {
+  const t = String(text || '')
+    .replace(/하나은행|하나카드|하나증권/g, '하나금융').replace(/KB국민은행|국민은행|KB국민/g, 'KB금융')
+    .replace(/신한은행|신한카드|신한투자증권/g, '신한금융').replace(/IBK기업은행|기업은행/g, 'IBK기업은행')
+    .replace(/농협은행|농협금융/g, 'NH농협').replace(/한국투자증권/g, '한국금융지주');
+  return ['하나금융', 'KB금융', 'IBK기업은행', '신한금융', 'NH농협', '한국금융지주', 'BNK금융', 'iM금융', 'DGB금융', 'JB금융', '카카오뱅크', '케이뱅크', '토스뱅크']
+    .find((k) => t.includes(k)) || '';
+}
+
+function titleSimilarity(a, b) {
+  const normalize = (s) => String(s || '').replace(/\s+/g, '').replace(/[-_|\u00b7,.\[\](){}'"“”‘’…]/g, '').toLowerCase();
+  const na = normalize(a); const nb = normalize(b);
+  if (na.length < 4 || nb.length < 4) return 0;
+  const bigrams = (s) => { const set = new Set(); for (let i = 0; i < s.length - 1; i += 1) set.add(s.slice(i, i + 2)); return set; };
+  const sa = bigrams(na); const sb = bigrams(nb);
+  let intersection = 0;
+  for (const bg of sa) if (sb.has(bg)) intersection += 1;
+  return intersection / Math.max(sa.size, sb.size);
+}
+function normalizeEventKey(key) {
+  return String(key || '').toLowerCase()
+    .replace(/\|후속.*$/, '')
+    .replace(/[\s·,.'"“”()\[\]]/g, '')
+    .replace(/(은|는|이|가|의|을|를|에|로|과|와)(?=\||$)/g, '');
+}
+function isFollowUpEventKey(key) { return /\|\s*후속/.test(String(key || '')); }
+
+function splitSentences(text) { return String(text || '').split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean); }
+function sentenceCount(text) { return splitSentences(text).length; }
+function usesNonFormalKorean(text) {
+  return String(text || '').split(/[.!?]+/).map((s) => s.trim()).filter(Boolean)
+    .some((s) => s.endsWith('다') && !s.endsWith('니다'));
+}
+const MD_LINK_RE = /\s*\(\[[^\]]*\]\([^)]*\)\)|\[([^\]]*)\]\((https?:[^)]*)\)/g;
+const cleanText = (v) => typeof v === 'string'
+  ? v.replace(MD_LINK_RE, (m, label) => (label ? label : '')).replace(/https?:\/\/\S+/g, '').replace(/[*#`_]{1,3}/g, '').replace(/\s{2,}/g, ' ').trim()
+  : v;
+// 상투어·작업 메모. 이 문구가 포함된 문장은 제거하고, 작성 단계에서 발견되면 1회 재요청한다.
+const BANNED_PHRASES = [
+  '점검해야 합니다', '확인해야 합니다', '주목해야 합니다', '검증 가능한', '검증 가능', '풀이 좁', '기사가 부족', '조사 근거',
+  '기사 풀', '엄격히 적용', '생각보다 좁', '확인된 어제·오늘 기사', '조사 메모', '후보 기사', '선정된 기사', '이번 브리핑에서는'
+];
+function findBannedPhrases(text) { return BANNED_PHRASES.filter((p) => String(text || '').includes(p)); }
+function dropBannedSentences(text) {
+  if (typeof text !== 'string') return text;
+  const sentences = splitSentences(text);
+  const kept = sentences.filter((s) => findBannedPhrases(s).length === 0);
+  return (kept.length ? kept : sentences).join(' ').replace(/^(그럼에도 불구하고|그럼에도|하지만|다만),?\s*/, '').trim();
+}
+
+const NEWS_KEYS = ['critical', 'daily_news', 'subsidiary_news', 'additional_news'];
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// ---------------------------------------------------------------------------------
+// 2. OpenAI Responses API 호출 (DRY_RUN이면 목 응답)
+// ---------------------------------------------------------------------------------
+let mockResponse = null;
+if (DRY_RUN) {
+  ({ mockResponse } = await import('./dry-run-fixtures.mjs'));
+  console.log(`[DRY_RUN] OpenAI calls are mocked. Output → public/briefing.dryrun.json (scenario=${process.env.DRY_RUN_SCENARIO || 'default'})`);
+}
+
+function extractOutputText(response) {
+  const parts = [];
+  for (const item of response.output || []) {
+    if (item.type !== 'message') continue;
+    for (const content of item.content || []) if (content.type === 'output_text' && content.text) parts.push(content.text);
+  }
+  return parts.join('\n').trim();
+}
 function retryDelayMs(response, body, attempt) {
   const retryAfter = Number(response.headers.get('retry-after'));
-  if (Number.isFinite(retryAfter) && retryAfter > 0) {
-    return Math.min(60_000, Math.ceil(retryAfter * 1000) + 1000);
-  }
-
-  const message = String(body?.error?.message || '');
-  const match = message.match(/try again in\s+([\d.]+)(ms|s)/i);
+  if (Number.isFinite(retryAfter) && retryAfter > 0) return Math.min(60_000, Math.ceil(retryAfter * 1000) + 1000);
+  const match = String(body?.error?.message || '').match(/try again in\s+([\d.]+)(ms|s)/i);
   if (match) {
     const amount = Number(match[1]);
-    const milliseconds = match[2].toLowerCase() === 's' ? amount * 1000 : amount;
-    return Math.min(60_000, Math.max(2_000, Math.ceil(milliseconds) + 1000));
+    const ms = match[2].toLowerCase() === 's' ? amount * 1000 : amount;
+    return Math.min(60_000, Math.max(2_000, Math.ceil(ms) + 1000));
   }
-
   return Math.min(60_000, 5_000 * (2 ** (attempt - 1)));
 }
 
-const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
-
 async function requestOpenAi(label, requestBody, maxAttempts = 3) {
+  if (DRY_RUN) {
+    const body = await mockResponse(label, requestBody, { date });
+    recordUsage(requestBody.model, body.usage);
+    return body;
+  }
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 300_000);
     let response;
-
     try {
       response = await fetch('https://api.openai.com/v1/responses', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
         signal: controller.signal
       });
     } catch (fetchError) {
       clearTimeout(timeout);
-      if (attempt === maxAttempts) {
-        throw new Error(`${label} timed out or failed to connect after ${maxAttempts} attempts: ${fetchError.message}`);
-      }
+      if (attempt === maxAttempts) throw new Error(`${label} timed out or failed to connect after ${maxAttempts} attempts: ${fetchError.message}`);
       const delay = Math.min(60_000, 15_000 * attempt);
-      console.warn(`${label} request timed out or failed to connect (${fetchError.message}). Retrying in ${delay}ms (${attempt}/${maxAttempts}).`);
+      console.warn(`${label} request failed (${fetchError.message}). Retrying in ${delay}ms (${attempt}/${maxAttempts}).`);
       await sleep(delay);
       continue;
-    } finally {
-      clearTimeout(timeout);
-    }
+    } finally { clearTimeout(timeout); }
 
     const body = await response.json().catch(() => ({}));
-        if (response.ok) {
-          const u = body?.usage || {};
-          __usage.input += Number(u.input_tokens || u.prompt_tokens || 0);
-          __usage.output += Number(u.output_tokens || u.completion_tokens || 0);
-          __usage.calls += 1;
-                    return body;
-        }
+    if (response.ok) { recordUsage(requestBody.model, body?.usage); return body; }
 
     const retryable = response.status === 429 || response.status >= 500;
     if (!retryable || attempt === maxAttempts) {
-      throw new Error(`${label} failed (${response.status}): ${body?.error?.message || 'unknown error'}`);
+      const error = new Error(`${label} failed (${response.status}): ${body?.error?.message || 'unknown error'}`);
+      error.status = response.status;
+      error.code = body?.error?.code || '';
+      throw error;
     }
-
-    const delay = response.status === 429
-      ? Math.max(90_000, retryDelayMs(response, body, attempt))
-      : Math.min(60_000, 15_000 * attempt);
+    const delay = response.status === 429 ? Math.max(90_000, retryDelayMs(response, body, attempt)) : Math.min(60_000, 15_000 * attempt);
     console.warn(`${label} received HTTP ${response.status}. Retrying in ${delay}ms (${attempt}/${maxAttempts}).`);
     await sleep(delay);
   }
-
   throw new Error(`${label} exhausted all retry attempts.`);
 }
 
-function normalizeJsonText(text) {
-  return String(text || '')
-    .trim()
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/\s*```$/i, '')
-    .trim();
-}
-
-function structuredOutputError(message, retryFeedback) {
-  const error = new Error(message);
-  error.retryFeedback = retryFeedback || message;
-  return error;
+function isModelUnavailableError(error) {
+  return [400, 404].includes(Number(error?.status)) && /model|not found|does not exist|unsupported/i.test(String(error?.message || ''));
 }
 
 function parseStructuredOutput(body, label) {
   const status = String(body?.status || 'unknown');
-  const incompleteReason = String(
-    body?.incomplete_details?.reason ||
-    body?.error?.message ||
-    ''
-  );
-
-  // 구조화 출력은 completed 상태일 때만 JSON 스키마 준수를 기대할 수 있습니다.
-  if (status === 'incomplete') {
-    console.error(`${label} response was incomplete.`);
-    console.error(`reason: ${incompleteReason || 'not provided'}`);
-    console.error(`usage: ${JSON.stringify(body?.usage || {})}`);
-
-    throw structuredOutputError(
-      `${label} response was incomplete: ${incompleteReason || 'unknown reason'}.`,
-      '이전 응답이 출력 도중 중단되었습니다. 기사 수와 서술 분량을 줄이고, 유효한 JSON 객체 하나만 처음부터 끝까지 완성하여 반환하십시오.'
-    );
-  }
-
-  if (status === 'failed') {
-    throw structuredOutputError(
-      `${label} response failed before completion.`,
-      '이전 응답 생성에 실패했습니다. 조사 근거만 사용하여 유효한 JSON 객체 하나를 다시 생성하십시오.'
-    );
-  }
-
+  const reason = String(body?.incomplete_details?.reason || body?.error?.message || '');
+  if (status === 'incomplete') throw new Error(`${label} response was incomplete: ${reason || 'unknown reason'}`);
+  if (status === 'failed') throw new Error(`${label} response failed before completion.`);
   const rawText = extractOutputText(body);
-
-  if (!rawText) {
-    const outputTypes = (body.output || [])
-      .map((item) => item.type)
-      .join(', ') || 'none';
-
-    throw structuredOutputError(
-      `${label} did not contain structured output (status=${status}, output_types=${outputTypes}, reason=${incompleteReason || 'not provided'}).`,
-      '이전 응답에 JSON 본문이 없었습니다. 설명이나 Markdown 없이 스키마에 맞는 JSON 객체 하나만 반환하십시오.'
-    );
-  }
-
-  const text = normalizeJsonText(rawText);
-
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    const preview = rawText.length > 1200
-      ? `${rawText.slice(0, 600)}\n... (생략) ...\n${rawText.slice(-600)}`
-      : rawText;
-
-    // 로그에는 남기되, 이 원문을 다음 모델 프롬프트에 다시 넣지는 않습니다.
-    console.error(`${label} JSON parse failed: ${error.message}`);
-    console.error(`${label} status: ${status}`);
-    console.error(`${label} output length: ${rawText.length}`);
-    console.error(`${label} raw output preview:\n${preview}`);
-
-    throw structuredOutputError(
-      `${label} returned invalid JSON.`,
-      '이전 응답의 JSON 문법이 올바르지 않았습니다. 설명, Markdown 코드블록, 주석을 포함하지 말고 스키마에 맞는 JSON 객체 하나만 반환하십시오.'
-    );
+  if (!rawText) throw new Error(`${label} did not contain structured output (status=${status}).`);
+  const text = rawText.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+  try { return JSON.parse(text); } catch (error) {
+    console.error(`${label} JSON parse failed: ${error.message}; preview: ${rawText.slice(0, 400)}`);
+    throw new Error(`${label} returned invalid JSON.`);
   }
 }
 
 async function coolDown(label) {
-  const milliseconds = Number.isFinite(cooldownMilliseconds) && cooldownMilliseconds >= 0
-    ? cooldownMilliseconds
-    : 75_000;
-  console.log(`${label} complete. Cooling down OpenAI TPM for ${milliseconds / 1000} seconds.`);
-  await sleep(milliseconds);
+  if (cooldownMilliseconds <= 0) return;
+  console.log(`${label} complete. Cooling down OpenAI TPM for ${cooldownMilliseconds / 1000} seconds.`);
+  await sleep(cooldownMilliseconds);
 }
 
-const newsItem = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['title', 'url', 'published', 'source_name', 'summary', 'why_woori_cro', 'entity', 'channel', 'source_type', 'risk_type', 'urgency', 'confidence', 'critical', 'window', 'watchpoints'],
+// ---------------------------------------------------------------------------------
+// 3. 이전 브리핑 이력 로드 (briefing_history + briefing.json, 실행일 이전 최근 3개)
+// ---------------------------------------------------------------------------------
+async function loadBriefingJson(url) { try { return JSON.parse(await readFile(url, 'utf8')); } catch { return null; } }
+
+// 브리핑 객체에서 공통 + 업권 기사를 모두 꺼낸다 (sectors 키가 없는 v2 이하 이력도 그대로 동작).
+function allItemsOf(b) {
+  const common = NEWS_KEYS.flatMap((k) => (Array.isArray(b?.[k]) ? b[k] : []));
+  const sectorItems = b?.sectors && typeof b.sectors === 'object'
+    ? Object.values(b.sectors).flatMap((s) => (Array.isArray(s?.news) ? s.news : []))
+    : [];
+  return [...common, ...sectorItems];
+}
+
+async function loadPreviousBriefings() {
+  const byDate = new Map();
+  try {
+    for (const name of await readdir(historyDir)) {
+      const m = name.match(/^(\d{4}-\d{2}-\d{2})\.json$/);
+      if (!m || m[1] >= date) continue;
+      const b = await loadBriefingJson(new URL(name, historyDir));
+      if (b && !b?.meta?.fallback_notice) byDate.set(m[1], b);
+    }
+  } catch {}
+  const live = await loadBriefingJson(liveBriefingPath);
+  const liveDate = String(live?.meta?.briefing_date || '');
+  if (live && liveDate && liveDate < date && !byDate.has(liveDate) && !live?.meta?.fallback_notice) byDate.set(liveDate, live);
+  return [...byDate.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, HISTORY_COMPARE_COUNT)
+    .map(([briefingDate, b]) => ({ date: briefingDate, items: allItemsOf(b) }));
+}
+
+const previousBriefings = await loadPreviousBriefings();
+const previousItems = previousBriefings.flatMap((b) => b.items.map((it) => ({
+  date: b.date, title: String(it.title || ''), entity: String(it.entity || ''), url: String(it.url || ''),
+  canonical: safeCanonical(it.url), event_key: String(it.event_key || ''), event_key_norm: normalizeEventKey(it.event_key || '')
+})));
+const previousCanonicalUrls = new Set(previousItems.map((it) => it.canonical).filter(Boolean));
+console.log(`Loaded ${previousBriefings.length} previous briefing(s) [${previousBriefings.map((b) => b.date).join(', ') || 'none'}] with ${previousItems.length} article(s) for cross-day dedupe.`);
+
+// 중복 실행 가드: 오늘 브리핑이 이미 있으면 종료 (FORCE_REGENERATE=1 또는 DRY_RUN이면 무시)
+if (!DRY_RUN && !FORCE_REGENERATE) {
+  const existing = await loadBriefingJson(liveBriefingPath);
+  if (existing?.meta?.briefing_date === date && !existing?.meta?.fallback_notice) {
+    console.log(`Briefing for ${date} already exists. Skipping duplicate run (set FORCE_REGENERATE=1 to override).`);
+    process.exit(0);
+  }
+}
+
+// ---------------------------------------------------------------------------------
+// 4. 수집: 8개 조사 단계 (기존 5 + 업권 3)
+// ---------------------------------------------------------------------------------
+const previousTitlesForPrompt = previousItems.slice(0, 30).map((it) => it.title);
+
+const commonResearchRules = `
+실행일은 ${date} KST다. ${shiftDate(date, -2)} ~ ${date} (최근 3일, KST) 사이에 게시된 공개 정보만 후보로 삼아라. 어제·오늘 기사를 우선하라.
+후보는 8~12건을 제시하라. 각 후보는 서로 다른 단일 사건이어야 하며, 같은 사건의 반복 보도는 가장 상세한 원문 하나로 통합하라.
+URL은 실제 검색으로 확인한 개별 기사·개별 발표의 직접 링크만 사용하라. 검색결과·섹션·게시판 목록 URL은 금지한다.
+각 후보마다 (1) 원문 실제 헤드라인 (2) 매체·기관 (3) 게시 일시 KST (4) 직접 URL (5) 확인된 핵심 사실 2~3줄(수치·날짜·주체 포함) (6) 우리금융 CRO 관점 한 줄을 적어라.
+제목은 원문 헤드라인을 그대로 가져와라. "금융권 동향관련보도", "계열사 관련보도"처럼 요약형 제목을 만들지 마라.
+게시 일시를 확인할 수 없는 후보는 published를 빈 문자열로 두되 가능한 한 검색으로 확인하라. 날짜 없는 후보는 자동 검증 단계를 거치지만, 확인된 날짜가 있는 후보가 우선 선정된다.
+다음은 후보에서 제외하라: 내부 교육·세미나·행사, 후원·CSR·봉사, 인사 발령·조직 개편, 홍보·상품 출시·설계사 수·체크카드 출시, 체육대회·시상식·채용박람회, 기획 칼럼·사설·인터뷰, 정치인 발언 모음·선거·정쟁, 통화안정증권 입찰·정례 모집, 리스크 영향 분석이 없는 단순 정기 통계.
+이전 브리핑 제목(사실상 같은 사건이면 새 수치·조치가 있을 때만 후보에 포함하고 '후속'이라고 표시하라): ${JSON.stringify(previousTitlesForPrompt)}
+이전 브리핑 URL은 제외하라: ${JSON.stringify([...previousCanonicalUrls].slice(0, 40))}
+검색은 주제·기관·계열사별로 개별 쿼리를 최소 10회 이상 수행하라.
+한국어 서술은 합니다체로 쓴다. 조사 메모를 모두 작성한 뒤 반드시 마지막에 아래 블록을 붙여라. 이 블록은 후보 선정에 직접 사용되므로 모든 후보를 빠짐없이, 정확하게 적어라:
+[[SOURCE_METADATA]]
+[{"url":"직접URL","title":"원문 헤드라인","published":"YYYY-MM-DD HH:MM 또는 YYYY-MM-DD 또는 빈 문자열"}]
+[[/SOURCE_METADATA]]
+`;
+
+function parseSourceMetadata(narrative) {
+  const text = String(narrative || '');
+  const out = [];
+  const push = (item) => {
+    if (!item?.url || !item?.title) return;
+    const url = String(item.url).trim();
+    if (!safeCanonical(url) || isLikelyListingUrl(url)) return;
+    const key = canonicalUrlKey(url);
+    if (out.some((o) => o.key === key)) return;
+    out.push({ key, url, title: String(item.title).trim(), published: normalizePublished(item.published || item.publish_date || item.date || '') });
+  };
+  const block = text.match(/\[\[SOURCE_METADATA\]\]([\s\S]*?)\[\[\/SOURCE_METADATA\]\]/);
+  if (block) { try { const parsed = JSON.parse(block[1].trim()); if (Array.isArray(parsed)) parsed.forEach(push); } catch {} }
+  const fenced = text.match(/```json\s*([\s\S]*?)```/);
+  if (fenced) { try { const parsed = JSON.parse(fenced[1].trim()); if (Array.isArray(parsed)) parsed.forEach(push); } catch {} }
+  return out;
+}
+// web_search_call.action.sources 등 응답 본문에 섞여 있는 url/title/published 객체를 긁어 보강한다.
+function extractSourceData(response) {
+  const sourceMap = new Map();
+  const visit = (value) => {
+    if (Array.isArray(value)) { value.forEach(visit); return; }
+    if (!value || typeof value !== 'object') return;
+    if (typeof value.url === 'string' && safeCanonical(value.url) && !isLikelyListingUrl(value.url)) {
+      const key = canonicalUrlKey(value.url);
+      if (!sourceMap.has(key)) {
+        sourceMap.set(key, {
+          key, url: value.url, title: String(value.title || '').trim(),
+          published: normalizePublished(value.publishedAt || value.datePublished || value.publishDate || value.published_date || value.publish_date || value.date || value.published || '')
+        });
+      }
+    }
+    Object.values(value).forEach(visit);
+  };
+  visit(response.output || []);
+  return [...sourceMap.values()];
+}
+// 조사 메모에서 특정 URL/제목 주변의 핵심 사실 몇 줄을 발췌한다 (채점·작성 입력용).
+function excerptFor(narrative, url, title) {
+  const lines = String(narrative || '').replace(/\[\[SOURCE_METADATA\]\][\s\S]*$/, '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const urlKey = safeCanonical(url);
+  let idx = lines.findIndex((l) => l.includes(url) || (urlKey && l.includes(urlKey)));
+  if (idx < 0) idx = lines.findIndex((l) => titleSimilarity(l, title) >= 0.45);
+  if (idx < 0) return '';
+  return cleanText(lines.slice(Math.max(0, idx - 1), idx + 5).join(' ')).slice(0, 500);
+}
+
+async function researchStage(stageId, label, scope, allowedDomains, minimumSources = 4) {
+  let best = { stage: stageId, narrative: '', sources: [] };
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    let body;
+    try {
+      body = await requestOpenAi(label, {
+        model: MODELS.research,
+        input: `당신은 우리금융그룹 CRO STAFF의 조사 담당자다.\n\n조사 범위:\n${scope}\n\n공통 조사 규칙:\n${commonResearchRules}`,
+        tools: [{
+          type: 'web_search', search_context_size: 'high',
+          ...(allowedDomains?.length ? { filters: { allowed_domains: allowedDomains } } : {}),
+          user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' }
+        }],
+        max_tool_calls: 15, include: ['web_search_call.action.sources'], store: false,
+        reasoning: { effort: 'low' }, text: { verbosity: 'medium' }, max_output_tokens: 14000
+      });
+    } catch (error) {
+      console.warn(`${label} failed (attempt ${attempt}/2): ${error.message}`);
+      if (attempt < 2) await coolDown(`${label} error retry`);
+      continue;
+    }
+    const narrative = extractOutputText(body);
+    const sources = parseSourceMetadata(narrative);
+    for (const sd of extractSourceData(body)) {
+      const existing = sources.find((s) => s.key === sd.key);
+      if (existing) { if (!existing.published && sd.published) existing.published = sd.published; }
+      else if (sd.title) sources.push(sd);
+    }
+    if (narrative && sources.length > best.sources.length) best = { stage: stageId, narrative, sources };
+    if (narrative && sources.length >= minimumSources) {
+      console.log(`${label} collected ${sources.length} candidate sources (${sources.filter((s) => s.published).length} dated).`);
+      return best;
+    }
+    if (attempt < 2) { console.warn(`${label} returned ${sources.length} sources (< ${minimumSources}). Retrying.`); await coolDown(`${label} retry`); }
+  }
+  console.warn(`${label} finished with ${best.sources.length} candidate sources.`);
+  return best;
+}
+
+const stageDefinitions = [
+  {
+    id: 'korean_media', label: 'Korean financial media research', minimum: 6, domains: koreanMediaDomains, sectors: ['group'],
+    scope: `한국 금융시장·금융회사 리스크 관련 언론기사를 조사하라. 네이버뉴스(n.news.naver.com, news.naver.com, finance.naver.com) 직접 링크를 최우선으로 쓰고, 부족할 때만 연합뉴스·경제지 원문 링크를 보완하라.
+금리·환율·채권·유동성·부동산 PF·가계부채·기업 신용·연체율·자본규제·소비자보호·사이버·운영리스크와 금융회사 사건을 점검하라. 수치가 있는 기사를 우선하라.
+기자가 작성한 기사 원문만 후보로 제시하라. 우리금융 계열사 전용 기사와 경쟁사 전용 기사는 다른 조사팀이 다루므로 여기서는 시장·정책·업권 전반 기사에 집중하라.`
+  },
+  {
+    id: 'woori_media', label: 'Woori Financial Group media research', minimum: 5, domains: koreanMediaDomains, sectors: ['group', ...SECTOR_IDS],
+    scope: `우리금융그룹 및 계열사 관련 언론기사를 전용으로 조사하라. 계열사명을 각각 네이버뉴스로 검색하라: 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명.
+우리은행 해외법인·지점(우리아메리카은행, 우리소다라은행(인도네시아), 베트남우리은행, 우리은행 캄보디아·중국·브라질·러시아·방글라데시·미얀마)의 건전성·제재·사고·현지 감독 이슈도 조사하라.
+건전성·자본·실적·금융사고·제재·소송·시장평가(증권사 리포트 포함)에 집중하고, 상품 출시·행사·CSR·인사 기사는 제외하라.`
+  },
+  {
+    id: 'peer_media', label: 'Peer competitor media research', minimum: 5, domains: koreanMediaDomains, sectors: ['group', 'bank'],
+    scope: `국내 주요 경쟁 금융회사의 언론기사를 전용으로 조사하라: KB금융, 신한금융, 하나금융, NH농협금융, IBK기업은행, 한국금융지주, BNK·iM·JB금융, 인터넷은행, 주요 증권·보험·카드사.
+금융사고·제재·대규모 손실·건전성 악화·자본비율·유동성·인수합병·소비자보호 이슈를 우선하고, 단순 실적 호조·수상·홍보 기사는 후순위로 두어라.
+같은 회사에 대해서는 가장 중요한 사건 1~2건만 제시하라. 우리금융 기사는 여기서 제외하라.`
+  },
+  {
+    id: 'global_media', label: 'Global financial media research', minimum: 4, domains: globalMediaDomains, sectors: ['group'],
+    scope: `Reuters, Bloomberg, FT, WSJ, CNBC, Nikkei 등 글로벌 언론에서 한국 금융시장 또는 우리금융그룹으로 전이될 수 있는 금융기사를 조사하라.
+미 연준·주요 중앙은행 결정, 달러·국채금리 급변, 은행 건전성·상업용 부동산 손실, 글로벌 제재·AML, 사이버 사고, 그리고 우리은행 해외법인 소재국(베트남·인도네시아·캄보디아·미국·중국·브라질·러시아·방글라데시·미얀마)의 감독·시장 리스크를 점검하라.
+정치인 발언 모음·일반 시황 소개 기사는 제외하고, 수치와 정책 결정이 있는 기사만 최대 10건 제시하라.`
+  },
+  {
+    id: 'official', label: 'Regulator and official source research', minimum: 2, domains: officialResearchDomains, sectors: ['group'],
+    scope: `감독당국·공식자료를 조사하라. 대상: 금융감독원(fss.or.kr), 금융위원회(fsc.go.kr), 한국은행(bok.or.kr), DART 전자공시(dart.fss.or.kr), 예금보험공사(kdic.or.kr).
+허용 범위는 다음만이다: 제재·검사결과 공개, 규정 제·개정(입법예고·규정변경예고 포함), 금융위 의결·결정, 한국은행 금통위 결정·금융안정 보고·거시건전성 조치, 우리금융 계열사의 DART 공시 중 자본·충당금·대규모 손실·소송·임원 제재.
+정기 통계·정례 보도자료·통화안정증권 입찰·행사·채용·일반 공지는 제외하라. 후보는 3~8건이면 충분하며, 허용 범위에 맞는 자료가 없으면 억지로 채우지 마라.
+각 후보에 발표 기관·발표일·핵심 수치(제재 수위·과태료·비율 등)를 반드시 적어라.`
+  },
+  // 업권 조사 단계 (config/sectors.json 의 research_stages + 각 업권 정의에서 프롬프트를 조립한다)
+  ...sectorConfig.research_stages.map((rs) => {
+    const defs = rs.sectors.map((id) => sectorById[id]).filter(Boolean);
+    const sectorBlocks = defs.map((s) => `■ ${s.label_ko} (우리금융 계열사: ${s.companies.join(', ')})
+  - 조사 범위: ${s.scope_ko}
+  - 검색 키워드(각각 개별 쿼리로): ${s.keywords_ko.join(', ')}${s.keywords_en?.length ? ` / ${s.keywords_en.join(', ')}` : ''}
+  - 업권 전문 출처(언론기사가 부족할 때 보완): ${(s.sources_hint || []).join(', ')}`).join('\n');
+    return {
+      id: rs.id, label: rs.label, minimum: rs.minimum ?? 4,
+      domains: [...koreanMediaDomains, ...defs.flatMap((s) => s.source_domains || [])],
+      sectors: rs.sectors,
+      scope: `다음 업권의 리스크 관련 언론기사를 전용으로 조사하라. 이 업권의 우리금융 계열사 리스크관리부가 아침에 읽을 기사다.
+${sectorBlocks}
+각 업권에서 (1) 우리금융 해당 계열사 기사 (2) 업권 전체 건전성·감독·규제 기사 (3) 경쟁사 사고·제재·손실 기사 순으로 찾아라. 업권당 후보 4~6건, 합계 8~12건을 제시하라.
+금감원·금융위의 업권 검사·제재·규정 변경, 업권 통계 중 연체율·자본비율·PF 등 리스크 수치가 있는 발표는 포함하라. 단순 상품 출시·실적 홍보·수상 기사는 제외하라.
+우리금융지주 차원 기사, 은행 일반 기사, 거시·환율 기사는 다른 조사팀이 다루므로 여기서는 이 업권 전용 기사에 집중하라.`
+    };
+  })
+];
+
+const researchStages = [];
+for (const def of stageDefinitions) {
+  researchStages.push(await researchStage(def.id, def.label, def.scope, def.domains, def.minimum));
+  await coolDown(def.label);
+}
+
+// 후보 풀 조립 (URL 기준 중복 통합)
+const stageSectorHint = Object.fromEntries(stageDefinitions.map((d) => [d.id, d.sectors || ['group']]));
+const candidateByKey = new Map();
+for (const stage of researchStages) {
+  for (const s of stage.sources) {
+    if (previousCanonicalUrls.has(s.key)) { console.log(`Skipped candidate already used in a previous briefing: ${s.title}`); continue; }
+    const existing = candidateByKey.get(s.key);
+    if (existing) {
+      if (!existing.published && s.published) existing.published = s.published;
+      if (!existing.excerpt) existing.excerpt = excerptFor(stage.narrative, s.url, s.title);
+      existing.stages.add(stage.stage);
+      continue;
+    }
+    candidateByKey.set(s.key, {
+      id: candidateByKey.size + 1, key: s.key, url: s.url, title: s.title, published: s.published,
+      stage: stage.stage, stages: new Set([stage.stage]), excerpt: excerptFor(stage.narrative, s.url, s.title),
+      stage_sector_hint: stageSectorHint[stage.stage] || ['group'],
+      source_type: isOfficialUrl(s.url) ? 'official' : 'media',
+      is_global_only: stage.stage === 'global_media' || isGlobalMediaUrl(s.url)
+    });
+  }
+}
+const candidates = [...candidateByKey.values()];
+console.log(`Candidate pool: ${candidates.length} unique URLs (${candidates.filter((c) => c.published).length} dated, ${candidates.filter((c) => c.source_type === 'official').length} official) from ${researchStages.length} stages [${researchStages.map((s) => `${s.stage}=${s.sources.length}`).join(', ')}].`);
+
+// 빈 업권 섹션 (실패 브리핑·shortfall 공용)
+function emptySectorSection(id, reason) {
+  const def = sectorById[id];
+  return { id, label_ko: def.label_ko, label_en: def.label_en, companies: def.companies, judgment: '', news: [], shortfall_reason: reason || '' };
+}
+
+// 실패 브리핑: 8개 조사 단계가 모두 비었을 때(API 전면 장애)만 사용한다. 그 외에는 항상 실제 기사로 출력한다.
+function createFailureBriefing(reason) {
+  return {
+    executive_judgment: '오늘의 CRO 브리핑은 조사 단계에서 후보를 전혀 수집하지 못해 자동 생성하지 않았습니다. 검증되지 않은 기사나 수치를 임의로 포함하지 않았습니다. 다음 실행에서 재생성이 필요합니다.',
+    executive_judgment_bullets: [
+      '여덟 개 조사 단계가 모두 빈 결과를 돌려주었습니다. OpenAI API 장애 또는 웹 검색 도구 장애 가능성이 있습니다.',
+      '이번 결과는 기사 부재가 아니라 수집 실패에 따른 안전 조치입니다. 본 결과를 의사결정 자료로 사용하지 않습니다.',
+      'GitHub Actions 로그에서 각 조사 단계의 응답 상태를 확인한 뒤 force_regenerate 옵션으로 재실행합니다.'
+    ],
+    critical: [], daily_news: [], subsidiary_news: [], additional_news: [], forward_looking_points: [],
+    insights: {
+      headline: '조사 단계 수집 실패로 자동 브리핑을 생성하지 않았습니다.',
+      bullets: ['조사 단계가 후보를 수집하지 못했습니다.', '검증되지 않은 기사 정보를 포함하지 않았습니다.', '다음 실행에서 로그 확인 후 재생성합니다.'],
+      action_items: ['OpenAI API 상태를 확인합니다.', '워크플로를 force_regenerate=true 로 수동 재실행합니다.', '재발 시 모델·검색 도구 설정을 점검합니다.'],
+      stance: '수집이 정상화될 때까지 자동 브리핑을 의사결정에 사용하지 않습니다.',
+      as_of: `${date} KST`
+    },
+    monitoring_points: [`${date} KST 조사 단계 응답 상태`, 'OpenAI API 상태 페이지', '다음 자동 실행의 정상 생성 여부', `직전 실패 사유: ${reason}`],
+    sectors: Object.fromEntries(SECTOR_IDS.map((id) => [id, emptySectorSection(id, reason)])),
+    editions: EDITIONS,
+    meta: {
+      fallback_notice: true, product: 'CRO Staff News & Critical Monitor', perspective: '우리금융그룹 CRO', mode: 'daily',
+      briefing_date: date, generated_at: new Date().toISOString(), pipeline_version: PIPELINE_VERSION, dry_run: DRY_RUN,
+      candidates_total: 0, selected_total: 0, shortfall_reason: reason, models: MODELS, usage: usageSummary(),
+      source_mix: { media: 0, official: 0 },
+      sector_counts: Object.fromEntries(['group', ...SECTOR_IDS].map((id) => [id, 0])),
+      sector_shortfall: Object.fromEntries(SECTOR_IDS.map((id) => [id, reason])),
+      editions: EDITIONS.length
+    }
+  };
+}
+if (candidates.length === 0) {
+  const reason = '모든 조사 단계에서 후보를 수집하지 못했습니다 (OpenAI API 또는 web_search 장애 가능성).';
+  console.error(`Total research failure: ${reason}`);
+  await writeFile(outputPath, `${JSON.stringify(createFailureBriefing(reason), null, 2)}\n`, 'utf8');
+  process.exit(0);
+}
+
+// ---------------------------------------------------------------------------------
+// 5. 날짜 검증: published가 비어 있는 후보를 1회 web_search로 보강
+// ---------------------------------------------------------------------------------
+async function verifyUndatedCandidates() {
+  const undated = candidates.filter((c) => !c.published).slice(0, 20);
+  if (undated.length === 0) return;
+  const list = undated.map((c, i) => `${i + 1}. ${c.title} (${c.url})`).join('\n');
+  try {
+    const body = await requestOpenAi('Date verification', {
+      model: MODELS.research,
+      input: `다음 기사·발표의 게시일시를 웹 검색으로 확인하라 (오늘 ${date} KST).\n\n${list}\n\n각 항목에 대해 다음 형식으로만 답하라:\n번호. URL | YYYY-MM-DD 또는 YYYY-MM-DD HH:MM 또는 '확인불가'`,
+      tools: [{ type: 'web_search', search_context_size: 'medium', user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' } }],
+      max_tool_calls: 10, include: ['web_search_call.action.sources'], store: false,
+      reasoning: { effort: 'low' }, text: { verbosity: 'low' }, max_output_tokens: 4000
+    });
+    let verified = 0;
+    for (const line of extractOutputText(body).split('\n')) {
+      const um = line.match(/https?:\/\/[^\s|]+/);
+      const published = normalizePublished(line.replace(um?.[0] || '', ''));
+      if (!um || !published) continue;
+      const key = safeCanonical(um[0]);
+      const target = undated.find((c) => c.key === key);
+      if (target && !target.published) { target.published = published; verified += 1; }
+    }
+    console.log(`Date verification: checked ${undated.length} undated candidates, verified ${verified}.`);
+  } catch (error) {
+    console.warn(`Date verification failed (continuing): ${error.message}`);
+  }
+}
+await verifyUndatedCandidates();
+
+// ---------------------------------------------------------------------------------
+// 6. 채점 (CRO scoring)
+// ---------------------------------------------------------------------------------
+const AXES = ['supervision', 'group', 'peer', 'market', 'overseas', 'none'];
+const scoringSchema = {
+  type: 'object', additionalProperties: false, required: ['candidates'],
   properties: {
-    title: { type: 'string' },
-    url: { type: 'string' },
-    published: { type: 'string' },
-    source_name: { type: 'string' },
-    summary: { type: 'string' },
-    why_woori_cro: { type: 'string' },
-    entity: { type: 'string' },
-    channel: { type: 'string' },
-    source_type: { type: 'string', enum: ['media', 'official'] },
-    risk_type: { type: 'string' },
-    urgency: { type: 'string', enum: ['높음', '중간', '낮음'] },
-    confidence: { type: 'string', enum: ['높음', '중간', '낮음'] },
-    critical: { type: 'boolean' },
-    window: { type: 'string', enum: ['primary', 'related'] },
-    watchpoints: {
+    candidates: {
       type: 'array',
-      minItems: 2,
-      maxItems: 3,
-      items: { type: 'string' }
+      items: {
+        type: 'object', additionalProperties: false,
+        required: ['id', 'url', 'title', 'published', 'source_type', 'entity', 'event_key', 'axis', 'sector', 'score', 'is_promo',
+          'is_political_or_column', 'is_repeat_of_previous', 'severity_flag', 'one_line_fact', 'cro_hook', 'sector_hook'],
+        properties: {
+          id: { type: 'integer' }, url: { type: 'string' }, title: { type: 'string' }, published: { type: 'string' },
+          source_type: { type: 'string', enum: ['media', 'official'] },
+          entity: { type: 'string' }, event_key: { type: 'string' },
+          axis: { type: 'string', enum: AXES }, sector: { type: 'string', enum: SECTOR_ENUM }, score: { type: 'integer' },
+          is_promo: { type: 'boolean' }, is_political_or_column: { type: 'boolean' }, is_repeat_of_previous: { type: 'boolean' },
+          severity_flag: { type: 'boolean' }, one_line_fact: { type: 'string' }, cro_hook: { type: 'string' }, sector_hook: { type: 'string' }
+        }
+      }
     }
   }
 };
 
-const schema = {
-  type: 'object',
-  additionalProperties: false,
+const sectorGuideForScoring = SECTORS.map((s) => `- ${s.id} (${s.label_ko}; 계열사 ${s.companies.join('·')}): ${s.scope_ko}`).join('\n');
+
+function buildScoringPrompt(batch) {
+  const previousForPrompt = previousItems.slice(0, 40).map((it) => ({ date: it.date, title: it.title, entity: it.entity, event_key: it.event_key || '' }));
+  return `당신은 우리금융그룹 CRO를 지원하는 CRO STAFF의 선별 심사관이다. 실행일은 ${date} KST다.
+아래 후보 각각을 채점하라. 후보를 추가하거나 빼지 말고, 입력된 id·url·title·published는 글자 그대로 복사하라 (published가 비어 있으면 빈 문자열 유지).
+
+축(axis)과 점수(score, 0~100 정수) 기준:
+- supervision: 금감원·금융위 제재·검사결과·규정 제·개정·의결, 한국은행 금통위·금융안정·거시건전성 조치 → 기본 80~100.
+- group: 우리금융지주·계열사·해외법인의 건전성·자본·실적·금융사고·제재·소송·시장평가 → 70~100. 금융사고·제재·대규모 손실은 90 이상.
+- peer: 경쟁사의 금융사고·제재·대규모 손실·건전성 악화·자본비율 급변 → 40~85. 단순 실적 호조·목표가 상향·수상은 40 이하.
+- market: 금리·환율·채권·PF·가계부채·연체율·유동성의 급변 중 수치가 있는 것 → 40~80. 수치 없는 일반 시황은 40 이하.
+- overseas: 우리은행 해외법인 소재국(베트남·인도네시아·캄보디아·미국·중국·브라질·러시아·방글라데시·미얀마)의 감독·시장 리스크, 글로벌 은행 건전성·제재·AML → 40~80.
+- none: 위 어디에도 해당하지 않으면 none, score 0~20.
+- 홍보·상품 출시·CSR·인사·행사·설계사 수·체크카드 출시·수상 → is_promo=true, score 0. 기획 칼럼·사설·인터뷰·정치인 발언·선거·정쟁 → is_political_or_column=true, score 0. 통안증권 입찰·정례 통계·정례 보도자료도 is_promo=true, score 0.
+- severity_flag: 금융사고·제재·대규모 손실·급변(하루 1% 이상 환율 변동, 연체율 급등 등)이면 true.
+
+업권(sector): 이 기사가 가장 직접 닿는 업권 하나. 감독당국 전반 조치·거시·시장 급변·우리금융지주·그룹 단위 이슈·경쟁 금융그룹(지주) 사고·해외법인 소재국 리스크는 group 이다.
+특정 업권의 계열사·업권 통계·업권 규제·업권 경쟁사(은행/카드사·캐피탈/저축은행/보험사/증권사·운용사)에 관한 기사는 그 업권이다. 금감원 제재라도 대상이 특정 업권 회사면 그 업권으로 둔다 (예: 특정 증권사 기관경고 → securities_am, 은행업감독규정 개정 → bank, 금융그룹 전반 규정 → group).
+${sectorGuideForScoring}
+sector_hook: sector가 group이 아니면 그 업권 우리금융 계열사(위 괄호 안 회사명) 관점에서 어느 포트폴리오·지표·절차에 닿는지 1문장(합니다체, 계열사명 명시). group이면 빈 문자열.
+
+event_key: '주체|사건요지' 형식의 짧은 키 (예: '우리금융|3Q실적', '금감원|○○은행 기관경고', '환율|1450원 돌파'). 같은 사건을 다룬 후보는 매체가 달라도 동일한 event_key를 써라. 실적 기사와 그 실적에 대한 증권사 분석 기사는 같은 사건이다.
+is_repeat_of_previous: 아래 이전 브리핑 목록과 사실상 같은 사건이면 true. 다만 새로운 수치·조치·처분이 확인되면 false로 두고 event_key 끝에 '|후속'을 붙여라.
+one_line_fact: 확인된 핵심 사실 1문장 (수치·날짜·주체 포함, 합니다체). 분석 주체가 있으면 '○○증권은 …라고 분석했습니다'처럼 밝혀라.
+cro_hook: 우리금융의 어느 계열사·포트폴리오·지표에 닿는지 1문장 (합니다체). '점검해야 합니다', '확인해야 합니다' 같은 상투어는 쓰지 마라.
+entity: 기사 주체(기관·기업·시장). source_type: 감독당국·공시·중앙은행 자료면 official, 언론기사면 media.
+
+이전 브리핑 기사 목록(최근 ${HISTORY_COMPARE_COUNT}일):
+${JSON.stringify(previousForPrompt)}
+
+[[CANDIDATES]]
+${JSON.stringify(batch.map((c) => ({ id: c.id, url: c.url, title: c.title, published: c.published, stage: c.stage, stage_sector_hint: c.stage_sector_hint, source_type: c.source_type, excerpt: c.excerpt })))}
+[[/CANDIDATES]]
+
+반드시 제공된 JSON 스키마에 맞춰 답하라.`;
+}
+
+// 제목·발췌 키워드로 업권을 추정한다 (휴리스틱 채점 및 LLM sector 보정용). group 이면 ''.
+function guessSectorByKeywords(text, hint) {
+  const t = String(text || '');
+  let best = ''; let bestHits = 0;
+  for (const s of SECTORS) {
+    const hits = [...s.companies, ...s.keywords_ko].filter((k) => k.length >= 2 && t.includes(k)).length;
+    const bonus = Array.isArray(hint) && hint.includes(s.id) && !hint.includes('group') ? 1 : 0;
+    if (hits + bonus > bestHits) { best = s.id; bestHits = hits + bonus; }
+  }
+  return bestHits > 0 ? best : '';
+}
+
+// 채점 호출이 실패했을 때 쓰는 보수적 휴리스틱 채점 (stage·키워드 기반).
+function heuristicScore(c) {
+  const t = `${c.title} ${c.excerpt}`;
+  const promo = /출시|후원|봉사|CSR|시상|수상|채용|박람회|체육대회|기념식|캠페인|통화안정증권|입찰|정례/.test(t);
+  const political = /\[칼럼\]|\[사설\]|\[기자수첩\]|인터뷰|의원|대통령|선거|정쟁|Trump|트럼프/.test(t);
+  const severity = /사고|제재|횡령|손실|급등|급락|급증|돌파|기관경고|과태료|영업정지/.test(t);
+  let axis = 'market'; let score = 45;
+  if (c.source_type === 'official' || c.stage === 'official') { axis = 'supervision'; score = 70; }
+  else if (c.stage === 'woori_media' || mentionsWooriSubsidiary(c.title)) { axis = 'group'; score = 65; }
+  else if (c.stage === 'peer_media' || competitorOf(c.title)) { axis = 'peer'; score = severity ? 65 : 38; }
+  else if (c.stage === 'global_media') { axis = 'overseas'; score = 45; }
+  else if (String(c.stage).startsWith('sector_')) { axis = 'market'; score = 50; }
+  if (severity) score += 10;
+  const sector = guessSectorByKeywords(t, c.stage_sector_hint) || 'group';
+  return {
+    id: c.id, url: c.url, title: c.title, published: c.published, source_type: c.source_type, entity: competitorOf(c.title) || '',
+    event_key: `${c.title.slice(0, 20)}`, axis, sector, score: promo || political ? 0 : score, is_promo: promo, is_political_or_column: political,
+    is_repeat_of_previous: false, severity_flag: severity, one_line_fact: cleanText(c.excerpt || c.title).slice(0, 160), cro_hook: '', sector_hook: ''
+  };
+}
+
+async function scoreCandidates() {
+  const BATCH = 30;
+  const scored = new Map();
+  let fallbackUsed = false;
+  for (let start = 0; start < candidates.length; start += BATCH) {
+    const batch = candidates.slice(start, start + BATCH);
+    let parsed = null;
+    for (let attempt = 1; attempt <= 2 && !parsed; attempt += 1) {
+      try {
+        const body = await requestOpenAi('CRO scoring', {
+          model: MODELS.scoring, input: buildScoringPrompt(batch), store: false, reasoning: { effort: 'low' },
+          text: { verbosity: 'low', format: { type: 'json_schema', name: 'cro_scoring', strict: true, schema: scoringSchema } },
+          max_output_tokens: 24000
+        });
+        parsed = parseStructuredOutput(body, 'CRO scoring');
+      } catch (error) {
+        console.warn(`CRO scoring batch ${start / BATCH + 1} attempt ${attempt}/2 failed: ${error.message}`);
+        if (attempt < 2) await coolDown('CRO scoring retry');
+      }
+    }
+    for (const c of batch) {
+      const s = parsed?.candidates?.find((x) => Number(x.id) === c.id || safeCanonical(x.url) === c.key);
+      if (s) scored.set(c.id, s);
+      else { fallbackUsed = true; scored.set(c.id, heuristicScore(c)); }
+    }
+  }
+  if (fallbackUsed) console.warn('CRO scoring used heuristic fallback for some candidates.');
+  return { scored, fallbackUsed };
+}
+const { scored: scoreById, fallbackUsed: scoringFallbackUsed } = await scoreCandidates();
+
+// 채점 결과를 후보에 병합한다 (url/title/published는 입력값 유지, axis는 코드가 한 번 더 보정).
+for (const c of candidates) {
+  const s = scoreById.get(c.id);
+  c.axis = AXES.includes(s.axis) ? s.axis : 'none';
+  c.score = Math.max(0, Math.min(100, Math.round(Number(s.score) || 0)));
+  c.is_promo = Boolean(s.is_promo);
+  c.is_political_or_column = Boolean(s.is_political_or_column);
+  c.is_repeat_of_previous = Boolean(s.is_repeat_of_previous);
+  c.severity_flag = Boolean(s.severity_flag);
+  c.entity = String(s.entity || '').trim();
+  c.event_key = String(s.event_key || '').trim() || c.title.slice(0, 30);
+  c.event_key_norm = normalizeEventKey(c.event_key);
+  c.one_line_fact = cleanText(String(s.one_line_fact || '')).trim();
+  c.cro_hook = cleanText(String(s.cro_hook || '')).trim();
+  c.sector = SECTOR_ENUM.includes(s.sector) ? s.sector : (guessSectorByKeywords(`${c.title} ${c.excerpt}`, c.stage_sector_hint) || 'group');
+  c.sector_hook = c.sector === 'group' ? '' : cleanText(String(s.sector_hook || '')).trim();
+  if (s.source_type === 'official' && !c.is_global_only) c.source_type = 'official';
+  // 축 보정: 경쟁사 기사를 group으로, 우리금융 기사를 peer로 잘못 찍은 경우
+  const titleEntity = `${c.title} ${c.entity}`;
+  if (c.axis === 'group' && !mentionsWooriSubsidiary(titleEntity)) c.axis = competitorOf(titleEntity) ? 'peer' : (c.source_type === 'official' ? 'supervision' : 'market');
+  if (c.axis === 'peer' && mentionsWooriSubsidiary(titleEntity) && !competitorOf(titleEntity)) c.axis = 'group';
+  // 업권 보정: 우리금융지주 자체 기사·글로벌 전용 기사가 업권으로 찍히면 group으로 되돌린다
+  if (c.sector !== 'group' && (/우리금융지주|우리금융그룹|Woori Financial Group/.test(c.title) || c.is_global_only)) c.sector = 'group';
+  if (c.sector === 'group') c.sector_hook = '';
+  if (c.is_promo || c.is_political_or_column) c.score = 0;
+}
+console.log(`Scoring complete: ${candidates.filter((c) => c.score >= 35).length} candidates scored ≥35, ${candidates.filter((c) => c.is_promo || c.is_political_or_column).length} flagged promo/political. By sector: ${JSON.stringify(Object.fromEntries(SECTOR_ENUM.map((id) => [id, candidates.filter((c) => c.sector === id).length])))}`);
+
+// ---------------------------------------------------------------------------------
+// 7. 확정 (deterministic selection)
+// ---------------------------------------------------------------------------------
+function isRepeatOfPrevious(c) {
+  if (isFollowUpEventKey(c.event_key)) return false;
+  if (c.is_repeat_of_previous) return true;
+  for (const prev of previousItems) {
+    if (prev.event_key_norm && c.event_key_norm && prev.event_key_norm === c.event_key_norm) return true;
+    if (titleSimilarity(prev.title, c.title) >= 0.5) return true;
+  }
+  return false;
+}
+function sameEvent(a, b) {
+  if (a.event_key_norm && b.event_key_norm && a.event_key_norm === b.event_key_norm) return true;
+  return titleSimilarity(a.title, b.title) >= 0.55;
+}
+
+// 공통 필터: 윈도우·플래그·점수·축. 점수순 정렬.
+function filterEligible(pool, { windowDays, minScore }, log) {
+  const eligible = [];
+  for (const c of pool) {
+    const age = ageInDays(c.published);
+    if (age === null) { log.push(`drop(no date): ${c.title}`); continue; }
+    if (age < -1 || age > windowDays - 1) { log.push(`drop(out of ${windowDays}-day window, age=${age}): ${c.title}`); continue; }
+    if (c.is_promo) { log.push(`drop(promo): ${c.title}`); continue; }
+    if (c.is_political_or_column) { log.push(`drop(political/column): ${c.title}`); continue; }
+    if (c.score < minScore) { log.push(`drop(score ${c.score} < ${minScore}): ${c.title}`); continue; }
+    if (c.axis === 'none') { log.push(`drop(axis none): ${c.title}`); continue; }
+    eligible.push(c);
+  }
+  eligible.sort((a, b) => b.score - a.score || (ageInDays(a.published) ?? 9) - (ageInDays(b.published) ?? 9));
+  return eligible;
+}
+// 사건 중복 제거: 이전 브리핑 재등장 차단 → 이미 다른 섹션에 확정된 기사와 같은 사건 제외 → 풀 내부 같은 사건은 최고점 1건
+// → (공통만) 경쟁사는 회사당 1건
+function dedupeEvents(eligible, taken, log, { perCompetitor }) {
+  const unique = [];
+  const seenCompetitors = new Set();
+  for (const c of eligible) {
+    if (isRepeatOfPrevious(c)) { log.push(`drop(repeat of previous briefing): ${c.title} [${c.event_key}]`); continue; }
+    const takenDup = taken.find((t) => t.key === c.key || sameEvent(t, c));
+    if (takenDup) { log.push(`drop(same event already selected in ${takenDup.selected_section}: "${takenDup.title}"): ${c.title}`); continue; }
+    const dup = unique.find((u) => sameEvent(u, c));
+    if (dup) { log.push(`drop(same event as "${dup.title}" score ${dup.score}): ${c.title} (score ${c.score})`); continue; }
+    if (perCompetitor) {
+      const company = c.axis === 'peer' ? competitorOf(`${c.title} ${c.entity}`) : '';
+      if (company) {
+        if (seenCompetitors.has(company)) { log.push(`drop(same competitor ${company}): ${c.title}`); continue; }
+        seenCompetitors.add(company);
+      }
+    }
+    unique.push(c);
+  }
+  return unique;
+}
+
+// 공통(그룹 공통) 확정: 축별 슬롯 보장 → 점수순 채움 (목표 7; 넘기는 추가 선정은 score≥80 만, 최대 8; 글로벌 단독 ≤2)
+function selectCommon(pool, step, taken = []) {
+  const log = [];
+  const eligible = filterEligible(pool, step, log);
+  const unique = dedupeEvents(eligible, taken, log, { perCompetitor: true });
+  const selected = [];
+  const slots = { supervision: 0, group: 0, peer: 0, market: 0, overseas: 0 };
+  const take = (c, reason) => { selected.push(c); slots[c.axis] = (slots[c.axis] || 0) + 1; log.push(`select(${reason}, ${c.axis}, score ${c.score}): ${c.title}`); };
+  for (const axis of ['supervision', 'group', 'peer', 'market', 'overseas']) {
+    const pick = unique.find((c) => c.axis === axis && !selected.includes(c));
+    if (pick) take(pick, `slot:${axis}`);
+  }
+  for (const c of unique) {
+    if (selected.length >= COMMON_MAX) break;
+    if (selected.includes(c)) continue;
+    if (selected.length >= COMMON_TARGET && c.score < HIGH_VALUE_SCORE) { log.push(`skip(target ${COMMON_TARGET} reached, score ${c.score} < ${HIGH_VALUE_SCORE}): ${c.title}`); continue; }
+    if (c.is_global_only && selected.filter((s) => s.is_global_only).length >= MAX_GLOBAL_ONLY) { log.push(`skip(global cap ${MAX_GLOBAL_ONLY}): ${c.title}`); continue; }
+    take(c, selected.length >= COMMON_TARGET ? 'high-value overflow' : 'score');
+  }
+  return { selected: selected.slice(0, COMMON_MAX), slots, log, eligibleCount: eligible.length, uniqueCount: unique.length };
+}
+
+// 업권 확정: 자사 계열사 기사 1건 우선 → 점수순 (목표 3; 넘기는 추가 선정은 score≥80 만, 최대 4)
+function selectSector(sectorId, pool, step, taken) {
+  const log = [];
+  const companies = sectorCompanies(sectorId);
+  const eligible = filterEligible(pool, step, log);
+  const unique = dedupeEvents(eligible, taken, log, { perCompetitor: false });
+  const selected = [];
+  const take = (c, reason) => { selected.push(c); log.push(`select(${sectorId}:${reason}, ${c.axis}, score ${c.score}): ${c.title}`); };
+  const own = unique.find((c) => companies.some((name) => `${c.title} ${c.entity}`.includes(name)));
+  if (own) take(own, 'slot:own-company');
+  for (const c of unique) {
+    if (selected.length >= SECTOR_MAX) break;
+    if (selected.includes(c)) continue;
+    if (selected.length >= SECTOR_TARGET && c.score < HIGH_VALUE_SCORE) { log.push(`skip(${sectorId} target ${SECTOR_TARGET} reached, score ${c.score} < ${HIGH_VALUE_SCORE}): ${c.title}`); continue; }
+    take(c, selected.length >= SECTOR_TARGET ? 'high-value overflow' : 'score');
+  }
+  return { selected: selected.slice(0, SECTOR_MAX), log, eligibleCount: eligible.length, uniqueCount: unique.length };
+}
+
+// 폴백 사다리: ① 3일/35 → ② 목표 미달이면 4일 윈도우(related) → ③ 그래도 최소치 미달이면 점수 임계 25.
+// 점수 임계를 낮추는 단계는 최소치를 못 채울 때만 쓴다 (수량보다 품질 우선).
+const ladder = [
+  { windowDays: 3, minScore: 35, label: '3-day window, score≥35' },
+  { windowDays: 4, minScore: 35, label: '4-day window (related), score≥35' },
+  { windowDays: 4, minScore: 25, label: '4-day window (related), score≥25' }
+];
+function runLadder(name, run, target, minimum) {
+  const attempt = (step) => {
+    const result = run(step);
+    console.log(`Selection ${name} [${step.label}]: eligible=${result.eligibleCount}, unique=${result.uniqueCount}, selected=${result.selected.length}`);
+    return { ...result, step };
+  };
+  let best = attempt(ladder[0]);
+  if (best.selected.length < target) { const wider = attempt(ladder[1]); if (wider.selected.length > best.selected.length) best = wider; }
+  if (best.selected.length < minimum) { const looser = attempt(ladder[2]); if (looser.selected.length > best.selected.length) best = looser; }
+  return best;
+}
+const markTaken = (items, section) => items.map((c) => { c.selected_section = section; return c; });
+
+// ── 공통 확정 ──
+const commonPool = candidates.filter((c) => c.sector === 'group');
+let selection = runLadder('common', (step) => selectCommon(commonPool, step), COMMON_TARGET, COMMON_MIN);
+let shortfallReason = '';
+// ④ 공통이 최소치에 못 미치면 업권 후보 중 고득점(≥70) 기사를 공통으로 승격한다 (sector→group).
+if (selection.selected.length < COMMON_MIN) {
+  const sectorPool = candidates.filter((c) => c.sector !== 'group' && c.score >= PROMOTE_MIN_SCORE);
+  const promoted = selectCommon(sectorPool, selection.step, markTaken(selection.selected, 'common'));
+  const room = COMMON_MIN - selection.selected.length;
+  const extra = promoted.selected.filter((c) => !selection.selected.includes(c)).slice(0, room);
+  for (const c of extra) {
+    c.promoted_from_sector = c.sector; c.sector = 'group'; c.sector_hook = '';
+    selection.selected.push(c); selection.slots[c.axis] = (selection.slots[c.axis] || 0) + 1;
+    selection.log.push(`select(promoted from ${c.promoted_from_sector}, ${c.axis}, score ${c.score}): ${c.title}`);
+  }
+  if (extra.length) console.log(`Selection common: promoted ${extra.length} sector candidate(s) with score≥${PROMOTE_MIN_SCORE} to reach the minimum.`);
+}
+for (const line of selection.log) console.log(`  ${line}`);
+if (selection.selected.length < COMMON_MIN) {
+  shortfallReason = `최근 ${selection.step.windowDays}일 내 중복·홍보·정치 기사를 제외한 그룹 공통 검증 후보가 ${selection.selected.length}건에 그쳤습니다 (공통 후보 ${commonPool.length}건, 적격 ${selection.eligibleCount}건, 사건 중복 제거 후 ${selection.uniqueCount}건).`;
+  console.warn(`Shortfall(common): ${shortfallReason}`);
+}
+const selected = markTaken(selection.selected, 'common');
+console.log(`Selected ${selected.length} common articles (slots: ${JSON.stringify(selection.slots)}).`);
+
+// ── 업권 확정 (공통 우선: 공통에 들어간 기사·같은 사건은 업권에서 제외) ──
+const sectorSelections = {};
+const sectorShortfall = {};
+const taken = [...selected];
+for (const id of SECTOR_IDS) {
+  const pool = candidates.filter((c) => c.sector === id && !taken.some((t) => t.key === c.key));
+  const result = runLadder(id, (step) => selectSector(id, pool, step, taken), SECTOR_TARGET, SECTOR_MIN);
+  for (const line of result.log) console.log(`  ${line}`);
+  if (result.selected.length < SECTOR_MIN) {
+    sectorShortfall[id] = `최근 ${result.step.windowDays}일 내 ${sectorLabel(id)} 업권 검증 후보가 ${result.selected.length}건에 그쳤습니다 (업권 후보 ${pool.length}건, 적격 ${result.eligibleCount}건, 사건 중복 제거 후 ${result.uniqueCount}건).`;
+    console.warn(`Shortfall(${id}): ${sectorShortfall[id]}`);
+  }
+  for (const c of result.selected) c.sector_critical = c.score >= SECTOR_CRITICAL_SCORE && c.severity_flag;
+  sectorSelections[id] = { ...result, selected: markTaken(result.selected, id) };
+  taken.push(...result.selected);
+}
+const sectorSelected = Object.fromEntries(SECTOR_IDS.map((id) => [id, sectorSelections[id].selected]));
+const allSelected = [...selected, ...SECTOR_IDS.flatMap((id) => sectorSelected[id])];
+console.log(`Selected sector articles: ${SECTOR_IDS.map((id) => `${id}=${sectorSelected[id].length}`).join(', ')} → total ${allSelected.length} (common ${selected.length}).`);
+
+// 6) critical 판정(공통만): score≥85 이고 (supervision/group 또는 severity_flag) → 최대 2건
+const criticalKeys = new Set(
+  selected.filter((c) => c.score >= 85 && (['supervision', 'group'].includes(c.axis) || c.severity_flag))
+    .sort((a, b) => b.score - a.score).slice(0, MAX_CRITICAL).map((c) => c.key)
+);
+// 7) 카테고리 배치 (상한 초과분은 인접 카테고리로 넘긴다)
+function categorize(items) {
+  const buckets = { critical: [], daily_news: [], subsidiary_news: [], additional_news: [] };
+  for (const c of items) {
+    let category;
+    if (criticalKeys.has(c.key)) category = 'critical';
+    else if (c.axis === 'group') category = 'subsidiary_news';
+    else if (c.axis === 'overseas' && mentionsWooriSubsidiary(`${c.title} ${c.entity}`)) category = 'subsidiary_news';
+    else if (c.is_global_only) category = 'additional_news';
+    else category = 'daily_news';
+    const order = { subsidiary_news: ['subsidiary_news', 'daily_news', 'additional_news'], additional_news: ['additional_news', 'daily_news'], daily_news: ['daily_news', 'additional_news'], critical: ['critical', 'daily_news'] }[category];
+    const target = order.find((k) => buckets[k].length < CATEGORY_CAPS[k]) || 'daily_news';
+    if (target !== category) console.log(`Category overflow: ${category} → ${target}: ${c.title}`);
+    c.category = target;
+    buckets[target].push(c);
+  }
+  for (const key of NEWS_KEYS) buckets[key].sort((a, b) => b.score - a.score);
+  return buckets;
+}
+const buckets = categorize(selected);
+for (const id of SECTOR_IDS) { for (const c of sectorSelected[id]) c.category = `sector:${id}`; sectorSelected[id].sort((a, b) => b.score - a.score); }
+console.log(`Categories: critical=${buckets.critical.length}, daily=${buckets.daily_news.length}, subsidiary=${buckets.subsidiary_news.length}, additional=${buckets.additional_news.length}`);
+
+function windowOf(c) { const age = ageInDays(c.published); return age !== null && age <= 1 ? 'primary' : 'related'; }
+function urgencyOf(c) { return c.score >= 85 ? '높음' : c.score >= 60 ? '중간' : '낮음'; }
+function confidenceOf(c) { return c.source_type === 'official' ? '높음' : c.excerpt && c.published ? '중간' : '낮음'; }
+function channelOf(c) {
+  return { supervision: '감독당국·정책', group: '우리금융그룹 계열사', peer: '경쟁사 동향', market: '금융시장', overseas: '해외·글로벌', none: '기타' }[c.axis] || '금융시장';
+}
+function riskTypeOf(c) {
+  return { supervision: '준법·규제', group: '자본·건전성·운영', peer: '신용·운영·평판', market: '시장·신용·유동성', overseas: '해외·시장·준법', none: '기타' }[c.axis] || '시장';
+}
+
+// ---------------------------------------------------------------------------------
+// 8. 작성 (CRO writing): 공통 1회 + 업권 묶음 2회
+// ---------------------------------------------------------------------------------
+const newsItemSchema = {
+  type: 'object', additionalProperties: false,
+  required: ['title', 'url', 'published', 'source_name', 'summary', 'why_woori_cro', 'entity', 'channel', 'source_type', 'risk_type', 'urgency', 'confidence', 'critical', 'window', 'watchpoints'],
+  properties: {
+    title: { type: 'string' }, url: { type: 'string' }, published: { type: 'string' }, source_name: { type: 'string' },
+    summary: { type: 'string' }, why_woori_cro: { type: 'string' }, entity: { type: 'string' }, channel: { type: 'string' },
+    source_type: { type: 'string', enum: ['media', 'official'] }, risk_type: { type: 'string' },
+    urgency: { type: 'string', enum: ['높음', '중간', '낮음'] }, confidence: { type: 'string', enum: ['높음', '중간', '낮음'] },
+    critical: { type: 'boolean' }, window: { type: 'string', enum: ['primary', 'related'] },
+    watchpoints: { type: 'array', minItems: 2, maxItems: 3, items: { type: 'string' } }
+  }
+};
+const briefingSchema = {
+  type: 'object', additionalProperties: false,
   required: ['executive_judgment', 'executive_judgment_bullets', 'critical', 'daily_news', 'subsidiary_news', 'additional_news', 'forward_looking_points', 'insights', 'monitoring_points'],
   properties: {
     executive_judgment: { type: 'string' },
-    executive_judgment_bullets: {
-      type: 'array',
-      minItems: 3,
-      maxItems: 4,
-      items: { type: 'string' }
-    },
-    critical: { type: 'array', minItems: 1, maxItems: 2, items: newsItem },
-    daily_news: { type: 'array', minItems: 3, maxItems: 6, items: newsItem },
-    subsidiary_news: { type: 'array', minItems: 0, maxItems: 4, items: newsItem },
-    additional_news: { type: 'array', minItems: 0, maxItems: 2, items: newsItem },
+    executive_judgment_bullets: { type: 'array', minItems: 3, maxItems: 4, items: { type: 'string' } },
+    critical: { type: 'array', minItems: 0, maxItems: CATEGORY_CAPS.critical, items: newsItemSchema },
+    daily_news: { type: 'array', minItems: 0, maxItems: CATEGORY_CAPS.daily_news, items: newsItemSchema },
+    subsidiary_news: { type: 'array', minItems: 0, maxItems: CATEGORY_CAPS.subsidiary_news, items: newsItemSchema },
+    additional_news: { type: 'array', minItems: 0, maxItems: CATEGORY_CAPS.additional_news, items: newsItemSchema },
     forward_looking_points: {
-      type: 'array',
-      maxItems: 4,
+      type: 'array', minItems: 2, maxItems: 4,
       items: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['title', 'horizon', 'likelihood', 'cro_angle', 'trigger'],
-        properties: {
-          title: { type: 'string' },
-          horizon: { type: 'string' },
-          likelihood: { type: 'string', enum: ['높음', '중간', '낮음'] },
-          cro_angle: { type: 'string' },
-          trigger: { type: 'string' }
-        }
+        type: 'object', additionalProperties: false, required: ['title', 'horizon', 'likelihood', 'cro_angle', 'trigger'],
+        properties: { title: { type: 'string' }, horizon: { type: 'string' }, likelihood: { type: 'string', enum: ['높음', '중간', '낮음'] }, cro_angle: { type: 'string' }, trigger: { type: 'string' } }
       }
     },
     insights: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['headline', 'bullets', 'action_items', 'stance'],
+      type: 'object', additionalProperties: false, required: ['headline', 'bullets', 'action_items', 'stance'],
       properties: {
-        headline: { type: 'string' },
-        bullets: { type: 'array', minItems: 3, maxItems: 5, items: { type: 'string' } },
-        action_items: { type: 'array', minItems: 3, maxItems: 5, items: { type: 'string' } },
-        stance: { type: 'string' }
+        headline: { type: 'string' }, bullets: { type: 'array', minItems: 3, maxItems: 5, items: { type: 'string' } },
+        action_items: { type: 'array', minItems: 3, maxItems: 5, items: { type: 'string' } }, stance: { type: 'string' }
       }
     },
     monitoring_points: { type: 'array', minItems: 4, maxItems: 7, items: { type: 'string' } }
   }
 };
-
-let previousTitles = [];
-let previousTopics = [];
-const previousCanonicalUrls = new Set();
-
-try {
-  const previous = JSON.parse(await readFile(outputPath, 'utf8'));
-  const previousDate = String(previous?.meta?.briefing_date || '');
-  const isPastBriefing = previousDate && previousDate < kstDate();
-
-  if (isPastBriefing) {
-    const previousNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news']
-      .flatMap((key) => previous[key] || []);
-
-    previousTitles = previousNews
-      .map((item) => item.title)
-      .filter(Boolean)
-      .slice(0, 20);
-
-    previousTopics = previousNews
-      .map((item) => ({
-        title: item.title || '',
-        entity: item.entity || '',
-        risk_type: item.risk_type || '',
-        summary: item.summary || ''
-      }))
-      .filter((item) => item.title || item.summary)
-      .slice(0, 20);
-
-    for (const item of previousNews) {
-      try {
-        if (item?.url) previousCanonicalUrls.add(canonicalUrlKey(item.url));
-      } catch {}
-    }
-  }
-} catch {}
-
-const date = kstDate();
-
-try {
-  const existing = JSON.parse(await readFile(outputPath, 'utf8'));
-  if (existing?.meta?.briefing_date === date && !existing?.meta?.fallback_notice) {
-    console.log(`Briefing for ${date} already exists. Skipping duplicate run.`);
-    process.exit(0);
-  }
-} catch {}
-const commonResearchRules = `
-실행일은 ${date} KST다. 실행 시점 기준 최근 24시간의 공개 정보를 primary 후보로 삼아라.
-각 후보는 서로 다른 단일 사건이어야 하며, 같은 사건의 반복 보도는 대표 원문 하나로 통합하라.
-URL은 실제 검색으로 확인한 개별 기사 또는 개별 공식 발표의 직접 링크만 사용하라. 검색결과·기관 섹션·게시판 목록 URL은 후보로 제시하지 마라.
-게시 일시는 KST 기준으로 적고 확인할 수 없으면 '게시 시각 미확인'이라고 명시하라.
-확인된 사실과 CRO 관점의 분석을 구분하고, 수치·날짜·기관명·기업명을 검증하라.
-자본·유동성·신용·시장·운영·사이버·법무/준법·평판·전략 리스크 영향을 평가하라.
-신뢰할 만한 후보가 부족하면 숫자를 채우지 말고 조사 메모에 이유를 적어라.
-primary 후보가 부족하면 맥락 이해에 직접 필요한 어제·오늘 유관·배경 자료를 추가 조사하되 반드시 related라고 표시하고 날짜를 명확히 적어라.
-이전 브리핑에 이미 사용된 URL은 후보에서 절대 제외하라: ${JSON.stringify([...previousCanonicalUrls])}
-이전 브리핑 제목은 중대한 신규 사실이 있을 때만 다시 후보에 포함하라: ${JSON.stringify(previousTitles)}
-이전 브리핑의 사건·주제와 사실상 같은 경우에는 URL과 언론사가 달라도 후보에서 제외하라. 예를 들어 같은 기업의 같은 제재·사고·실적·자본조달·정책발표·통계발표를 다른 매체가 보도한 기사는 새로운 기사로 보지 마라. 이전 브리핑 주제 참고 자료: ${JSON.stringify(previousTopics)}
-각 후보에 제목, 매체·기관, 게시 일시, 직접 URL, 확인된 사실, 우리금융 CRO 중요성, 리스크 유형, 긴급도, 근거 신뢰도와 확인할 질문을 포함하라. 제목은 반드시 원문 기사의 실제 헤드라인을 그대로 가져와라. "이데일리 금융권 기사입니다", "금융권 동향관련보도", "증권금융시장 관련보도", "우리은행 해외현지법인 관련보도", "계열사 관련보도" 같이 매체명·카테고리·그룹명만 조합한 문장을 제목으로 만들지 마라. "관련보도"나 "관련 보도"로 끝나는 제목을 절대 만들지 마라. 반드시 원문에 있는 구체적인 기사 제목을 그대로 사용하라. 각 후보 옆에 반드시 해당 기사의 실제 URL과 게시 일시를 정확히 적어라.
-모든 한국어 서술은 임원 보고서에 맞는 정중한 합니다체로 작성하라. 문장을 '한다·이다·있다·된다·필요하다'로 끝내지 말고 '합니다·입니다·있습니다·됩니다·필요합니다'로 끝내라.
-반드시 웹 검색을 수행하고, 모든 후보 옆에 실제 검색 출처를 인라인 인용으로 붙여라. 이 조사 단계에서는 읽기 쉽고 한국어 조사 메모로 답하되, 마지막에 반드시 메타데이터 블록을 추가하라. 다음 기사는 CRO 리스크 브리핑 후보에서 절대 제외하라: 내부 교육·세미나·행사, 후원·CSR·봉사활동, 인사 발령·조직 개편(리스크 사고와 무관한 것), 홍보성 기사, 체육대회·채용박람회·시상식, 단순 통계 발표(리스크 영향 분석이 없는 것), 일반 행정 공지, 통화안정증권 경쟁입찰·정례모집, 금융위·한국은행·금감원 정기 보도자료, 기관 공식 보도자료(기자가 작성한 언론기사가 아닌 것). 이 기사들은 숫자를 채우기 위해 끼워 넣지 마라. 오직 자본·유동성·신용·시장·운영·사이버·법무·평판·전략 리스크에 직접적 영향이 있는 기사만 후보로 삼아라.
-조사 메모를 모두 작성한 후, 마지막에 반드시 다음 블록을 추가하라. 각 후보 기사의 정확한 메타데이터를 포함해야 한다:
-[[SOURCE_METADATA]]
-[{"url":"실제URL","title":"원문 기사의 실제 헤드라인","published":"게시일시(YYYY-MM-DD 또는 YYYY-MM-DD HH:MM)"}]
-[[/SOURCE_METADATA]]
-title은 반드시 원문 기사의 실제 헤드라인을 그대로 적어라. "금융권 동향관련보도" 같은 요약형 제목을 만들지 마라. published는 반드시 정확한 게시일시를 적어라. 이 메타데이터는 후보 선정에 직접 사용되므로 정확성이 매우 중요하다.
-모든 후보 기사에 게시일시를 반드시 정확히 적어라. 게시일시를 확인할 수 없는 기사는 후보에서 제외하라. 날짜가 없는 후보는 최종 선정에서 자동 제외되므로, 반드시 각 후보의 실제 게시일시를 SOURCE_METADATA에 포함하라. 어제·오늘 기사가 부족하면, 검색을 더 수행해서 어제·오늘 기사를 추가로 찾아라. 후보 수를 채우기 위해 날짜 없는 기사나 오래된 기사를 넣지 마라.
-검색을 충분히 많이 수행하라. 각 계열사·기관·주제·리스크 유형별로 개별 검색을 돌려라(예: "우리은행 어제·오늘", "우리카드 리스크", "KB금융 건전성", "신한금융 제재", "금융위원회 규제" 등). 검색 쿼리에 반드시 "어제·오늘" 또는 "이번 주" 같은 최신 기간을 명시하고, 검색 결과에서 게시일시가 어제·오늘인 기사를 우선 선정하라. 최소 15회 이상의 개별 검색을 수행하여 어제·오늘 기사를 최대한 많이 확보하라.
-`;
-
-const koreanMediaDomains = [
-  'n.news.naver.com',
-  'news.naver.com',
-  'finance.naver.com',
-  'yna.co.kr',
-  'news1.kr',
-  'hankyung.com',
-  'mk.co.kr',
-  'sedaily.com',
-  'edaily.co.kr',
-  'mt.co.kr',
-  'news.bizwatch.co.kr',
-  'biz.chosun.com',
-  'fnnews.com',
-  'asiae.co.kr',
-  'etoday.co.kr',
-  'ytn.co.kr',
-  'infomax.co.kr',
-  'heraldcorp.com',
-  'donga.com',
-  'joongang.co.kr'
-];
-const globalMediaDomains = [
-  'reuters.com', 'bloomberg.com', 'ft.com', 'wsj.com', 'cnbc.com',
-  'apnews.com', 'nikkei.com', 'economist.com', 'marketwatch.com',
-  'finance.yahoo.com'
-];
-const officialDomains = [
-  'fsc.go.kr', 'fss.or.kr', 'bok.or.kr', 'moef.go.kr', 'kofia.or.kr',
-  'krx.co.kr', 'dart.fss.or.kr', 'kdic.or.kr', 'woorifg.com',
-  'wooribank.com', 'bis.org', 'fsb.org', 'imf.org',
-  'federalreserve.gov', 'ecb.europa.eu'
-];
-const wooriSubsidiaryKeywords = [
-  '우리금융', '우리금융지주', '우리은행', '우리카드', '우리금융캐피탈',
-  '우리종합금융', '우리자산운용', '우리금융저축은행', '우리투자증권',
-  '우리에프아이에스', '우리글로벌자산운용', '동양생명', 'ABL생명',
-  '우리아메리카', 'Woori America', '우리소다라', 'Woori Saudara', 'Bank Woori Saudara',
-  '우리은행 캄보디아', '우리은행 브라질', '우리은행 중국', '베트남우리은행'
-];
-
-const competitorKeywords = [
-  'KB금융', 'KB국민', 'KB국민은행',
-  '신한금융', '신한은행', '신한카드', '신한투자증권',
-  '하나금융', '하나은행', '하나카드', '하나증권',
-  'NH농협', '농협금융', '농협은행',
-  'IBK기업은행', '기업은행',
-  '한국금융지주', '한국투자증권'
-];
-
-function mentionsWooriSubsidiary(item) {
-  // subsidiary_news 판정은 제목을 1순위로, 요약·entity를 보조로 사용합니다.
-  // 제목에 계열사명이 없어도 본문(요약)이 우리금융 계열사에 직접 관련되면 인정합니다.
-  const title = String(item?.title || '').trim();
-  const summary = String(item?.summary || '').trim();
-  const entity = String(item?.entity || '').trim();
-  const haystack = [title, summary, entity].filter(Boolean).join(' ');
-
-  if (!haystack) return false;
-
-  // 경쟁사 기사는 우리금융이 비교 언급되어도 계열사 뉴스가 아닙니다.
-  if (competitorKeywords.some((keyword) => haystack.includes(keyword))) {
-    return false;
-  }
-
-  // 제목·요약·entity 어디든 우리금융 또는 계열사명이 직접 등장하면 계열사 뉴스로 인정합니다.
-  return wooriSubsidiaryKeywords.some((keyword) =>
-    haystack.includes(keyword)
-  );
-}
-
-function isCompetitorFinancialArticle(item) {
-  const title = String(item?.title || '').trim();
-
-  return competitorKeywords.some((keyword) => title.includes(keyword));
-}
-
-function moveMisplacedSubsidiaryNews(candidate) {
-  candidate.critical ||= [];
-  candidate.daily_news ||= [];
-  candidate.subsidiary_news ||= [];
-  candidate.additional_news ||= [];
-
-  const seenUrls = new Set();
-  const subsidiaryNews = [];
-  const dailyNews = [];
-  const additionalNews = [];
-
-  const addUnique = (target, item) => {
-    try {
-      const urlKey = canonicalUrlKey(item.url);
-
-      if (seenUrls.has(urlKey)) {
-        console.log(`Removed duplicate article during category cleanup: ${item.title}`);
-        return false;
-      }
-
-      item.critical = false;
-      seenUrls.add(urlKey);
-      target.push(item);
-      return true;
-    } catch {
-      console.log(
-        `Removed article with invalid URL during category cleanup: ${item.title || '제목 미확인'}`
-      );
-      return false;
-    }
-  };
-
-  // critical 기사의 URL은 다른 섹션에 중복 배치되지 않도록 먼저 기록합니다.
-  for (const item of candidate.critical) {
-    try {
-      seenUrls.add(canonicalUrlKey(item.url));
-    } catch {}
-  }
-
-  // 1) 기존 계열사 뉴스: 우리금융 직접 기사만 유지합니다.
-  // 경쟁사 기사는 daily_news로 옮기고, 무관한 해외 기업 기사는 제거합니다.
-  for (const item of candidate.subsidiary_news) {
-    if (mentionsWooriSubsidiary(item)) {
-      addUnique(subsidiaryNews, item);
-      continue;
-    }
-
-    if (isCompetitorFinancialArticle(item)) {
-      if (addUnique(dailyNews, item)) {
-        console.log(
-          `Moved competitor article from subsidiary_news to daily_news: ${item.title}`
-        );
-      }
-      continue;
-    }
-
-    console.log(
-      `Removed unrelated article from subsidiary_news: ${item.title || '제목 미확인'}`
-    );
-  }
-
-  // 2) daily_news: 우리금융 직접 기사는 subsidiary_news로 이동합니다.
-  for (const item of candidate.daily_news) {
-    if (mentionsWooriSubsidiary(item)) {
-      if (addUnique(subsidiaryNews, item)) {
-        console.log(
-          `Moved direct Woori article from daily_news to subsidiary_news: ${item.title}`
-        );
-      }
-      continue;
-    }
-
-    addUnique(dailyNews, item);
-  }
-
-  // 3) additional_news: 우리금융 직접 기사는 subsidiary_news,
-  // 경쟁사 기사는 daily_news로 옮기며, 나머지는 additional_news에 유지합니다.
-  for (const item of candidate.additional_news) {
-    if (mentionsWooriSubsidiary(item)) {
-      if (addUnique(subsidiaryNews, item)) {
-        console.log(
-          `Moved direct Woori article from additional_news to subsidiary_news: ${item.title}`
-        );
-      }
-      continue;
-    }
-
-    if (isCompetitorFinancialArticle(item)) {
-      if (addUnique(dailyNews, item)) {
-        console.log(
-          `Moved competitor article from additional_news to daily_news: ${item.title}`
-        );
-      }
-      continue;
-    }
-
-    addUnique(additionalNews, item);
-  }
-
-  // 기사 수를 인위적으로 4건·6건으로 자르지 않습니다.
-  // 구조화 출력에서 확보된 검증 기사를 보존하는 것이 우선입니다.
-  candidate.subsidiary_news = subsidiaryNews;
-  candidate.daily_news = dailyNews;
-  candidate.additional_news = additionalNews;
-}
-function extractDateFromPublished(publishedText) {
-  const match = String(publishedText || '').match(/(\d{4})-(\d{2})-(\d{2})/);
-  return match ? match[0] : '';
-}
-
-function parsePublishedKst(publishedText) {
-  const text = String(publishedText || '').trim();
-  let year = null;
-  let month = null;
-  let day = null;
-  let m;
-  // YYYY-MM-DD | YYYY.MM.DD | YYYY/MM/DD
-  if ((m = text.match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/))) {
-    year = +m[1]; month = +m[2]; day = +m[3];
-  // YYYYMMDD (8 digits)
-  } else if ((m = text.match(/(\d{4})(\d{2})(\d{2})/))) {
-    year = +m[1]; month = +m[2]; day = +m[3];
-  // YYYY년 M월 D일
-  } else if ((m = text.match(/(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/))) {
-    year = +m[1]; month = +m[2]; day = +m[3];
-  // M월 D일 (연도는 현재 연도로 간주 — 이후 7일 게이트가 옛 기사를 걸러낸다)
-  } else if ((m = text.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/))) {
-    year = new Date().getFullYear(); month = +m[1]; day = +m[2];
-  }
-  if (!year || !month || !day) return { date: null, hasTime: false };
-  const timeMatch = text.match(/(\d{1,2}):(\d{2})/);
-  if (timeMatch) {
-    const withTime = new Date(year, month - 1, day, +timeMatch[1], +timeMatch[2], 0);
-    if (!Number.isNaN(withTime.getTime())) return { date: withTime, hasTime: true };
-  }
-  const dateOnly = new Date(year, month - 1, day);
-  if (!Number.isNaN(dateOnly.getTime())) return { date: dateOnly, hasTime: false };
-  return { date: null, hasTime: false };
-}
-
-function isYesterdayOrTodayKst(publishedText) {
-  const parsed = parsePublishedKst(publishedText);
-  if (!parsed.date) return false;
-  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
-  const pubKst = fmt.format(parsed.date);
-  const todayKst = fmt.format(new Date());
-  const yKst = fmt.format(new Date(Date.now() - 24 * 3600 * 1000));
-  return pubKst === todayKst || pubKst === yKst;
-}
-
-function isRecentWithinDaysKst(publishedText, maxDays) {
-  const parsed = parsePublishedKst(publishedText);
-  if (!parsed.date) return false;
-  const diff = (Date.now() - parsed.date.getTime()) / 86400000;
-  return diff >= -0.2 && diff <= maxDays;
-}
-
-function hostMatchesDomain(hostname, domain) {
-  return hostname === domain || hostname.endsWith(`.${domain}`);
-}
-
-function isOfficialUrl(rawUrl) {
-  try {
-    const hostname = new URL(rawUrl).hostname.toLowerCase().replace(/^www\./, '');
-    return hostname.endsWith('.go.kr') || hostname.endsWith('.gov') ||
-      officialDomains.some((domain) => hostMatchesDomain(hostname, domain));
-  } catch {
-    return false;
-  }
-}
-
-function isLikelyListingUrl(rawUrl) {
-  try {
-    const url = new URL(rawUrl);
-    const path = url.pathname.replace(/\/+$/, '');
-    const hasArticleId = /\d{4,}/.test(path) || [...url.searchParams.keys()].some((key) =>
-      /^(idx|id|no|seq|article|article_id|nttId|bbsId)$/i.test(key) && url.searchParams.get(key)
-    );
-    const looksLikeSearch = !hasArticleId && [...url.searchParams.keys()].some((key) =>
-      /^(query|keyword|search|searchword|srchtext|srchkey)$/i.test(key) && url.searchParams.get(key)
-    );
-    const knownBoardRoot = /\/(no\d{6}|po\d{6})$/i.test(path);
-    return looksLikeSearch || knownBoardRoot || (!hasArticleId && /\/(news|search|list|bbs)$/i.test(path));
-  } catch {
-    return true;
-  }
-}
-
-function sourceUrlQuality(rawUrl) {
-  try {
-    const url = new URL(rawUrl);
-    let score = 0;
-    if (!isLikelyListingUrl(rawUrl)) score += 100;
-    if (/\d{4,}/.test(url.pathname)) score += 20;
-    score -= [...url.searchParams.keys()].filter((key) => key.toLowerCase().startsWith('utm_')).length * 5;
-    score -= url.search.length / 100;
-    return score;
-  } catch {
-    return -1000;
-  }
-}
-
-async function researchStage(label, scope, allowedDomains, minimumSources = 4) {
-  let best = { narrative: '', source_urls: [], source_data: [] };
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const body = await requestOpenAi(label, {
-      model,
-      input: `당신은 CRO STAFF의 조사 담당자다.\n\n조사 범위:\n${scope}\n\n공통 조사 규칙:\n${commonResearchRules}`,
-      tools: [{
-        type: 'web_search',
-        search_context_size: 'high',
-        ...(allowedDomains && allowedDomains.length > 0 ? { filters: { allowed_domains: allowedDomains } } : {}),
-        user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' }
-              }],
-              max_tool_calls: 15,
-              include: ['web_search_call.action.sources'],
-      store: false,
-      reasoning: { effort: 'low' },
-      text: { verbosity: 'medium' },
-      max_output_tokens: 12000
-    });
-    const narrative = extractOutputText(body);
-    const sourceData = extractSourceData(body);
-    const narrativeMappings = parseSourceMappingFromNarrative(narrative);
-    if (narrativeMappings.length > 0) {
-      console.log(`${label} extracted ${narrativeMappings.length} title/date mappings from narrative.`);
-    }
-    const combinedData = [...sourceData];
-    for (const mapping of narrativeMappings) {
-      try {
-        const mKey = canonicalUrlKey(mapping.url);
-        const existing = combinedData.find((d) => {
-          try { return canonicalUrlKey(d.url) === mKey; } catch { return false; }
-        });
-        if (existing) {
-          if ((!existing.title || existing.title.length < 5) && mapping.title) existing.title = mapping.title;
-          if (!existing.published && mapping.published) existing.published = mapping.published;
-        } else {
-          try {
-            const mUrl = new URL(mapping.url);
-            if (['http:', 'https:'].includes(mUrl.protocol) && !isLikelyListingUrl(mapping.url)) {
-              combinedData.push(mapping);
-            }
-          } catch {}
+// 업권 묶음 작성 스키마: sectors[] 각 항목 = {sector, judgment(2문장), news[]}
+const sectorWritingSchema = {
+  type: 'object', additionalProperties: false, required: ['sectors'],
+  properties: {
+    sectors: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false, required: ['sector', 'judgment', 'news'],
+        properties: {
+          sector: { type: 'string', enum: SECTOR_IDS },
+          judgment: { type: 'string' },
+          news: { type: 'array', minItems: 0, maxItems: SECTOR_MAX, items: newsItemSchema }
         }
-      } catch {}
-    }
-    const sourceUrls = combinedData.map((s) => s.url);
-    if (narrative && sourceUrls.length > best.source_urls.length) best = { narrative, source_urls: sourceUrls, source_data: combinedData };
-    if (narrative && sourceUrls.length >= minimumSources) {
-      console.log(`${label} collected ${sourceUrls.length} verified source URLs.`);
-      return { narrative, source_urls: sourceUrls, source_data: combinedData };
-    }
-    if (attempt < 2) {
-      console.warn(`${label} returned fewer than ${minimumSources} cited sources. Retrying after TPM cooldown.`);
-      await coolDown(`${label} empty-source retry`);
+      }
     }
   }
-  console.warn(`${label} returned only ${best.source_urls.length} cited sources; continuing with verified sources from other stages.`);
-  return best;
-}
-
-const domesticMedia = await researchStage(
-  'Korean financial media research',
-  `한국 금융시장·금융회사 리스크 관련 일반 언론기사를 조사하라.
-후보는 네이버 메인뉴스 및 네이버 경제뉴스 기사 링크(n.news.naver.com, news.naver.com, finance.naver.com)를 최우선으로 사용하라.
-네이버 기사 링크가 충분하면 후보 6~8건 중 최소 4건 이상은 네이버 뉴스 직접 링크로 제시하라.
-네이버에 적합한 기사가 부족할 때만 연합뉴스·주요 경제지·금융전문매체의 원문 링크를 보완적으로 사용하라.
-금리·환율·유동성·부동산 PF·가계·기업 신용·자본규제·소비자보호·사이버·운영리스크와 금융회사 사건을 점검하라.
-정부기관 보도자료가 아니라 기자가 작성한 기사 원문만 후보로 제시하라. 같은 정책이라도 시장·금융회사 파급효과를 분석한 언론기사를 우선하라.`,
-  koreanMediaDomains,
-  6
-);
-await coolDown('Korean financial media research');
-
-const wooriMedia = await researchStage(
-  'Woori Financial Group media research',
-  `한국 주요 통신사·경제지·금융 전문매체 및 네이버뉴스에서 우리금융그룹 및 계열사에 관한 일반 언론기사를 전용으로 조사하라. 네이버뉴스(news.naver.com, finance.naver.com)의 검색 결과를 적극적으로 활용하라.
-다음 계열사명을 각각 네이버 뉴스 검색으로 확인하라: 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명.
-우리은행 해외지점 및 해외 현지법인인 우리아메리카은행, 우리소다라, 우리은행 캄보디아, 우리은행 베트남, 우리은행 중국, 우리은행 브라질 등의 직접 관련 보도도 조사하라.
-각 계열사명을 검색했을 때 어제·오늘 기사가 있으면 반드시 후보에 포함하라. 기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최소 8건 최대 10건 제시하라.`,
-  koreanMediaDomains,
-  6
-);
-await coolDown('Woori Financial Group media research');
-
-const peerMedia = await researchStage(
-  'Peer competitor media research',
-  `한국 주요 통신사·경제지·금융 전문매체 및 네이버뉴스에서 국내 주요 금융 경쟁사의 일반 언론기사를 전용으로 조사하라. 네이버뉴스(news.naver.com, finance.naver.com)의 검색 결과를 적극적으로 활용하라.
-KB금융, 신한금융, 하나금융, NH농협금융, IBK기업은행, 한국금융지주 및 주요 은행·증권·보험·카드사의 자본, 건전성, 유동성, 인수합병, 제재, 금융사고, 소비자보호, 실적과 리스크 변화를 점검하라.
-우리금융그룹 관련 기사는 이 조사 단계의 후보로 넣지 말고, 경쟁사 변화가 우리금융그룹의 자본·유동성·신용·시장·운영·준법·평판 리스크에 주는 시사점을 함께 적어라.
-기업 홈페이지·공시 링크가 아니라 기자가 작성한 기사 원문을 후보로 최소 6건 최대 8건 제시하라.`,
-  koreanMediaDomains,
-  6
-);
-await coolDown('Peer competitor media research');
-
-const globalMedia = await researchStage(
-  'Global financial media research',
-  `Reuters, Bloomberg, FT, WSJ, CNBC, AP, Nikkei 등 신뢰도 높은 글로벌 언론에서 우리금융그룹으로 전이될 수 있는 일반 금융기사를 조사하라.
-금리·달러·채권·주식·원자재·지정학·해외 상업용 부동산·은행 건전성·사이버·제재·AML 변화를 점검하라.
-기관 발표문 자체보다 기자가 취재·작성한 기사 원문을 후보로 최대 8건 제시하라.`,
-  globalMediaDomains,
-  4
-);
-await coolDown('Global financial media research');
-
-const researchEvidence = {
-  korean_media: domesticMedia,
-  woori_media: wooriMedia,
-  peer_media: peerMedia,
-  global_media: globalMedia
 };
-const sourceStagesByCanonical = new Map();
 
-for (const [stage, evidence] of Object.entries(researchEvidence)) {
-  for (const sourceUrl of evidence.source_urls || []) {
-    try {
-      const key = canonicalUrlKey(sourceUrl);
-
-      if (!sourceStagesByCanonical.has(key)) {
-        sourceStagesByCanonical.set(key, new Set());
-      }
-
-      sourceStagesByCanonical.get(key).add(stage);
-    } catch {}
-  }
-}
-
-function isFromResearchStage(rawUrl, stage) {
-  try {
-    return sourceStagesByCanonical
-      .get(canonicalUrlKey(rawUrl))
-      ?.has(stage) === true;
-  } catch {
-    return false;
-  }
-}
-
-function isNaverNewsUrl(rawUrl) {
-  try {
-    const hostname = new URL(rawUrl).hostname
-      .toLowerCase()
-      .replace(/^www\./, '');
-
-    return [
-      'n.news.naver.com',
-      'news.naver.com',
-      'finance.naver.com'
-    ].some((domain) => hostMatchesDomain(hostname, domain));
-  } catch {
-    return false;
-  }
-}
-
-function isGlobalMediaUrl(rawUrl) {
-  try {
-    const hostname = new URL(rawUrl).hostname
-      .toLowerCase()
-      .replace(/^www\./, '');
-
-    return globalMediaDomains.some((domain) =>
-      hostMatchesDomain(hostname, domain)
-    );
-  } catch {
-    return false;
-  }
-}
-const researchedUrlByCanonical = new Map();
-const researchedUrlsByPath = new Map();
-for (const sourceUrl of Object.values(researchEvidence).flatMap((evidence) => evidence.source_urls || [])) {
-  const canonicalKey = canonicalUrlKey(sourceUrl);
-  const current = researchedUrlByCanonical.get(canonicalKey);
-  if (!current || sourceUrlQuality(sourceUrl) > sourceUrlQuality(current)) {
-    researchedUrlByCanonical.set(canonicalKey, sourceUrl);
-  }
-  const pathKey = urlPathKey(sourceUrl);
-  const matches = researchedUrlsByPath.get(pathKey) || [];
-  if (!matches.includes(sourceUrl)) matches.push(sourceUrl);
-  researchedUrlsByPath.set(pathKey, matches);
-}
-if (researchedUrlByCanonical.size < 10) {
-  console.warn(`Research produced only ${researchedUrlByCanonical.size} unique source URLs; synthesis will fill what it can.`);
-}
-const researchedTitleByUrl = new Map();
-const researchedDateByUrl = new Map();
-for (const sourceData of Object.values(researchEvidence).flatMap((evidence) => evidence.source_data || [])) {
-  const canonicalKey = canonicalUrlKey(sourceData.url);
-  if (sourceData.title && !researchedTitleByUrl.has(canonicalKey)) {
-    researchedTitleByUrl.set(canonicalKey, sourceData.title);
-  }
-  if (sourceData.published && !researchedDateByUrl.has(canonicalKey)) {
-    researchedDateByUrl.set(canonicalKey, sourceData.published);
-  }
-}
-function getResearchedMeta(itemUrl) {
-  try {
-    const canonicalKey = canonicalUrlKey(itemUrl);
-    let researchedUrl = researchedUrlByCanonical.get(canonicalKey);
-    if (!researchedUrl) {
-      const pathMatches = researchedUrlsByPath.get(urlPathKey(itemUrl)) || [];
-      if (pathMatches.length === 1) researchedUrl = pathMatches[0];
-    }
-    if (!researchedUrl) return null;
-    const verifiedKey = canonicalUrlKey(researchedUrl);
-    return {
-      title: researchedTitleByUrl.get(verifiedKey) || '',
-      published: researchedDateByUrl.get(verifiedKey) || '',
-      researchedUrl
-    };
-  } catch {
-    return null;
-  }
-}
-
-console.log(`Extracted ${researchedTitleByUrl.size} article titles and ${researchedDateByUrl.size} article dates from research sources.`);
-// ===== B: 날짜 미확인 후보 일괄 검증 — 어제·오늘 기사 풀을 확대한다. =====
-// 연구가 URL은 많이 모았지만 날짜가 비어 있어 백필에서 제외되는 후보를,
-// 한 번의 LLM(web_search) 호출로 일괄 검증해 어제·오늘이면 풀에 살린다.
-async function verifyUndatedSourceDates() {
-  const undated = [];
-  const seen = new Set();
-  for (const [stage, evidence] of Object.entries(researchEvidence)) {
-    for (const sd of evidence.source_data || []) {
-      try {
-        const key = canonicalUrlKey(sd.url);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        if (!researchedUrlByCanonical.has(key)) continue;
-        if (previousCanonicalUrls.has(key)) continue;
-        if (isLikelyListingUrl(sd.url)) continue;
-        const published = sd.published || researchedDateByUrl.get(key) || '';
-        if (parsePublishedKst(published).date) continue; // 이미 날짜 있음
-        const title = sd.title || researchedTitleByUrl.get(key) || '(제목없음)';
-        undated.push({ url: researchedUrlByCanonical.get(key), title, stage });
-      } catch {}
-    }
-  }
-  if (undated.length === 0) return;
-  const targets = undated.slice(0, 20); // 비용 제한: 최대 20개만 검증
-  const list = targets.map((t, i) => `${i + 1}. ${t.title} (${t.url})`).join('\n');
-  try {
-    const body = await requestOpenAi('Backfill date verification', {
-      model,
-      input: `다음 기사들의 게시일시를 웹 검색으로 확인하라. 각 기사가 어제·오늘(오늘 ${date} KST 기준) 게시되었는지 판단하라.\n\n${list}\n\n각 항목에 대해 다음 형식으로만 답하라:\n번호. URL | 게시일시(YYYY-MM-DD) 또는 '오래됨' 또는 '확인불가'`,
-      tools: [{ type: 'web_search', search_context_size: 'high', user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' } }],
-      max_tool_calls: 8,
-      include: ['web_search_call.action.sources'],
-      store: false,
-      reasoning: { effort: 'low' },
-      text: { verbosity: 'medium' },
-      max_output_tokens: 6000
-    });
-    const text = extractOutputText(body);
-    let verified = 0;
-    for (const line of String(text || '').split('\n')) {
-      const dm = line.match(/(\d{4})-(\d{2})-(\d{2})/);
-      const um = line.match(/https?:\/\/[^\s|]+/);
-      if (!dm || !um) continue;
-      try {
-        const key = canonicalUrlKey(um[0]);
-        if (researchedUrlByCanonical.has(key) && !researchedDateByUrl.has(key)) {
-          researchedDateByUrl.set(key, `${dm[1]}-${dm[2]}-${dm[3]}`);
-          verified += 1;
-        }
-      } catch {}
-    }
-    console.log(`Date verification: checked ${targets.length} undated sources, verified ${verified} recent dates.`);
-  } catch (e) {
-    console.warn(`Date verification failed (continuing): ${e.message}`);
-  }
-}
-await verifyUndatedSourceDates();
-function buildSynthesisPrompt() {
-  return `
-당신은 우리금융그룹 전체 CRO를 지원하는 전략 비서 CRO STAFF다. 실행일은 ${date} KST다.
-아래 네 조사팀의 웹 조사 메모와 검증 출처 URL만 사용하여 최종 데일리 브리핑을 작성하라. 조사 메모에 없는 사실과 수치를 새로 만들지 마라.
-
-우선순위: 1. 한국 금융시장 리스크 2. 한국 금융 규제·정책 변화 3. 국내 금융 경쟁사 동향 4. 글로벌 금융시장 및 해외 규제·정책 5. 우리금융그룹과 계열사 직접 영향은 범주와 관계없이 상향
-언어 규칙 (반드시 준수): - summary, why_woori_cro, watchpoints, entity, channel, risk_type 등 분석 텍스트 필드는 반드시 자연스러운 한국어로 작성한다. - title은 URL별 실제 기사 제목 매핑에 있는 제목을 그대로 사용한다. 외국어 원문 제목은 임의로 번역하거나 바꾸지 마라. - 고유명사(인명, 기관명, 기업명, 상품명)는 널리 쓰이는 한국어 표기(예: 로이터, 블룸버그, 연준)를 사용하고, 필요하면 괄호 안에 원어를 병기할 수 있다.
-카테고리별 리서치 출처 우선순위 (daily_news 구성 시 반드시 준수): - daily_news는 korean_media와 peer_media 조사 결과를 우선적으로 사용한다. 우리금융그룹 및 계열사 직접 영향 기사는 woori_media 조사 결과를 우선 사용하되 subsidiary_news 배치를 먼저 검토한다. global_media(Reuters, Bloomberg, FT, CNBC 등) 기사는 daily_news 전체의 약 30% 이내로 제한한다. - global_media 기사는 한국 금융시장이나 우리금융그룹에 직접적인 영향이 있는 경우에만 선택하고, 단순 해외 시황 소개성 기사는 선택하지 않는다.
-
-- daily_news는 한국 기사 중심으로 구성하라. 네이버 메인뉴스·네이버 경제뉴스에서 주요하게 다뤄진 사안을 우선 선정하되, 출처 URL은 네이버 링크 또는 해당 언론사의 원문 링크를 모두 허용한다.
-- global_media 단독 출처 기사는 전체 기사 중 최대 20%까지만 허용한다. 글로벌 기사는 한국 금융시장, 원화·채권·유동성 또는 우리금융그룹에 직접 전이될 가능성이 높은 경우만 선택하라.
-- subsidiary_news에는 woori_media 조사 단계에서 수집된 URL 중 실제 기사 제목에 우리금융지주·우리은행·우리카드·우리금융캐피탈·우리투자증권·동양생명·ABL생명 등 우리금융 계열사명이 직접 등장하는 기사만 넣어라. - 신한금융·신한은행·KB금융·KB국민은행·하나금융·하나은행·NH농협·IBK기업은행·한국금융지주 등 경쟁사명이 기사 제목에 등장하면, 우리금융이 본문에서 언급되거나 비교 대상이어도 subsidiary_news에 넣지 마라. 해당 기사는 daily_news 후보로만 검토하라.
-- 해외 일반 기업, 해외 일반 사이버 공격, 해외 시장 동향, 경쟁사 단독 기사, 우리금융과 무관한 기업 기사는 subsidiary_news에 절대 넣지 마라.
-- 우리금융 직접 관련 기사가 없으면 subsidiary_news는 빈 배열([])로 제출하라. 기사의 수를 채우기 위해 무관한 뉴스를 넣는 것을 절대 금지한다.
-
-최종 선정 규칙:
-- 전체 기사는 최소 10건을 목표로 선정한다. critical(크리티컬)은 최소 1건은 반드시 포함하고, 나머지는 daily_news, subsidiary_news, additional_news 사이에서 그날 확보된 조사 근거의 양과 질에 맞게 자유롭게 배분한다.
-- 최종 브리핑은 반드시 10건을 채운다. 조사 근거에 검증 가능한 서로 다른 실제 기사가 10건 이상 있으면 반드시 10건을 선정한다. 검증 단계에서 중복·날짜·URL 검사로 일부가 제외될 수 있으므로, 최종 10건이 남도록 조사 근거에서 서로 다른 실제 기사 12건 이상을 선정하라. 10건을 채우기 위해 subsidiary_news나 additional_news가 비어 있어도 daily_news와 critical을 늘려 전체 합계를 10건으로 맞춘다. 같은 사건을 여러 매체가 보도한 경우 대표 원문 1건만 남기고, 조사 근거 안에서 완전히 다른 사건의 실제 기사를 찾아 10건을 채운다.
-- 특정 카테고리에 오늘 조건을 만족하는 기사가 부족하면 억지로 채우지 말고, 다른 카테고리에서 조건을 만족하는 기사를 더 선정해서 전체 합계 10건을 채운다.
-- subsidiary_news를 채울 때는 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사 관련 기사(오늘자 primary 우선, 부족하면 어제·오늘 related도 허용), (2) 우리은행 해외지점·해외 현지법인(캄보디아, 인도네시아, 우리아메리카은행 등) 관련 기사. (1)에서 오늘자 기사가 부족하면 어제·오늘 related 기사로 채워라. subsidiary_news에는 일반 시장 뉴스(금리, 환율, 증시, 투자심리, 은행 건전성 등)를 절대 배치하지 마라. subsidiary_news에는 우리금융그룹 또는 계열사에 직접 관련된 기사만 넣어라.조건에 맞는 실제 기사가 없으면 빈 배열([])로 제출하라.일반 시장 뉴스, 해외 일반 기업 뉴스, 단순 사이버 뉴스로 빈자리를 채우는 것은 절대 금지한다.
-- 전체 기사는 10건을 목표로 선정하되, 검증 가능한 서로 다른 사건이 부족하면 억지로 채우지 마라. 이 경우 최소 8건 이상을 선정하고, 존재하지 않는 기사나 중복 사건을 만들지 마라.
-- 우리금융그룹·계열사(subsidiary_news)에는 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명 등 국내 계열사 기사, 또는 우리은행 해외지점·현지법인(우리은행 캄보디아, 우리소다라, 우리아메리카은행) 기사만 선택한다. 캄보디아·인도네시아·미국 지역의 일반 금융권 기사(금리, 환율, 증시, 투자심리, 은행 건전성 등)는 subsidiary_news에 절대 포함하지 마라. 그런 기사는 daily_news에만 배치할 수 있다. KB금융, 신한금융, 하나금융, NH농협금융, 한국금융지주 등 다른 금융지주·경쟁사 기사도 subsidiary_news에는 절대 포함하지 마라.
-- subsidiary_news에는 우리금융그룹 계열사 또는 우리은행 해외지점·해외 현지법인에 직접 관련된 기사만 선정한다. 다음 우선순위를 따른다: (1) 국내 우리금융그룹 계열사(우리은행, 우리카드, 우리금융캐피탈, 우리종합금융, 우리자산운용, 우리금융저축은행, 우리투자증권, 우리에프아이에스, 우리글로벌자산운용, 동양생명, ABL생명 등) 관련 기사(오늘자 primary 우선, 부족하면 어제·오늘 related도 허용), (2) 우리은행 해외지점·해외 현지법인(우리은행 캄보디아, 우리소다라, 우리아메리카은행 등) 관련 기사. subsidiary_news에는 절대로 일반 시장 뉴스(엔화, 환율, 증시, 투자심리, 금리, 은행 건전성 등)를 배치하지 마라. 해당 지역의 일반 금융권 기사는 daily_news에만 배치할 수 있다. subsidiary_news에는 우리금융그룹 또는 계열사에 직접 관련된 기사만 넣어라. 어제·오늘의 우리금융 직접 관련 기사가 없으면 빈 배열([])로 제출하라.
-- 전체 기사 중 기자가 작성한 일반 언론기사(source_type=media)를 최소 60% 이상 선정하고, 감독당국·정부·중앙은행·공시·기업 공식자료(source_type=official)는 나머지 비중으로 선정한다.
-- 공식자료는 사실과 수치 검증에 적극 활용하되, 같은 사건의 언론기사가 있으면 독자가 맥락과 파급효과를 이해할 수 있는 언론기사를 대표 원문으로 우선 선정한다.
-- Gumloop 예시처럼 연합뉴스, 주요 경제지·금융 전문매체 및 Reuters·Bloomberg·FT·CNBC 등 신뢰도 높은 일반기사가 브리핑의 중심이 되어야 한다.
-- 모든 기사는 게시일시가 확인된 최근 3일(KST) 이내 기사만 사용하라. 어제·오늘 기사를 우선하되, 10건을 채우지 못하면 최근 3일 이내 기사로 채워라. 3일을 초과했거나 게시일시를 확인할 수 없는 기사는 절대 선택하지 마라. - critical 기사는 실행 시점 기준 최근 36시간 이내 기사이면 window를 primary로 표시하라. 최근 36시간 이내의 검증 가능한 핵심 기사가 부족하면 어제·오늘의 중요 기사도 critical에 넣을 수 있으며, 이 경우 반드시 window를 related로 표시하라. 36시간을 넘긴 기사를 primary로 표시하지 마라. - published 필드에는 확인 가능한 게시일시를 KST 기준으로 적어라.
-- daily_news와 subsidiary_news를 채우기 위해 related로 표시하는 기사는 최근 3일 이내여야 하며, 전체 기사 중 related는 최대 8건까지 허용한다.
-- "오늘자 검증 가능한 기사 없음" 같은 placeholder 문구를 title이나 다른 필드에 넣지 마라. 절대로 가짜 기사를 만들지 마라. 조사 근거 URL 목록에 없는 URL을 사용하지 마라. 10건을 채우기 위해 존재하지 않는 기사를 지어내지 마라. 그런 항목을 만들 수 없으면 조사 근거 안에서 실제로 존재하는 다른 기사로 대체하거나, additional_news에 한해서만 해당 카테고리를 빈 배열로 남긴다.
-- 동일 사건과 동일 URL을 제거하고 대표 원문 하나만 남긴다. 서로 다른 매체가 같은 사건(예: 같은 날 발표된 같은 통계, 같은 기관의 같은 공지, 같은 기업의 같은 이슈)을 각자 보도한 경우, URL이 다르더라도 반드시 동일 사건으로 간주하여 가장 상세하고 신뢰도 높은 원문 하나만 남기고 나머지는 절대 선택하지 마라. 예를 들어 "카드론 금리 상승"처럼 같은 주제를 다룬 여러 매체의 기사를 daily_news에 중복 포함시키지 마라. - 통화안정증권 경쟁입찰·정례모집, 금융위·한국은행·금감원 정기 보도자료, 기관 공식 보도자료는 절대 선정하지 마라. 오직 기자가 작성한 언론기사만 선정하라.
-- critical, daily_news, subsidiary_news, additional_news 네 카테고리를 통틀어 같은 URL이나 같은 게시물 번호(seq, id 등)를 가진 기사를 두 번 이상 선택하지 마라. 카테고리를 넘나드는 중복도 동일 사건 중복으로 간주하고 반드시 제거하라.
-- 만약 특정 사건이 여러 카테고리에 모두 적합해 보이면, 그 사건은 가장 관련성이 높은 카테고리 하나에만 배치하고 다른 카테고리에는 조사 근거 안에서 완전히 다른 사건을 새로 찾아 채워라. url 필드를 빈 문자열이나 추정값으로 채우지 말고, 반드시 조사 근거에 있는 실제 URL만 사용하라.
-- URL은 각 조사팀의 source_urls에 있는 값을 글자 하나도 바꾸지 않고 그대로 복사한다.
-- 검색결과, 언론사·기관의 뉴스 섹션 첫 화면, 게시판 목록 주소는 기사로 선정하지 않는다. URL 경로 또는 쿼리에 개별 기사·발표 식별자가 있는 직접 링크만 사용한다.
-- 이전 브리핑에 사용된 URL은 절대 다시 선택하지 마라. 금지 URL의 정규화 목록은 다음과 같다: ${JSON.stringify([...previousCanonicalUrls])} - 이전 브리핑 제목은 중대한 신규 사실이 있을 때만 다시 포함한다: ${JSON.stringify(previousTitles)} - 이전 브리핑의 제목·요약·대상·리스크 유형을 아래 참고 자료와 비교하라. 같은 사건 또는 사실상 같은 주제라면 다른 언론사·다른 URL·표현 변경 기사라도 다시 선택하지 마라. 단, 새로운 처분·수치·피해 확산·당국 조치·자본 영향 등 독립적인 신규 사실이 확인된 경우에만 예외로 한다: ${JSON.stringify(previousTopics)}
-- 확인된 사실과 분석·추론을 구분하고 투자 권고나 확정적 시장 예측을 하지 않는다.
-
-CRO 품질 게이트:
-- title 필드에는 반드시 원문 기사의 실제 헤드라인을 그대로 사용하라. "이데일리 금융권 기사입니다", "한국경제 금융권 기사입니다", "금융권 동향관련보도", "증권금융시장 관련보도", "우리은행 해외현지법인 관련보도", "계열사 관련보도" 같이 매체명·카테고리·그룹명만 조합한 문장을 title로 만들지 마라. "관련보도"나 "관련 보도"로 끝나는 제목을 절대 만들지 마라. 원문에 있는 구체적인 기사 제목을 URL별 실제 기사 제목 매핑에 있는 형태 그대로 작성하라. "제목 없음"을 title로 사용하지 마라. title이 없는 기사는 제출하지 마라. URL이 없는 기사도 제출하지 마라.
-- 다음 기사는 리스크 영향이 없으므로 절대 선정하지 마라: 내부 교육·행사, 후원·CSR, 인사 발령, 홍보성 기사, 체육대회·시상식·채용박람회, 단순 통계 발표, 일반 행정 공지, 통화안정증권 경쟁입찰·정례모집, 금융위·한국은행·금감원 정기 보도자료, 기관 공식 보도자료. 이런 기사가 조사 근거에 있어도 반드시 제외하라. - 수치, 날짜, 게시 시각, 기관명, 기업명과 근거 신뢰도를 후보 간 비교한다.
-- 자본·유동성·신용·시장·운영·사이버·법무/준법·평판·전략 리스크 영향을 평가한다.
-- 영향 전파 속도, 영향 범위, 대응 가능 시간, 규제기관 관심으로 긴급도를 판단한다.
-- 기사 간 연결고리, 리스크 전이 경로, 오늘 확인할 지표·질문, 단기 모니터링 포인트를 도출한다.
-- 모든 문장은 예외 없이 정중한 합니다체를 사용한다. '한다·이다·있다·된다·필요하다·전망된다' 같은 해라체 종결은 금지하고 '합니다·입니다·있습니다·됩니다·필요합니다·전망됩니다'로 쓴다.
-- executive_judgment_bullets는 Gumloop 예시처럼 3~4개로 작성한다. 각 항목은 (1) 무슨 변화가 확인되었는지 (2) 그 핵심 수치·맥락은 무엇인지 (3) 그룹 리스크 관점에서 어떤 의미인지를 자연스럽게 이어지는 2문장의 완결된 문장으로 서술한다. "확인된 변화는", "핵심 수치는" 같은 정형화된 라벨 단어를 문장 맨 앞에 그대로 반복해서 쓰지 말고, 자연스러운 문장으로 풀어서 작성한다. executive_judgment에는 이 판단을 충분한 문단으로 종합한다. executive_judgment와 bullets·insights는 CRO가 읽는 결론 문장이다. '검증 가능한 풀', '조사 근거', '기사가 부족', '엄격히 적용하면', '확인된 기사만' 등 브리핑 작성 과정·데이터 수집 상황에 대한 언급을 절대 쓰지 말고, 첫 문장부터 오늘 가장 중요한 리스크 판단으로 시작하라.
-- 같은 회사(예: 하나금융, KB금융, 신한금융, BNK금융, IBK기업은행)에 대한 기사는 전체 브리핑에서 1건만 선택하라. 실적 기사와 그 실적에 대한 증권사 분석 기사도 같은 사건으로 본다.
-- 정치인 발언 모음, 선거·정쟁, 칼럼·사설·인터뷰성 기사는 선택하지 마라. 유가·금리·환율 리스크는 시장 데이터·중앙은행 결정을 직접 다룬 기사를 우선하라.
-- 증권사·신용평가사 분석을 인용할 때는 summary에 '○○증권은 …라고 분석했습니다'처럼 분석 주체를 반드시 밝히고, 회사가 직접 밝힌 사실처럼 쓰지 마라.
-- summary·why_woori_cro·watchpoints에 URL, 마크다운 링크, 괄호 속 도메인 표기를 넣지 마라.
-- 각 기사 summary는 3~5문장으로 작성한다. 첫 문장에서 매체명과 게시일을 밝히고, 이후 핵심 수치·당사자·발생 경위·현재 상태를 원문 범위 안에서 구체적으로 설명한다. 단순 헤드라인 재진술이나 2문장 요약은 금지한다.
-- why_woori_cro는 2~3문장으로 작성한다. 우리은행 또는 관련 계열사에 미치는 자본·유동성·신용·시장·운영·준법·평판·전략 영향과 30~90일 의사결정 포인트를 구체적으로 연결한다.
-- watchpoints는 기사마다 2~3개를 제시한다. 기관 발표 일정, 비율·스프레드·연체율·충당금·한도 등 실제로 확인할 지표나 질문으로 작성한다.
-- 오늘의 CRO STAFF 인사이트는 기사들을 나열하지 말고 공통 동인, 1차·2차 전이경로, 현재 판단을 뒤집을 조건, 1주·2주·90일 모니터링 행동을 연결한다. 
-최우선 섹션 편성 규칙: - 이 규칙은 위에 있는 다른 규칙과 충돌하면 항상 우선한다. - 전체 기사 중 Reuters, AP, Bloomberg, FT, WSJ, CNBC 등 글로벌 언론 기사는 최대 2건만 선택하라. - daily_news에는 글로벌 기사를 최대 1건만 넣어라. 나머지는 반드시 korean_media 또는 peer_media의 국내 기사로 채워라. - additional_news에는 글로벌 기사를 최대 1건만 넣어라. 같은 유가·중동 분쟁·글로벌 금리 사건을 여러 해외 기사로 반복 선정하는 것을 절대 금지한다. - subsidiary_news에는 글로벌 일반 기사, 해외 일반 기업 기사, 해외 일반 사이버 기사, 경쟁사 단독 기사를 절대 넣지 마라. - woori_media 또는 korean_media 조사 근거에 제목상 우리금융지주, 우리은행, 우리카드, 우리금융캐피탈, 우리투자증권, 동양생명, ABL생명 등 우리금융 계열사가 직접 등장하는 어제·오늘 기사가 하나라도 있으면, 그중 최소 1건을 subsidiary_news에 우선 배치하라. - subsidiary_news가 빈 배열일 수 있는 경우는 조사 근거 전체에 어제·오늘의 우리금융 직접 관련 기사가 전혀 없는 경우뿐이다. - 신한금융, KB금융, 하나금융, NH농협, IBK기업은행, 한국금융지주 등 경쟁사 직접 기사는 subsidiary_news가 아니라 daily_news에 배치하라. - daily_news는 국내 금융시장·규제·가계대출·부동산 PF·여신·자본·유동성·소비자보호·금융사고·경쟁사 관련 국내 기사 중심으로 구성하라. - 동일한 해외 유가·지정학·채권금리 사건은 전체 브리핑에서 대표 기사 1건만 남기고, 같은 사건의 Reuters·AP·Bloomberg 후속 기사들을 중복 선택하지 마라. 
-URL별 실제 기사 제목 매핑 (반드시 준수):
-
-URL별 실제 기사 제목 매핑 (반드시 준수):
-각 기사의 title 필드에는 반드시 아래 매핑에 있는 제목을 그대로 복사하라. 임의로 제목을 수정하거나 새로 만들지 마라. 제목이 매핑에 없는 URL은 조사 메모에서 해당 URL에 대응하는 실제 기사 제목을 찾아 사용하라. 매핑에 있는 제목에 언론사명이나 카테고리명이 포함된 경우, 그 부분만 제거하고 실제 기사 제목 부분을 사용하라.
-${JSON.stringify([...researchedTitleByUrl.entries()].map(([url, title]) => ({ url, title })))}
-
-조사 근거 JSON:
-${JSON.stringify(researchEvidence)}
-
-반드시 제공된 JSON 스키마에 맞춰 한국어로 답하라.
-`;
-}
-let briefing;
-let synthesisError;
-let synthesisFeedback = '';
-const rejectedUrls = new Set();
-let bestFallbackCandidate = null;
-let bestFallbackCount = 0;
-
-function usesNonFormalKorean(text) {
-  return String(text || '')
-    .split(/[.!?]+/)
-    .map((sentence) => sentence.trim())
-    .filter(Boolean)
-    .some((sentence) => sentence.endsWith('다') && !sentence.endsWith('니다'));
-}
-
-function sentenceCount(text) {
-  return String(text || '').split(/[.!?]+/).map((sentence) => sentence.trim()).filter(Boolean).length;
-}
-
-function titleSimilarity(a, b) {
-  const normalize = (s) => String(s || '').replace(/\s+/g, '').replace(/[-_|\u00b7,\[\](){}'"]/g, '').toLowerCase();
-  const na = normalize(a);
-  const nb = normalize(b);
-  if (na.length < 4 || nb.length < 4) return 0;
-  const bigrams = (s) => {
-    const set = new Set();
-    for (let i = 0; i < s.length - 1; i += 1) set.add(s.slice(i, i + 2));
-    return set;
+function writingItem(c, critical) {
+  return {
+    url: c.url, title: c.title, published: c.published, source_name: guessSourceName(c.url), source_type: c.source_type,
+    axis: c.axis, sector: c.sector, score: c.score, entity: c.entity, one_line_fact: c.one_line_fact, cro_hook: c.cro_hook,
+    sector_hook: c.sector_hook, window: windowOf(c), critical, research_excerpt: c.excerpt
   };
-  const sa = bigrams(na);
-  const sb = bigrams(nb);
-  if (sa.size === 0 || sb.size === 0) return 0;
-  let intersection = 0;
-  for (const bg of sa) if (sb.has(bg)) intersection += 1;
-  return intersection / Math.max(sa.size, sb.size);
+}
+function writingInput() {
+  const out = {};
+  for (const key of NEWS_KEYS) out[key] = buckets[key].map((c) => writingItem(c, key === 'critical'));
+  return out;
+}
+const ARTICLE_RULES = `기사별 작성 규칙:
+- summary는 정확히 3문장이다. ① 확인된 사실(수치·날짜·주체를 명시; 증권사·신평사 분석은 '○○증권은 …라고 분석했습니다'처럼 분석 주체 표기) ② 우리금융에 직접 닿는 지점(어느 계열사·포트폴리오·지표인지) ③ 오늘 CRO가 확인할 질문 1개(의문문).
+- watchpoints는 2~3개이며, 각 항목은 '지표·일정·기준값'을 명사형 또는 의문문으로 쓴다 (예: '그룹 연체율 1.4% 이상 지속 여부', '금감원 제재 확정 공시 일정').
+- source_name은 매체·기관명(입력값 참고). entity는 기사 주체. channel·risk_type은 짧은 한국어 명사구. urgency·confidence는 높음/중간/낮음.
+- 금지어(절대 사용 금지): '점검해야 합니다', '확인해야 합니다', '주목해야 합니다', '검증 가능한', '풀이 좁', '기사가 부족', '조사 근거', '조사 메모', '후보 기사'. 브리핑 작성 과정·데이터 수집 상황에 대한 언급은 어떤 필드에도 쓰지 마라.
+- 입력된 one_line_fact·cro_hook·sector_hook·research_excerpt 에 없는 수치·사실을 만들지 마라. 마크다운·URL·괄호 속 도메인을 쓰지 마라.`;
+
+function buildWritingPrompt(feedback) {
+  const input = writingInput();
+  return `당신은 우리금융그룹 CRO를 지원하는 CRO STAFF다. 실행일은 ${date} KST다.
+아래 [[SELECTED]] 블록의 기사들은 그룹 공통(지주 관점) 섹션으로 이미 선정·분류가 끝났다. 기사를 추가·삭제·이동하지 말고, 각 카테고리의 순서를 그대로 유지하며 모든 기사를 작성하라.
+title, url, published, source_type, window, critical 은 입력값을 글자 그대로 복사하라.
+
+${ARTICLE_RULES}
+- why_woori_cro는 2~3문장으로 ②③을 구체화한다 (영향 경로와 30~90일 의사결정 포인트).
+
+종합 섹션 (전체본 기준, 그룹 공통 기사를 중심으로):
+- executive_judgment는 정확히 3문장: (1) 오늘 가장 큰 리스크 1개 (2) 그룹에 닿는 경로 (3) 오늘 CRO가 물어볼 질문 1개. 첫 문장부터 리스크 판단으로 시작하라.
+- executive_judgment_bullets는 3~4개. 선정 기사 중 score가 높은 순으로 '사실 → 의미'를 자연스러운 2문장으로 쓴다. 라벨 단어('확인된 변화는' 등)로 시작하지 마라.
+- forward_looking_points 2~4개(title, horizon 예: '1~2주', likelihood, cro_angle 2문장, trigger 1문장).
+- insights: headline 1문장, bullets 3~5개(기사 간 공통 동인·전이경로), action_items 3~5개(담당 조직과 기한이 드러나는 행동), stance 1~2문장.
+- monitoring_points 4~7개(지표명과 기준값·일정).
+모든 서술은 정중한 합니다체이며 '한다·이다·있다·된다'로 문장을 끝내지 마라.
+${feedback ? `\n이전 시도의 품질 문제 (모두 고쳐라):\n${feedback}\n` : ''}
+[[SELECTED]]
+${JSON.stringify(input)}
+[[/SELECTED]]
+
+반드시 제공된 JSON 스키마에 맞춰 한국어로 답하라.`;
+}
+function buildSectorWritingPrompt(batchIds, feedback) {
+  const input = batchIds.map((id) => ({
+    sector: id, label_ko: sectorLabel(id), companies: sectorCompanies(id), scope: sectorById[id].scope_ko,
+    news: sectorSelected[id].map((c) => writingItem(c, Boolean(c.sector_critical)))
+  }));
+  return `당신은 우리금융그룹 CRO STAFF다. 실행일은 ${date} KST다. 이번 호출은 업권본(해당 업권 계열사 리스크관리부용) 섹션을 작성한다.
+아래 [[SECTORS]] 블록은 업권별로 이미 선정된 기사다. 업권·기사를 추가·삭제·이동하지 말고, 입력된 순서를 유지하며 모든 업권의 모든 기사를 작성하라. 기사가 0건인 업권은 news를 빈 배열로 두되 judgment는 작성하라.
+title, url, published, source_type, window, critical 은 입력값을 글자 그대로 복사하라. sector는 입력값과 같은 id를 쓴다.
+
+${ARTICLE_RULES}
+- why_woori_cro는 '그룹 관점 1문장 + ○○(해당 업권 계열사명, companies 참고) 관점 1~2문장'으로 쓴다. 계열사명을 반드시 명시하고, sector_hook 의 내용을 구체화하라.
+
+업권별 judgment: 정확히 2문장. (1) 오늘 이 업권(해당 계열사)의 최대 리스크 1개와 그 경로 (2) 해당 계열사 리스크관리부가 오늘 확인할 질문 1개(의문문). 기사가 없는 업권이면 '오늘 (업권명) 업권에서 새로 확인된 리스크 사건은 없습니다.'로 시작하고 두 번째 문장은 상시 지표 질문을 쓴다.
+모든 서술은 정중한 합니다체이며 '한다·이다·있다·된다'로 문장을 끝내지 마라.
+${feedback ? `\n이전 시도의 품질 문제 (모두 고쳐라):\n${feedback}\n` : ''}
+[[SECTORS]]
+${JSON.stringify(input)}
+[[/SECTORS]]
+
+반드시 제공된 JSON 스키마에 맞춰 한국어로 답하라.`;
 }
 
-function narrativeQualityError(candidate, candidateNews) {
-  const genericTitlePatterns = ['금융권 기사입니다', '금융권 동향관련보도', '금융권 동향 관련 보도', '증권금융시장 관련보도', '증권금융시장 관련 보도', '금융 기사입니다', '경제 기사입니다', '시장 기사입니다', '관련보도', '관련 보도', '해외현지법인 관련', '해외지점 관련', '계열사 관련보도', '금융권 동향', '증권금융시장', '해당없음', '해당 없음', '해당사항없음', '해당 사항 없음', 'placeholder', 'Placeholder', 'N/A', 'n/a', '제목 없음'];
-  const genericTitleItem = candidateNews.find((item) => {
-    const title = String(item.title || '');
-    return genericTitlePatterns.some((pattern) => title.includes(pattern));
-  });
-  if (genericTitleItem) {
-    return `Article title appeared to be a generic/placeholder instead of the actual headline: "${genericTitleItem.title}"`;
+// 기사 단위 품질 검사 (공통·업권 공용)
+function itemProblems(it, { requireCompany } = {}) {
+  const problems = [];
+  const banned = [it.summary, it.why_woori_cro, ...(it.watchpoints || [])].flatMap(findBannedPhrases);
+  if (banned.length) problems.push(`금지어 사용 (${[...new Set(banned)].join(', ')}): ${it.title}`);
+  if (sentenceCount(it.summary) < 3) problems.push(`summary가 3문장 미만: ${it.title}`);
+  if (sentenceCount(it.why_woori_cro) < 2) problems.push(`why_woori_cro가 2문장 미만: ${it.title}`);
+  if ([it.summary, it.why_woori_cro, ...(it.watchpoints || [])].some(usesNonFormalKorean)) problems.push(`해라체 사용: ${it.title}`);
+  if (requireCompany?.length && !requireCompany.some((name) => String(it.why_woori_cro || '').includes(name))) problems.push(`why_woori_cro에 계열사명(${requireCompany.join('/')}) 누락: ${it.title}`);
+  return problems;
+}
+// 작성 결과 검사: 누락 기사, 금지어, 해라체, 문장 수. 문제 목록을 돌려준다.
+function writingProblems(draft) {
+  const problems = [];
+  for (const key of NEWS_KEYS) {
+    const expected = buckets[key];
+    const got = draft[key] || [];
+    const gotKeys = new Set(got.map((it) => safeCanonical(it.url)));
+    for (const c of expected) if (!gotKeys.has(c.key)) problems.push(`${key}에서 기사 누락: ${c.title}`);
+    for (const it of got) problems.push(...itemProblems(it));
   }
-  const irrelevantPatterns = ['교육', '세미나', '후원', 'CSR', '봉사', '체육대회', '시상식', '채용박람회', '환영 행사', '초청 강연'];
-  const irrelevantItem = candidateNews.find((item) => {
-    const text = `${item.title || ''} ${item.summary || ''}`;
-    return irrelevantPatterns.some((pattern) => text.includes(pattern)) &&
-           !text.includes('리스크') && !text.includes('제재') && !text.includes('사고') &&
-           !text.includes('손실') && !text.includes('규제') && !text.includes('벌금');
-  });
-  if (irrelevantItem) {
-    return `Article appeared to be a non-risk event (education/sponsorship/CSR) incorrectly included: ${irrelevantItem.title}`;
+  const narrative = [draft.executive_judgment, ...(draft.executive_judgment_bullets || []), draft.insights?.headline, ...(draft.insights?.bullets || []), ...(draft.insights?.action_items || []), draft.insights?.stance, ...(draft.monitoring_points || [])];
+  const bannedNarrative = narrative.flatMap(findBannedPhrases);
+  if (bannedNarrative.length) problems.push(`종합 섹션 금지어 사용: ${[...new Set(bannedNarrative)].join(', ')}`);
+  if (narrative.some(usesNonFormalKorean)) problems.push('종합 섹션 해라체 사용');
+  if (sentenceCount(draft.executive_judgment) < 3) problems.push('executive_judgment가 3문장 미만');
+  return problems;
+}
+function sectorWritingProblems(draft, batchIds) {
+  const problems = [];
+  for (const id of batchIds) {
+    const got = (draft.sectors || []).find((s) => s.sector === id);
+    if (!got) { problems.push(`업권 누락: ${id}`); continue; }
+    const gotKeys = new Set((got.news || []).map((it) => safeCanonical(it.url)));
+    for (const c of sectorSelected[id]) if (!gotKeys.has(c.key)) problems.push(`${id}에서 기사 누락: ${c.title}`);
+    for (const it of got.news || []) problems.push(...itemProblems(it, { requireCompany: sectorCompanies(id) }));
+    if (findBannedPhrases(got.judgment).length) problems.push(`${id} judgment 금지어 사용`);
+    if (usesNonFormalKorean(got.judgment)) problems.push(`${id} judgment 해라체 사용`);
+    if (sentenceCount(got.judgment) < 2) problems.push(`${id} judgment가 2문장 미만`);
   }
-  const narrativeFields = [
-    candidate.executive_judgment,
-    ...(candidate.executive_judgment_bullets || []),
-    ...candidateNews.flatMap((item) => [item.summary, item.why_woori_cro]),
-    (candidate.insights || {}).headline,
-    ...((candidate.insights || {}).bullets || []),
-    ...((candidate.insights || {}).action_items || []),
-    (candidate.insights || {}).stance
-  ];
-  const placeholderPatterns = ['해당없음', '해당 없음', '해당사항없음', '해당 사항 없음', 'placeholder', 'Placeholder', 'N/A', 'n/a'];
-  const placeholderItem = candidateNews.find((item) => {
-    const text = `${item.title || ''} ${item.summary || ''} ${item.why_woori_cro || ''}`;
-    return placeholderPatterns.some((pattern) => text.includes(pattern));
-  });
-  if (placeholderItem) {
-    return `Article contained placeholder text instead of real content: ${placeholderItem.title}`;
-  }
-  if (narrativeFields.some(usesNonFormalKorean)) {
-    return 'Korean narrative used plain 한다체 instead of formal 합니다체.';
-  }
-  const shortSummary = candidateNews.find((item) => String(item.summary || '').length < 180);
-  if (shortSummary) return `Article summary was too short for Gumloop-quality depth: ${shortSummary.title}`;
-  const shallowSummary = candidateNews.find((item) => sentenceCount(item.summary) < 3);
-  if (shallowSummary) return `Article summary contained fewer than 3 sentences: ${shallowSummary.title}`;
-  const missingAttribution = candidateNews.find((item) => !String(item.summary || '').includes(String(item.source_name || '')));
-  if (missingAttribution) return `Article summary did not name its source: ${missingAttribution.title}`;
-  const shortImplication = candidateNews.find((item) => String(item.why_woori_cro || '').length < 90);
-  if (shortImplication) return `CRO implication was too short: ${shortImplication.title}`;
-  const shallowImplication = candidateNews.find((item) => sentenceCount(item.why_woori_cro) < 2);
-  if (shallowImplication) return `CRO implication contained fewer than 2 sentences: ${shallowImplication.title}`;
-  if (String(candidate.executive_judgment || '').length < 280) {
-    return 'Executive judgment was too short for decision-useful synthesis.';
-  }
-  return '';
+  return problems;
 }
 
-function extractUrlsFromText(text) {
-  const matches = String(text || '').match(/https?:\/\/[^\s)]+/g) || [];
-  return matches.map((url) => url.replace(/[).,]+$/, ''));
-}
-
-function dedupeCandidateNews(candidate) {
-  const seen = new Set();
-  const cleaned = { ...candidate };
-  const now = new Date();
-  for (const key of ['critical', 'daily_news', 'subsidiary_news', 'additional_news']) {
-    const items = candidate[key] || [];
-    const keptItems = [];
-    for (const item of items) {
-      let normalizedKey;
-      try {
-        normalizedKey = canonicalUrlKey(item.url);
-      } catch {
+// 공통 호출 1회 + 업권 묶음 호출 N회를 같은 루프로 돌린다 (모델 404 폴백 1회, 품질 재요청 1회, 그래도 안 되면 최선 초안 또는 null).
+let writingModel = MODELS.writing;
+let writingModelFallbacks = 0;
+async function writeWithRetry(label, schemaName, schema, buildPrompt, checkProblems) {
+  let feedback = '';
+  let best = null;
+  let bestProblemCount = Infinity;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    let draft;
+    try {
+      const body = await requestOpenAi(label, {
+        model: writingModel, input: buildPrompt(feedback), store: false, reasoning: { effort: 'medium' },
+        text: { verbosity: 'medium', format: { type: 'json_schema', name: schemaName, strict: true, schema } },
+        max_output_tokens: 32000
+      });
+      draft = parseStructuredOutput(body, label);
+    } catch (error) {
+      if (isModelUnavailableError(error) && writingModel !== MODELS.writing_fallback && writingModelFallbacks === 0) {
+        console.warn(`Writing model ${writingModel} unavailable (${error.message}). Falling back to ${MODELS.writing_fallback}.`);
+        writingModel = MODELS.writing_fallback;
+        writingModelFallbacks += 1;
+        attempt -= 1; // 모델 폴백은 시도 횟수에 세지 않는다 (1회만, 이후 호출은 모두 폴백 모델 사용).
         continue;
       }
-      if (seen.has(normalizedKey)) continue;
-      if (previousCanonicalUrls.has(normalizedKey)) continue;
-      if (isLikelyListingUrl(item.url)) continue;
-      const parsedPublished = parsePublishedKst(item.published);
-      if (!parsedPublished.date) continue; // 날짜를 확인할 수 없는 기사는 fallback에서도 제외
-      const daysDiff = (now - parsedPublished.date) / (1000 * 60 * 60 * 24);
-      if (!isRecentWithinDaysKst(item.published, 3)) continue; // 최근 3일 fallback에 포함
-      seen.add(normalizedKey);
-      item.source_type = isOfficialUrl(item.url) ? 'official' : 'media';
-      keptItems.push(item);
+      console.warn(`${label} attempt ${attempt}/2 failed: ${error.message}`);
+      feedback = '이전 응답이 유효한 JSON 스키마로 완성되지 않았습니다. 분량을 줄이더라도 유효한 JSON 객체 하나를 끝까지 완성하십시오.';
+      if (attempt < 2) await coolDown(`${label} retry`);
+      continue;
     }
-    cleaned[key] = keptItems;
+    const problems = checkProblems(draft);
+    if (problems.length < bestProblemCount) { best = draft; bestProblemCount = problems.length; }
+    if (problems.length === 0) { console.log(`${label} accepted on attempt ${attempt} (model=${writingModel}).`); return { draft, fallback: false }; }
+    console.warn(`${label} attempt ${attempt}/2 had ${problems.length} quality problem(s): ${problems.slice(0, 5).join(' | ')}`);
+    feedback = problems.join('\n');
+    if (attempt < 2) await coolDown(`${label} quality retry`);
   }
-  return cleaned;
+  if (best) { console.warn(`${label}: using best draft with ${bestProblemCount} remaining problem(s); code will patch them.`); return { draft: best, fallback: false }; }
+  console.warn(`${label} failed twice. Assembling from scoring output.`);
+  return { draft: null, fallback: true };
 }
 
-function countNews(candidate) {
-  return ['critical', 'daily_news', 'subsidiary_news', 'additional_news']
-    .reduce((sum, key) => sum + (candidate[key] || []).length, 0);
-}
-
-// 나쁜 기사만 걸러내고 나머지는 살리는 검증 헬퍼.
-// 전체 후보를 폐기하는 대신, 검증을 통과한 기사만 남긴다.
-function pruneCandidateNews(candidate) {
-  const now = new Date();
-  const kept = { critical: [], daily_news: [], subsidiary_news: [], additional_news: [] };
-  const seen = new Set();
-  for (const key of ['critical', 'daily_news', 'subsidiary_news', 'additional_news']) {
-    for (const item of candidate[key] || []) {
-      let url;
-      try { url = new URL(item.url); } catch { continue; }
-      if (!['http:', 'https:'].includes(url.protocol)) continue;
-      if (isLikelyListingUrl(item.url)) continue;
-      const canonicalKey = canonicalUrlKey(item.url);
-      let researchedUrl = researchedUrlByCanonical.get(canonicalKey);
-      if (!researchedUrl) {
-        const pathMatches = researchedUrlsByPath.get(urlPathKey(item.url)) || [];
-        if (pathMatches.length === 1) researchedUrl = pathMatches[0];
-      }
-      if (!researchedUrl) continue; // 조사 근거에 없는 URL은 제거
-      if (item.url !== researchedUrl) item.url = researchedUrl;
-      const verifiedKey = canonicalUrlKey(item.url);
-      if (previousCanonicalUrls.has(verifiedKey)) continue;
-      if (seen.has(verifiedKey)) continue;
-      const parsedPublished = parsePublishedKst(item.published);
-      if (!parsedPublished.date) continue;
-      const hoursDiff = (now - parsedPublished.date) / (1000 * 60 * 60);
-      const daysDiff = hoursDiff / 24;
-      if (!isRecentWithinDaysKst(item.published, 3)) continue; // 최근 3일 유지
-      if (item.window === 'primary' && hoursDiff > 36) item.window = 'related';
-      if (item.window === 'primary' && !parsedPublished.hasTime && daysDiff > 1) item.window = 'related';
-      seen.add(verifiedKey);
-      item.source_type = isOfficialUrl(item.url) ? 'official' : 'media';
-      kept[key].push(item);
-    }
+const writing = await writeWithRetry('CRO writing', 'cro_staff_daily_briefing', briefingSchema, buildWritingPrompt, writingProblems);
+await coolDown('CRO writing');
+const sectorWriting = {}; // sectorId → { judgment, news[] } | null
+const sectorWritingFallback = [];
+for (const batchIds of SECTOR_WRITING_BATCHES) {
+  if (!batchIds.length) continue;
+  const label = `CRO sector writing (${batchIds.join('+')})`;
+  const result = await writeWithRetry(label, 'cro_staff_sector_briefing', sectorWritingSchema,
+    (feedback) => buildSectorWritingPrompt(batchIds, feedback), (draft) => sectorWritingProblems(draft, batchIds));
+  for (const id of batchIds) {
+    const got = result.draft ? (result.draft.sectors || []).find((s) => s.sector === id) : null;
+    sectorWriting[id] = got || null;
+    if (!got) sectorWritingFallback.push(id);
   }
-  return kept;
+  await coolDown(label);
 }
 
-const MAX_SYNTHESIS_ATTEMPTS = 5;
-const badUrls = new Set();
-
-for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt += 1) {
-  const bannedUrlsText = rejectedUrls.size > 0
-    ? `\n\n다음 URL은 이전 시도에서 이미 실패했으므로 이번 시도에서 절대 다시 선택하지 마라. 대신 조사 근거 안에 있는 완전히 다른 URL을 선택하라:\n${[...rejectedUrls].join('\n')}`
-    : '';
-  const dynamicBannedUrlsText = badUrls.size > 0
-    ? `\n\n다음 URL은 사용이 금지되었습니다. 절대 사용하지 마십시오:\n${[...badUrls].map((u) => `- ${u}`).join('\n')}`
-    : '';
-  const synthesisBody = await requestOpenAi('CRO quality-gate synthesis', {     model,     input: `${buildSynthesisPrompt()}${synthesisFeedback ? `\n\n이전 시도 품질 오류:\n${synthesisFeedback}\n이 오류를 모두 고쳐 완전히 새로 선정하라.` : ''}${bannedUrlsText}${dynamicBannedUrlsText}`,     store: false,     reasoning: { effort: 'low' },     text: {       verbosity: 'medium',       format: {         type: 'json_schema',         name: 'cro_staff_daily_briefing',         strict: true,         schema       }     },     max_output_tokens: 32000   });
-  let candidate;
-  try {
-    candidate = parseStructuredOutput(synthesisBody, 'CRO quality-gate synthesis');
-  } catch (parseError) {
-    synthesisError = parseError;
-
-    // parseStructuredOutput()이 제공한 짧고 안전한 재시도 지시만 사용합니다.
-    synthesisFeedback = parseError.retryFeedback ||
-      '이전 응답의 형식 검증에 실패했습니다. 유효한 JSON 객체 하나만 반환하십시오.';
-
-    console.warn(
-      `${parseError.message} (attempt ${attempt}/${MAX_SYNTHESIS_ATTEMPTS}).`
-    );
-
-    if (attempt < MAX_SYNTHESIS_ATTEMPTS) {
-      await coolDown('CRO quality-gate synthesis retry');
-    }
-
-    continue;
-  }
-
-  // Override fabricated titles and dates with actual values from research metadata
-  for (const item of ['critical', 'daily_news', 'subsidiary_news', 'additional_news'].flatMap((k) => candidate[k] || [])) {
-    const meta = getResearchedMeta(item.url);
-    if (meta) {
-      if (meta.title && meta.title.length > 5) {
-        if (item.title && titleSimilarity(item.title, meta.title) < 0.3) {
-          console.log(`Overriding model title with actual headline: "${item.title}" -> "${meta.title}" (URL: ${item.url})`);
-        }
-        item.title = meta.title;
-      }
-      if (meta.published) {
-        item.published = meta.published;
-      }
-      if (meta.researchedUrl && item.url !== meta.researchedUrl) {
-        item.url = meta.researchedUrl;
-      }
-    }
-  }
-  moveMisplacedSubsidiaryNews(candidate);
-  try {
-    const dedupedFallback = dedupeCandidateNews(
-      JSON.parse(JSON.stringify(candidate))
-    );
-
-    const fallbackCount = countNews(dedupedFallback);
-
-    const fallbackGlobalItems = [
-      ...(dedupedFallback.critical || []),
-      ...(dedupedFallback.daily_news || []),
-      ...(dedupedFallback.subsidiary_news || []),
-      ...(dedupedFallback.additional_news || [])
-    ].filter((item) => isGlobalMediaUrl(item.url));
-
-    const fallbackDailyGlobalItems = (dedupedFallback.daily_news || [])
-      .filter((item) => isGlobalMediaUrl(item.url));
-
-    const fallbackAdditionalGlobalItems = (dedupedFallback.additional_news || [])
-      .filter((item) => isGlobalMediaUrl(item.url));
-
-    const fallbackSubsidiaryGlobalItems = (dedupedFallback.subsidiary_news || [])
-      .filter((item) => isGlobalMediaUrl(item.url));
-
-    // 글로벌 기사 과다 후보도 fallback으로 저장합니다.
-    // 백필 단계에서 글로벌 기사를 상한에 맞게 정리하므로 여기서 버리지 않습니다.
-    if (fallbackCount > bestFallbackCount) {
-      bestFallbackCount = fallbackCount;
-      bestFallbackCandidate = dedupedFallback;
-    }
-  } catch {}
-
-  try {
-      // 전체 후보를 폐기하는 대신, 검증을 통과한 기사만 남긴다.
-            const pruned = pruneCandidateNews(candidate);
-            // critical이 0건이면 daily_news에서 상위 기사를 critical로 승격한다.
-            // 이렇게 하면 critical이 비어서 전체가 실패하는 것을 방지한다.
-            if ((pruned.critical || []).length < 1 && (pruned.daily_news || []).length > 0) {
-              const promoted = pruned.daily_news.shift();
-              promoted.critical = true;
-              promoted.window = promoted.window || 'primary';
-              pruned.critical = [promoted];
-              console.log(`Promoted article to critical because critical was empty: ${promoted.title}`);
-            }
-            const candidateNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news']
-              .flatMap((key) => pruned[key] || []);
-            if ((pruned.critical || []).length < 1) {
-              throw new Error(`Critical (Priority Watch) contained 0 articles; at least 1 is required.`);
-            }
-                // 10건을 목표로 하되, 검증 통과한 기사가 있으면 빈 브리핑 대신 저장한다.
-                // 초반 시도에서는 10건을 요구하고, 마지막 시도에서는 검증 통과분을 보존한다.
-                const minimumRequired = [8, 7, 6, 5, 5][attempt - 1] ?? 5;
-
-  if (candidateNews.length < minimumRequired) {
-    throw new Error(
-      `Final briefing contained only ${candidateNews.length} articles; ` +
-      `at least ${minimumRequired} are required. ` +
-      `조사 근거 URL 안에서 서로 다른 실제 기사로 보완하십시오.`
-    );
-  }
-      const candidateUrls = new Set();
-      for (const item of candidateNews) {
-        const verifiedKey = canonicalUrlKey(item.url);
-        if (candidateUrls.has(verifiedKey)) throw new Error(`Duplicate article URL: ${item.url}`);
-                        candidateUrls.add(verifiedKey);
-      }
-const now = new Date();
-
-for (const item of candidateNews) {
-  const parsedPublished = parsePublishedKst(item.published);
-
-  // pruneCandidateNews()가 이미 날짜 검증을 수행했으므로 여기서는 throw하지 않습니다.
-  if (!parsedPublished.date) continue;
-
-  const hoursDiff = (now - parsedPublished.date) / (1000 * 60 * 60);
-  const daysDiff = hoursDiff / 24;
-
-  // 어제·오늘이지만 최근 36시간을 넘긴 기사가 primary로 표시되면
-  // 버리지 않고 related로만 보정합니다.
-  if (item.window === 'primary' && hoursDiff > 36) {
-    item.window = 'related';
-
-    console.log(
-      `Downgraded primary article to related: ${item.title} ` +
-      `(published: ${item.published || '미기재'})`
-    );
-  }
-
-  // 시각 없이 날짜만 있는 기사는 당일·전일까지만 primary를 허용합니다.
-  if (
-    item.window === 'primary' &&
-    !parsedPublished.hasTime &&
-    daysDiff > 1
-  ) {
-    item.window = 'related';
-
-    console.log(
-      `Downgraded date-only primary article to related: ${item.title} ` +
-      `(published: ${item.published || '미기재'})`
-    );
-  }
-}
-
-const relatedCount = candidateNews.filter(
-  (item) => item.window === 'related'
-).length;
-
-if (relatedCount > 0) {
-  console.log(
-    `Final briefing includes ${relatedCount} related article(s) within the allowed 7-day window.`
-  );
-}
-
-// critical은 primary 또는 related만 허용합니다. 유효하지 않은 window는 제거합니다.
-pruned.critical = (pruned.critical || []).filter((item) =>
-  item.window === 'primary' || item.window === 'related'
-);
-// 우리금융 직접 관련 기사가 없는 날에는 subsidiary_news를 빈 배열로 둡니다.
-// 무관한 기사를 채우기 위해 넣지 않습니다. 제목에 우리금융 계열사명이 없는 기사는 제거합니다.
-pruned.subsidiary_news = (pruned.subsidiary_news || []).filter((item) =>
-  mentionsWooriSubsidiary(item)
-);
-    candidateNews.forEach((item) => { item.source_type = isOfficialUrl(item.url) ? 'official' : 'media'; });
-    const mediaCount = candidateNews.filter((item) => item.source_type === 'media').length;
-    const minimumMediaCount = Math.max(3, Math.ceil(candidateNews.length * 0.5));
-
-if (mediaCount < minimumMediaCount) {
-  console.warn(
-    `CRO quality-gate synthesis selected only ${mediaCount} media articles; ` +
-    `at least ${minimumMediaCount} are preferred. Continuing with available articles.`
-  );
-}
-
-// 전체 브리핑에서 global_media 단독 출처 기사는 최대 2건만 허용합니다.
-// 초과분은 제거합니다.
-const globalItems = candidateNews.filter((item) =>
-  isGlobalMediaUrl(item.url)
-);
-
-const globalDailyItems = (pruned.daily_news || []).filter((item) =>
-  isGlobalMediaUrl(item.url)
-);
-
-const globalAdditionalItems = (pruned.additional_news || []).filter((item) =>
-  isGlobalMediaUrl(item.url)
-);
-
-const globalSubsidiaryItems = (pruned.subsidiary_news || []).filter((item) =>
-  isGlobalMediaUrl(item.url)
-);
-
-// 전체 8~10건 브리핑에서 해외 기사는 최대 2건만 허용합니다. 초과분은 제거합니다.
-if (globalItems.length > 2) {
-  console.warn(
-    `Too many global-media articles: ${globalItems.length}. ` +
-    `Trimming to at most 2 global articles across the entire briefing.`
-  );
-}
-
-// Daily News는 국내 금융 기사 중심이므로 해외 기사는 최대 1건만 허용합니다.
-if (globalDailyItems.length > 1) {
-  console.warn(
-    `Daily News contained too many global articles: ${globalDailyItems.length}. ` +
-    `Trimming to at most 1 global article in daily_news.`
-  );
-}
-
-// Additional News도 해외 기사는 최대 1건만 허용합니다.
-if (globalAdditionalItems.length > 1) {
-  console.warn(
-    `Additional News contained too many global articles: ${globalAdditionalItems.length}. ` +
-    `Trimming to at most 1 global article in additional_news.`
-  );
-}
-
-// 우리금융 계열사 섹션에는 해외 일반 언론 기사를 넣지 않습니다.
-if (globalSubsidiaryItems.length > 0) {
-  console.warn(
-    `Subsidiary News contained global-media article(s): ${globalSubsidiaryItems.length}. ` +
-    `Removing them from subsidiary_news.`
-  );
-  pruned.subsidiary_news = (pruned.subsidiary_news || []).filter((item) =>
-    !isGlobalMediaUrl(item.url)
-  );
-}
-
-const qualityError = narrativeQualityError(candidate, candidateNews);
-    if (qualityError) console.warn(`Quality issue (continuing anyway): ${qualityError}`);
-    // prune된 결과를 최종 브리핑에 반영합니다.
-    candidate.critical = pruned.critical;
-    candidate.daily_news = pruned.daily_news;
-    candidate.subsidiary_news = pruned.subsidiary_news;
-    candidate.additional_news = pruned.additional_news;
-    briefing = candidate;
-    break;
-  } catch (error) {
-    synthesisError = error;
-    synthesisFeedback = error.message;
- const badUrlsFromError = extractUrlsFromText(error.message);
-
-    for (const url of badUrlsFromError) {
-      // 이번 합성 시도에서는 재선정하지 않게 금지 목록에만 넣습니다.
-      // 실제 조사 근거와 메타데이터에서는 삭제하지 않습니다.
-      rejectedUrls.add(url);
-
-      // 조사 근거에 없는 URL만 별도 금지 목록에 추가합니다.
-      try {
-        const canonicalKey = canonicalUrlKey(url);
-        const researchedUrl = researchedUrlByCanonical.get(canonicalKey);
-
-        if (!researchedUrl) {
-          badUrls.add(canonicalKey);
-        }
-      } catch {
-        badUrls.add(url);
-      }
-    }
-    if (attempt < MAX_SYNTHESIS_ATTEMPTS) {
-      console.warn(
-  `${error.message} ` +
-  `Blocked ${badUrlsFromError.length} URL(s) for the next synthesis attempt ` +
-  `without deleting verified research evidence. ` +
-  `Retrying synthesis after TPM cooldown (${attempt}/${MAX_SYNTHESIS_ATTEMPTS}).`
-);
-      await coolDown('CRO quality-gate synthesis retry');
-    }
-  }
-}
-function createFailureBriefing(date, reason) {
+// 작성 실패 시 코드가 조립하는 기사 본문
+function assembleItem(c) {
+  const sourceName = guessSourceName(c.url);
+  const fact = c.one_line_fact || `${c.title}라고 보도했습니다.`;
+  const hook = c.cro_hook || `${channelOf(c)} 영역에서 우리금융 관련 포트폴리오에 영향을 줄 수 있는 사안입니다.`;
+  const question = `오늘 관련 익스포저와 지표 변화가 그룹 기준치 안에 있는지가 질문입니다.`;
+  const isSector = c.sector && c.sector !== 'group';
+  const companyName = isSector ? sectorCompanies(c.sector).join('·') : '';
+  const sectorLine = isSector ? (c.sector_hook || `${companyName} 관점에서는 ${sectorLabel(c.sector)} 업권 익스포저와 관련 지표에 닿는 사안입니다.`) : '';
   return {
-    executive_judgment:
-      '오늘의 CRO 브리핑은 조사 출처를 수집했으나 최종 구조화 출력 검증에 실패하여 자동 생성하지 않았습니다. 검증되지 않은 기사나 수치를 임의로 포함하지 않았습니다.',
-    executive_judgment_bullets: [
-      '조사 단계는 수행되었으나 최종 합성 응답이 유효한 JSON 형식으로 완성되지 않았습니다. 따라서 기사 내용을 추정하거나 임의로 작성하지 않았습니다.',
-      '이번 결과는 기사 부재가 아니라 출력 형식 검증 실패에 따른 안전 조치입니다. 다음 자동 실행에서 재생성이 필요합니다.',
-      '운영 측면에서는 응답 상태, incomplete 사유, 출력 길이와 원본 출력 미리보기를 확인해야 합니다. 구조화 출력이 정상 완료되기 전에는 본 결과를 의사결정 자료로 사용하지 않아야 합니다.'
-    ],
-    critical: [],
-    daily_news: [],
-    subsidiary_news: [],
-    additional_news: [],
-    forward_looking_points: [],
+    title: c.title, url: c.url, published: c.published, source_name: sourceName,
+    summary: `${sourceName}이(가) ${c.published.slice(0, 10)}에 보도한 내용입니다. ${fact} ${hook} ${question}`,
+    why_woori_cro: isSector
+      ? `${hook} ${sectorLine} ${companyName} 리스크관리부는 30~90일 안에 관련 한도·충당금 지표의 변화 여부를 의사결정 포인트로 둡니다.`
+      : `${hook} 30~90일 안에 관련 한도·충당금·자본 지표의 변화 여부가 의사결정 포인트입니다.`,
+    entity: c.entity || '', channel: channelOf(c), source_type: c.source_type, risk_type: riskTypeOf(c),
+    urgency: urgencyOf(c), confidence: confidenceOf(c), critical: isSector ? Boolean(c.sector_critical) : c.category === 'critical', window: windowOf(c),
+    watchpoints: [`${c.entity || channelOf(c)} 관련 지표의 다음 발표·공시 일정`, `${riskTypeOf(c)} 익스포저 한도 대비 사용률`]
+  };
+}
+function assembleSectorJudgment(id) {
+  const items = [...sectorSelected[id]].sort((a, b) => b.score - a.score);
+  const top = items[0];
+  const company = sectorCompanies(id).join('·');
+  if (!top) return `오늘 ${sectorLabel(id)} 업권에서 새로 확인된 리스크 사건은 없습니다. ${company} 리스크관리부가 오늘 볼 질문은 연체율·자본비율 등 상시 지표가 내부 기준치 안에 있는지입니다.`;
+  const path = top.sector_hook || top.cro_hook || `${company}의 관련 포트폴리오와 지표에 영향을 줄 수 있습니다.`;
+  return `오늘 ${sectorLabel(id)} 업권의 가장 큰 리스크는 ${top.entity || top.title} 관련 사안이며, ${path} ${company} 리스크관리부가 오늘 볼 질문은 관련 익스포저와 한도 사용률이 기준치 안에 있는지입니다.`;
+}
+function assembleFallbackBriefing() {
+  const top = [...selected].sort((a, b) => b.score - a.score);
+  const bullet = (c) => `${c.one_line_fact || c.title} ${c.cro_hook || `${channelOf(c)} 관점에서 우리금융 관련 지표에 영향을 줄 수 있습니다.`}`;
+  const briefing = {
+    executive_judgment: `오늘 가장 큰 리스크는 ${top[0]?.entity || top[0]?.title || '주요 사안'} 관련 사안입니다. ${top[0]?.cro_hook || '그룹 포트폴리오와 자본 지표에 영향을 줄 수 있습니다.'} 오늘 CRO가 물어볼 질문은 관련 익스포저와 한도 사용률이 기준치 안에 있는지입니다.`,
+    executive_judgment_bullets: top.slice(0, 4).map(bullet),
+    forward_looking_points: top.slice(0, 2).map((c) => ({ title: c.event_key.replace(/\|/g, ' '), horizon: '1~2주', likelihood: '중간', cro_angle: `${c.cro_hook || '관련 지표의 변화를 지켜볼 사안입니다.'} 후속 발표가 나오면 영향 범위를 재평가합니다.`, trigger: `${c.entity || '관련 기관'}의 후속 발표 또는 수치 변화입니다.` })),
     insights: {
-      headline: '최종 구조화 출력 검증이 필요합니다.',
-      bullets: [
-        '최종 합성 응답이 유효한 JSON으로 완성되지 않았습니다.',
-        '검증되지 않은 기사 정보를 브리핑에 포함하지 않았습니다.',
-        '다음 실행에서 로그를 확인한 뒤 자동 생성을 다시 수행해야 합니다.'
-      ],
-      action_items: [
-        'GitHub Actions 로그에서 응답 상태와 incomplete 사유를 확인합니다.',
-        'raw output preview를 확인해 출력 중단 또는 문법 오류를 점검합니다.',
-        '기사 수와 기사별 서술 분량을 필요 시 추가로 줄입니다.'
-      ],
-      stance: '검증 가능한 구조화 출력이 생성될 때까지 자동 브리핑 내용을 의사결정에 사용하지 않아야 합니다.'
+      headline: `${top[0]?.entity || '주요 리스크'} 관련 사안을 중심으로 그룹 리스크 지표를 함께 봅니다.`,
+      bullets: top.slice(0, 3).map(bullet),
+      action_items: ['리스크관리부는 금일 중 관련 익스포저와 한도 사용률을 집계합니다.', '계열사 리스크 담당은 이번 주 안에 관련 지표 변화를 보고합니다.', '그룹 리스크관리협의회에서 다음 회의 때 대응 방향을 결정합니다.'],
+      stance: '확인된 사실 범위 안에서 보수적으로 대응합니다.'
     },
-    monitoring_points: [
-      `${date} KST 최종 합성 응답의 상태를 확인합니다.`,
-      '구조화 출력의 중단 사유를 확인합니다.',
-      '다음 자동 실행에서 정상 기사 배열 생성 여부를 확인합니다.',
-      `직전 실패 사유: ${String(reason || '확인되지 않았습니다.')}`
-    ],
-    meta: {
-      fallback_notice: true
-    }
+    monitoring_points: top.slice(0, 5).map((c) => `${c.entity || channelOf(c)} 관련 후속 발표와 수치 변화`)
   };
-}
-if (!briefing) {
-  // fallback은 최소한 실사용 가능한 분량과 핵심 경보를 갖춘 경우에만 사용합니다.
-  // 10건을 목표로 하되, 검증 통과한 기사가 5건 이상이면 빈 브리핑 대신 저장합니다.
-  // critical이 비어 있으면 daily_news에서 하나를 승격하여 fallback을 유효화합니다.
-  if (bestFallbackCandidate && (bestFallbackCandidate.critical || []).length < 1 && (bestFallbackCandidate.daily_news || []).length > 0) {
-    const promoted = bestFallbackCandidate.daily_news.shift();
-    promoted.critical = true;
-    bestFallbackCandidate.critical = [promoted];
-    console.log(`Promoted article to critical in fallback: ${promoted.title}`);
-  }
-  const hasUsableFallback =
-    bestFallbackCandidate &&
-    bestFallbackCount >= 1 &&
-    (bestFallbackCandidate.critical || []).length >= 1;
-
-  if (hasUsableFallback) {
-    console.warn(
-      `Strict validation failed, but preserving the best usable candidate ` +
-      `with ${bestFallbackCount} articles.`
-    );
-
-    bestFallbackCandidate.critical ||= [];
-    bestFallbackCandidate.daily_news ||= [];
-    bestFallbackCandidate.subsidiary_news ||= [];
-    bestFallbackCandidate.additional_news ||= [];
-
-    briefing = bestFallbackCandidate;
-  } else {
-    console.warn(
-      'No usable fallback candidate was produced. ' +
-      'Writing a failure notice instead of publishing an incomplete briefing.'
-    );
-
-    briefing = createFailureBriefing(date, synthesisError?.message);
-  }
-}
-// ===== Backfill: 모델이 빼먹은 우리금융 계열사 기사와 10건 부족분을 조사 근거에서 직접 보충합니다. =====
-function buildBackfillPool() {
-  const pool = [];
-  const seen = new Set();
-  const now = new Date();
-  for (const [stage, evidence] of Object.entries(researchEvidence)) {
-    for (const sd of evidence.source_data || []) {
-      try {
-        const key = canonicalUrlKey(sd.url);
-        if (seen.has(key)) continue;
-        if (!researchedUrlByCanonical.has(key)) continue;
-        if (previousCanonicalUrls.has(key)) continue;
-        if (isLikelyListingUrl(sd.url)) continue;
-        const title = sd.title || researchedTitleByUrl.get(key) || '';
-        const published = sd.published || researchedDateByUrl.get(key) || '';
-        // 품질 게이트: 최근 7일 이내 기사만 백필에 포함. 어제·오늘=primary, 그 외 최근=related.
-        if (!isRecentWithinDaysKst(published, 3)) continue;
-        seen.add(key);
-        pool.push({
-          url: researchedUrlByCanonical.get(key),
-          title,
-          published,
-          source_name: '',
-          summary: '',
-          why_woori_cro: '',
-          entity: '',
-          channel: '',
-          source_type: isOfficialUrl(sd.url) ? 'official' : 'media',
-          risk_type: '',
-          urgency: '중간',
-          confidence: '중간',
-          critical: false,
-          window: isYesterdayOrTodayKst(published) ? 'primary' : 'related',
-          watchpoints: [],
-          _stage: stage
-        });
-      } catch {}
-    }
-  }
-  pool.sort((a, b) => (a.window === 'primary' ? 0 : 1) - (b.window === 'primary' ? 0 : 1));
-  return pool;
-}
-const backfillPool = buildBackfillPool();
-console.log(`Backfill pool size: ${backfillPool.length} candidates (${backfillPool.filter((c)=>c._stage==='woori_media').length} woori_media).`);
-function usedUrlSet(b) {
-  const set = new Set();
-  for (const k of ['critical','daily_news','subsidiary_news','additional_news']) {
-    for (const it of (b[k] || [])) { try { set.add(canonicalUrlKey(it.url)); } catch {} }
-  }
-  return set;
-}
-function backfillBriefing(b) {
-  if (b?.meta?.fallback_notice === true) return b;
-  b.critical ||= []; b.daily_news ||= []; b.subsidiary_news ||= []; b.additional_news ||= [];
-  const used = usedUrlSet(b);
-  const isGlobal = (it) => { try { return isGlobalMediaUrl(it.url); } catch { return false; } };
-  // 1) 글로벌 기사 상한을 실제로 적용한다. (전체 2건, daily 1건, additional 1건, subsidiary 0건)
-  const trimGlobal = (arr, max) => {
-    const kept = [];
-    let globalCount = 0;
-    for (const it of arr) {
-      if (isGlobal(it)) {
-        if (globalCount >= max) { console.log(`Trimmed excess global article: ${it.title}`); continue; }
-        globalCount += 1;
-      }
-      kept.push(it);
-    }
-    return kept;
-  };
-  b.daily_news = trimGlobal(b.daily_news, 1);
-  b.additional_news = trimGlobal(b.additional_news, 1);
-  b.critical = trimGlobal(b.critical, 1);
-  b.subsidiary_news = (b.subsidiary_news || []).filter((it) => !isGlobal(it));
-  // 전체 글로벌 2건 상한: daily/additional/critical에서 초과분 제거
-  const allGlobal = ['critical','daily_news','subsidiary_news','additional_news']
-    .flatMap((k) => (b[k] || [])).filter(isGlobal);
-  if (allGlobal.length > 2) {
-    let over = allGlobal.length - 2;
-    for (const k of ['daily_news','additional_news','critical']) {
-      const arr = b[k] || [];
-      const kept = [];
-      for (const it of arr) {
-        if (over > 0 && isGlobal(it)) { console.log(`Trimmed global article to enforce 2-cap: ${it.title}`); over -= 1; continue; }
-        kept.push(it);
-      }
-      b[k] = kept;
-    }
-  }
-  // 2) subsidiary_news가 비면 조사 근거에서 우리금융 계열사 기사를 채운다.
-  if ((b.subsidiary_news || []).length === 0) {
-    const wooriCandidates = backfillPool.filter((c) =>
-      mentionsWooriSubsidiary(c) && !used.has(canonicalUrlKey(c.url))
-    );
-    for (const c of wooriCandidates.slice(0, 3)) {
-      c.critical = false;
-      b.subsidiary_news.push(c);
-      used.add(canonicalUrlKey(c.url));
-      console.log(`Backfilled subsidiary_news from research: ${c.title}`);
-    }
-  }
-  // 3) 전체 10건 미만이면 국내 기사로 daily_news를 보충한다.
-  const total = ['critical','daily_news','subsidiary_news','additional_news'].reduce((sum,k)=>sum+(b[k]||[]).length,0);
-  if (total < 10) {
-    const need = 10 - total;
-    const dailyCandidates = backfillPool.filter((c) =>
-      c._stage !== 'global_media' && !used.has(canonicalUrlKey(c.url))
-    );
-    for (const c of dailyCandidates.slice(0, need)) {
-      c.critical = false;
-      b.daily_news.push(c);
-      used.add(canonicalUrlKey(c.url));
-      console.log(`Backfilled daily_news to reach 10: ${c.title}`);
-    }
-  }
-  return b;
-}
-briefing = backfillBriefing(briefing);
-
-// ===== Enrich: 백필로 추가된 기사에 CRO 품질 요약을 LLM으로 채웁니다. =====
-async function enrichBackfilledArticles(b) {
-  const backfilled = ['critical','daily_news','subsidiary_news','additional_news']
-    .flatMap((k) => (b[k] || []))
-    .filter((it) => it && !String(it.summary || '').trim());
-  if (backfilled.length === 0) return b;
-  const itemsForPrompt = backfilled.map((it, i) => ({
-    idx: i,
-    title: it.title,
-    url: it.url,
-    published: it.published,
-    source_type: it.source_type
-  }));
-  const body = await requestOpenAi('Backfill enrichment', {
-    model,
-    tools: [{ type: 'web_search', search_context_size: 'high', user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' } }],
-    max_tool_calls: 4,
-    include: ['web_search_call.action.sources'],
-    input: `당신은 우리금융그룹 CRO를 지원하는 전략 비서다. 아래 백필 기사 각각에 대해 CRO 리스크 브리핑 품질의 요약을 작성하라.\n각 기사의 URL을 웹 검색으로 확인해 실제 제목과 내용을 파악하라.\n각 기사는 조사 단계에서 수집된 실제 기사다. 제목·URL·게시일을 근거로 title(제목이 비어있으면 URL과 게시일을 근거로 실제 기사 제목을 추정해 채우고, 이미 있으면 그대로 두라), summary(3~5문장, 첫 문장에 매체명과 게시일, 합니다체), why_woori_cro(2~3문장, 우리금융 계열사에 미치는 자본·유동성·신용·시장·운영·준법·평판·전략 영향과 30~90일 의사결정 포인트), watchpoints(2~3개), source_name(언론사명), risk_type을 채워라.\n모든 문장은 정중한 합니다체로 작성하라. 존재하지 않는 수치를 만들지 마라. 제목과 URL에 없는 사실을 지어내지 마라.\n\n기사 목록:\n${JSON.stringify(itemsForPrompt)}\n\n다음 JSON 배열만 반환하라:\n[{"idx":0,"title":"...","summary":"...","why_woori_cro":"...","watchpoints":["...","..."],"source_name":"...","risk_type":"..."}]`,
-    store: false,
-    reasoning: { effort: 'low' },
-    text: { verbosity: 'medium' },
-    max_output_tokens: 12000
-  });
-  const raw = extractOutputText(body);
-  let enriched = [];
-  try { enriched = JSON.parse(normalizeJsonText(raw)); } catch (e) {
-    console.warn(`Backfill enrichment JSON parse failed: ${e.message}`);
-    return b;
-  }
-  if (!Array.isArray(enriched)) return b;
-  for (const e of enriched) {
-    const item = backfilled[e.idx];
-    if (!item) continue;
-    if (e.title && !String(item.title || '').trim()) item.title = String(e.title).trim();
-    if (e.summary) item.summary = String(e.summary).trim();
-    if (e.why_woori_cro) item.why_woori_cro = String(e.why_woori_cro).trim();
-    if (Array.isArray(e.watchpoints) && e.watchpoints.length) item.watchpoints = e.watchpoints.map(String).slice(0, 3);
-    if (e.source_name) item.source_name = String(e.source_name).trim();
-    if (e.risk_type) item.risk_type = String(e.risk_type).trim();
-  }
-  console.log(`Enriched ${backfilled.length} backfilled article(s) with CRO-quality summaries.`);
-  return b;
-}
-try {
-  briefing = await enrichBackfilledArticles(briefing);
-} catch (enrichError) {
-  console.warn(`Backfill enrichment failed; continuing with backfilled articles as-is: ${enrichError.message}`);
+  while (briefing.executive_judgment_bullets.length < 3) briefing.executive_judgment_bullets.push('추가로 확인된 변화는 없습니다. 기존 모니터링 체계를 유지합니다.');
+  while (briefing.monitoring_points.length < 4) briefing.monitoring_points.push('그룹 연체율·충당금·자본비율 월간 추이');
+  while (briefing.insights.bullets.length < 3) briefing.insights.bullets.push('추가 전이 경로는 확인되지 않았습니다. 기존 모니터링 체계를 유지합니다.');
+  for (const key of NEWS_KEYS) briefing[key] = buckets[key].map(assembleItem);
+  return briefing;
 }
 
-
-const allNews = ['critical', 'daily_news', 'subsidiary_news', 'additional_news']
-  .flatMap((key) => briefing[key] || []);
-
-const isFailureFallback = briefing?.meta?.fallback_notice === true;
-
-const urls = new Set();
-for (const item of allNews) {
-  const url = new URL(item.url);
-  if (!['http:', 'https:'].includes(url.protocol)) throw new Error(`Invalid article URL: ${item.url}`);
-  const canonicalKey = canonicalUrlKey(item.url);
-  let researchedUrl = researchedUrlByCanonical.get(canonicalKey);
-  if (!researchedUrl) {
-    const pathMatches = researchedUrlsByPath.get(urlPathKey(item.url)) || [];
-    if (pathMatches.length === 1) researchedUrl = pathMatches[0];
-  }
-  if (!researchedUrl) {
-    console.warn(`Final briefing contained unverified URL, keeping: ${item.title} URL: ${item.url}`);
-  } else if (item.url !== researchedUrl) {
-    console.log(`Normalized researched URL: ${item.url} -> ${researchedUrl}`);
-    item.url = researchedUrl;
-  }
-  const verifiedKey = canonicalUrlKey(item.url);
-  // Override title and date with actual values in fallback too
-  const meta = getResearchedMeta(item.url);
-  if (meta) {
-    if (meta.title && meta.title.length > 5) {
-      item.title = meta.title;
-    }
-    if (meta.published) {
-      item.published = meta.published;
-    }
-    if (meta.researchedUrl && item.url !== meta.researchedUrl) {
-      item.url = meta.researchedUrl;
-    }
-  }
-  if (previousCanonicalUrls.has(verifiedKey)) {
-    throw new Error(`Final briefing reused an article URL from the previous briefing: ${item.url}`);
-  }
-  if (urls.has(verifiedKey)) { console.warn(`Duplicate article URL after normalization, removing: ${item.url}`); continue; }
-  urls.add(verifiedKey);
-}
-if (allNews.length < 1 && !isFailureFallback) {
-  throw new Error(
-    `Fallback briefing contained only ${allNews.length} articles; at least 1 is required.`
-  );
-}
-// Check fallback quality (warn only, don't reject)
-const fallbackQualityError = narrativeQualityError(briefing, allNews);
-if (fallbackQualityError) {
-  console.warn(`Fallback briefing had quality issues (continuing anyway): ${fallbackQualityError}`);
-}
-// ===== 하드 품질 게이트: 최종 브리핑에서 옛날 기사·날짜 미확인·placeholder 제목을 제거한다.
-// 숫자를 채우는 것보다 품질을 지키는 것이 우선이다. 통과한 기사만 남긴다.
-const HARD_PLACEHOLDER = [
-  '확인 불가', '원문 제목 확인', '원문 제목 미확인', '제목 없음', '보도(원문 제목',
-  '금융권 기사입니다', '금융권 동향관련보도', '관련보도', '관련 보도',
-  '해당없음', '해당 없음', '해당사항없음', '해당 사항 없음', 'placeholder', 'Placeholder', 'N/A', 'n/a'
-];
-const hardGateNow = new Date();
-for (const key of ['critical', 'daily_news', 'subsidiary_news', 'additional_news']) {
-  const kept = [];
-  for (const it of (briefing[key] || [])) {
-    const parsed = parsePublishedKst(it.published);
-    if (!parsed.date) {
-      console.log(`Dropped article with unverifiable date: ${it.title || it.url}`);
-      continue;
-    }
-    if (!isRecentWithinDaysKst(it.published, 3)) {
-      console.log(`Dropped non-recent article: ${it.title || it.url}`);
-      continue;
-    }
-    const title = String(it.title || '').trim();
-    const summary = String(it.summary || '').trim();
-    if (!title || !summary) {
-      console.log(`Dropped article missing title/summary: ${it.url}`);
-      continue;
-    }
-    if (HARD_PLACEHOLDER.some((p) => title.includes(p) || summary.includes(p))) {
-      console.log(`Dropped placeholder article: ${title}`);
-      continue;
-    }
-    kept.push(it);
-  }
-  briefing[key] = kept;
+// ---------------------------------------------------------------------------------
+// 9. 후처리: 입력값 강제 덮어쓰기, 금지어·마크다운 제거, 누락 보정, 플래그 정리
+// ---------------------------------------------------------------------------------
+// 초안 기사 → 최종 newsItem (공통·업권 공용). critical 은 호출자가 정한다.
+function finalizeItem(c, draftItems, critical) {
+  const found = draftItems.find((it) => safeCanonical(it.url) === c.key);
+  const item = found ? { ...found } : assembleItem(c);
+  if (!found) console.log(`Assembled missing article from scoring output: ${c.title}`);
+  // 입력값 강제: url/title/published/source_type/window/critical
+  item.title = c.title; item.url = c.url; item.published = c.published; item.source_type = c.source_type;
+  item.window = windowOf(c); item.critical = critical;
+  item.source_name = String(item.source_name || '').trim() || guessSourceName(c.url);
+  item.entity = String(item.entity || '').trim() || c.entity || competitorOf(c.title) || '';
+  item.channel = String(item.channel || '').trim() || channelOf(c);
+  item.risk_type = String(item.risk_type || '').trim() || riskTypeOf(c);
+  if (!['높음', '중간', '낮음'].includes(item.urgency)) item.urgency = urgencyOf(c);
+  if (!['높음', '중간', '낮음'].includes(item.confidence)) item.confidence = confidenceOf(c);
+  item.summary = dropBannedSentences(cleanText(item.summary));
+  item.why_woori_cro = dropBannedSentences(cleanText(item.why_woori_cro));
+  item.watchpoints = (Array.isArray(item.watchpoints) ? item.watchpoints : []).map(cleanText).filter((w) => w && findBannedPhrases(w).length === 0).slice(0, 3);
+  while (item.watchpoints.length < 2) item.watchpoints.push(`${item.entity || item.channel} 관련 지표의 다음 발표·공시 일정`);
+  if (sentenceCount(item.summary) < 2) item.summary = assembleItem(c).summary;
+  if (sentenceCount(item.why_woori_cro) < 1) item.why_woori_cro = assembleItem(c).why_woori_cro;
+  // 새 필드 (기존 웹·메일은 무시한다)
+  item.score = c.score; item.axis = c.axis; item.event_key = c.event_key; item.one_line_fact = c.one_line_fact; item.cro_hook = c.cro_hook;
+  item.sector = c.sector || 'group'; item.sector_hook = c.sector_hook || '';
+  if (c.promoted_from_sector) item.promoted_from_sector = c.promoted_from_sector;
+  return item;
 }
 
-// ── 최종 품질 후처리: 마크다운 링크 제거, 메타 문장 제거, 같은 회사 중복 제거, 빈 entity 보정 ──
-const MD_LINK_RE = /\s*\(\[[^\]]*\]\([^)]*\)\)|\[([^\]]*)\]\((https?:[^)]*)\)/g;
-const cleanText = (v) => typeof v === 'string'
-  ? v.replace(MD_LINK_RE, (m, label) => (label ? label : '')).replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim()
-  : v;
-const META_PATTERNS = ['검증 가능한', '검증 가능', '조사 근거', '기사 풀', '기사가 부족', '엄격히 적용', '확인된 어제·오늘 기사', '생각보다 좁'];
-const dropMetaSentences = (text) => {
-  if (typeof text !== 'string') return text;
-  const sentences = text.split(/(?<=[.!?])\s+/);
-  const kept = sentences.filter((sentence) => !META_PATTERNS.some((p) => sentence.includes(p)));
-  return (kept.length ? kept : sentences).join(' ').replace(/^(그럼에도 불구하고|그럼에도|하지만|다만),?\s*/, '').trim();
-};
-briefing.executive_judgment = dropMetaSentences(cleanText(briefing.executive_judgment));
-briefing.executive_judgment_bullets = (briefing.executive_judgment_bullets || []).map((b) => dropMetaSentences(cleanText(b)));
-if (briefing.insights) {
-  briefing.insights.headline = dropMetaSentences(cleanText(briefing.insights.headline));
-  briefing.insights.bullets = (briefing.insights.bullets || []).map((b) => dropMetaSentences(cleanText(b)));
+let briefing = writing.draft ? writing.draft : assembleFallbackBriefing();
+for (const key of NEWS_KEYS) briefing[key] = buckets[key].map((c) => finalizeItem(c, briefing[key] || [], key === 'critical'));
+briefing.executive_judgment = dropBannedSentences(cleanText(briefing.executive_judgment));
+briefing.executive_judgment_bullets = (briefing.executive_judgment_bullets || []).map((b) => dropBannedSentences(cleanText(b))).filter(Boolean);
+briefing.insights ||= {};
+briefing.insights.headline = dropBannedSentences(cleanText(briefing.insights.headline || ''));
+briefing.insights.bullets = (briefing.insights.bullets || []).map((b) => dropBannedSentences(cleanText(b))).filter(Boolean);
+briefing.insights.action_items = (briefing.insights.action_items || []).map((b) => dropBannedSentences(cleanText(b))).filter(Boolean);
+briefing.insights.stance = dropBannedSentences(cleanText(briefing.insights.stance || ''));
+briefing.insights.as_of = `${date} KST`;
+briefing.monitoring_points = (briefing.monitoring_points || []).map((b) => dropBannedSentences(cleanText(b))).filter(Boolean);
+briefing.forward_looking_points = (briefing.forward_looking_points || []).map((p) => ({ ...p, title: cleanText(p.title), cro_angle: dropBannedSentences(cleanText(p.cro_angle)), trigger: cleanText(p.trigger) }));
+{
+  const fallback = assembleFallbackBriefing();
+  if (briefing.executive_judgment_bullets.length < 3) briefing.executive_judgment_bullets = fallback.executive_judgment_bullets;
+  if (briefing.insights.bullets.length < 3) briefing.insights.bullets = fallback.insights.bullets;
+  if (briefing.insights.action_items.length < 3) briefing.insights.action_items = fallback.insights.action_items;
+  if (briefing.monitoring_points.length < 4) briefing.monitoring_points = fallback.monitoring_points;
+  if (!briefing.executive_judgment) briefing.executive_judgment = fallback.executive_judgment;
+  if (!briefing.insights.headline) briefing.insights.headline = fallback.insights.headline;
+  if (!briefing.insights.stance) briefing.insights.stance = fallback.insights.stance;
 }
-const COMPANY_KEYS = ['하나금융', 'KB금융', '신한금융', 'BNK금융', 'DGB금융', 'iM금융', 'JB금융', 'NH농협금융', 'IBK기업은행', '카카오뱅크', '케이뱅크', '토스뱅크', '한국금융지주'];
-const companyOf = (item) => {
-  const t = String(item.title || '').replace(/하나은행/g, '하나금융').replace(/KB국민은행|국민은행/g, 'KB금융').replace(/신한은행/g, '신한금융').replace(/기업은행/g, 'IBK기업은행').replace(/IBKIBK/g, 'IBK');
-  return COMPANY_KEYS.find((k) => t.includes(k)) || '';
-};
-const seenCompanies = new Set();
-for (const key of ['critical', 'subsidiary_news', 'daily_news', 'additional_news']) {
-  briefing[key] = (briefing[key] || []).filter((item) => {
-    for (const f of ['summary', 'why_woori_cro']) item[f] = cleanText(item[f]);
-    if (Array.isArray(item.watchpoints)) item.watchpoints = item.watchpoints.map(cleanText);
-    const company = companyOf(item);
-    if (!item.entity && company) item.entity = company;
-    if (!item.channel) item.channel = key === 'subsidiary_news' ? '우리금융그룹 계열사' : (company ? '경쟁사 동향' : '금융시장');
-    if (company && key !== 'subsidiary_news') {
-      if (seenCompanies.has(company)) {
-        console.log(`Dropped same-company duplicate (${company}): ${item.title}`);
-        return false;
-      }
-      seenCompanies.add(company);
-    }
-    return true;
-  });
+// 업권 섹션 조립 (공통 작성 결과와 독립적으로 각 업권을 확정한다)
+briefing.sectors = {};
+briefing.sector_judgment = {};
+for (const id of SECTOR_IDS) {
+  const draft = sectorWriting[id];
+  const news = sectorSelected[id].map((c) => finalizeItem(c, draft?.news || [], Boolean(c.sector_critical)));
+  let judgment = dropBannedSentences(cleanText(draft?.judgment || ''));
+  if (sentenceCount(judgment) < 2) judgment = assembleSectorJudgment(id);
+  briefing.sectors[id] = { ...emptySectorSection(id, sectorShortfall[id] || ''), judgment, news };
+  briefing.sector_judgment[id] = judgment;
 }
-briefing.critical.forEach((item) => { item.critical = true; });
-briefing.daily_news.forEach((item) => { item.critical = false; });
-briefing.subsidiary_news.forEach((item) => { item.critical = false; });
-briefing.additional_news.forEach((item) => { item.critical = false; });
+briefing.editions = EDITIONS;
 
+const allNews = NEWS_KEYS.flatMap((key) => briefing[key] || []);
+const allSectorNews = SECTOR_IDS.flatMap((id) => briefing.sectors[id].news);
+const residualNonFormal = [...allNews, ...allSectorNews].filter((it) => [it.summary, it.why_woori_cro].some(usesNonFormalKorean)).length;
+if (residualNonFormal) console.warn(`Quality note: ${residualNonFormal} article(s) still contain 해라체 sentences.`);
+
+// ---------------------------------------------------------------------------------
+// 10. 메타 · 이력 · 저장
+// ---------------------------------------------------------------------------------
+async function saveHistory(finalBriefing) {
+  if (DRY_RUN) { console.log(`[DRY_RUN] Skipping history save (would write public/briefing_history/${date}.json).`); return; }
+  await mkdir(historyDir, { recursive: true });
+  await writeFile(new URL(`${date}.json`, historyDir), `${JSON.stringify(finalBriefing, null, 2)}\n`, 'utf8');
+  const cutoff = shiftDate(date, -HISTORY_RETENTION_DAYS);
+  for (const name of await readdir(historyDir)) {
+    const m = name.match(/^(\d{4}-\d{2}-\d{2})\.json$/);
+    if (m && m[1] < cutoff) { await unlink(new URL(name, historyDir)); console.log(`Pruned old history file: ${name}`); }
+  }
+}
+async function writeOutput(finalBriefing) {
+  await writeFile(outputPath, `${JSON.stringify(finalBriefing, null, 2)}\n`, 'utf8');
+  await saveHistory(finalBriefing);
+}
+
+const previousEventKeys = new Set(previousItems.map((it) => it.event_key_norm).filter(Boolean));
+const continued = allSelected.filter((c) => isFollowUpEventKey(c.event_key) || previousEventKeys.has(c.event_key_norm)).map((c) => c.event_key);
+const usage = usageSummary();
+const sectorCounts = { group: allNews.length, ...Object.fromEntries(SECTOR_IDS.map((id) => [id, briefing.sectors[id].news.length])) };
 briefing.meta = {
-  fallback_notice: briefing?.meta?.fallback_notice === true,
+  fallback_notice: false,
   product: 'CRO Staff News & Critical Monitor',
   perspective: '우리금융그룹 CRO',
   mode: 'daily',
   briefing_date: date,
   generated_at: new Date().toISOString(),
-  primary_window: '어제·오늘(KST) 우선, 부족 시 최근 3일 이내 유관·배경 자료',
-  research_method: '4 media research stages + independent CRO quality-gate synthesis',
+  primary_window: '어제·오늘(KST) 우선, 최근 3일 이내 기사 중심 (부족 시 4일까지 related)',
+  research_method: `${stageDefinitions.length} research stages (domestic/woori/peer/global/official + ${sectorConfig.research_stages.length} sector) + LLM scoring (axis+sector) + deterministic selection (common ${COMMON_TARGET} + ${SECTOR_IDS.length} sectors × ${SECTOR_TARGET}) + CRO writing (1 common + ${SECTOR_WRITING_BATCHES.length} sector batches)`,
+  pipeline_version: PIPELINE_VERSION,
+  dry_run: DRY_RUN,
+  candidates_total: candidates.length,
+  selected_total: allNews.length + allSectorNews.length,
+  common_total: allNews.length,
+  slots: selection.slots,
+  selection_window_days: selection.step.windowDays,
+  selection_min_score: selection.step.minScore,
+  shortfall_reason: shortfallReason,
+  sector_counts: sectorCounts,
+  sector_shortfall: sectorShortfall,
+  sector_selection_steps: Object.fromEntries(SECTOR_IDS.map((id) => [id, sectorSelections[id].step.label])),
+  editions: EDITIONS.length,
+  scoring_fallback: scoringFallbackUsed,
+  writing_fallback: writing.fallback,
+  sector_writing_fallback: sectorWritingFallback,
+  models: { research: MODELS.research, scoring: MODELS.scoring, writing: writingModel },
+  usage,
+  changes: { new: allSelected.filter((c) => !continued.includes(c.event_key)).map((c) => c.event_key), continued },
+  compared_briefings: previousBriefings.map((b) => b.date),
   source_mix: {
-    media: allNews.filter((item) => item.source_type === 'media').length,
-    official: allNews.filter((item) => item.source_type === 'official').length
+    media: [...allNews, ...allSectorNews].filter((item) => item.source_type === 'media').length,
+    official: [...allNews, ...allSectorNews].filter((item) => item.source_type === 'official').length
   }
 };
-briefing.insights.as_of = `${date} KST`;
 
-await writeFile(outputPath, `${JSON.stringify(briefing, null, 2)}\n`, 'utf8');
-console.log(`Generated ${allNews.length} unique briefing articles for ${date}.`);
-__logUsage();
+await writeOutput(briefing);
+console.log(`Generated ${allNews.length} common + ${allSectorNews.length} sector briefing articles for ${date} → ${outputPath.pathname.split('/').slice(-2).join('/')}${shortfallReason ? ` (shortfall: ${shortfallReason})` : ''}${Object.keys(sectorShortfall).length ? ` (sector shortfall: ${Object.keys(sectorShortfall).join(', ')})` : ''}`);

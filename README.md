@@ -45,11 +45,27 @@ The server validates the token, serves the report directly, and stores authoriza
 
 ## 4. Daily report update
 
-GitHub Actions starts at 21:30 UTC, which is 06:30 KST. It runs three paced media-research stages for Korean financial news, Woori and peer news, and global financial news, followed by a separate official-source verification stage. After an independent CRO quality-gate synthesis, it updates `public/briefing.json`, waits for Render auto-deploy, and sends the stable report link at 07:00 KST. Manual workflow runs send immediately after a successful deploy.
+GitHub Actions starts at 22:07 UTC (07:07 KST). The generator (`scripts/generate-daily-briefing.mjs`, pipeline `v3-sectors`) runs eight paced research stages (Korean media, Woori group, peers, global media, regulators/official sources, plus three sector stages: card/capital + savings bank, insurance, securities/asset management), then one LLM **scoring** call per 30 candidates (axis / sector / score / event_key / promo flags / sector_hook per candidate), a deterministic **selection** step in code, and three LLM **writing** calls (one for the group-common section, two batched calls for the five sector sections). It updates `public/briefing.json`, stores a copy in `public/briefing_history/<date>.json` (30 days), waits for Render auto-deploy, and sends the stable report link at 07:00 KST. Manual workflow runs accept `send_email` (default true) and `force_regenerate` (default false).
 
-The production quality gate requires exactly 10 unique URLs: 3 critical issues, 3 daily financial-risk items, 3 Woori/subsidiary items, and 1 additional high-relevance issue. At least 6 must be reporting from reliable media, while official releases and filings are capped at 4 and serve primarily as verification. The primary window is the latest 24 hours. When needed to complete the 10-item baseline without fabricating news, directly relevant background sources from the previous seven days may be included and are visibly marked as related.
+### Editions: 전체본 1 + 업권본 5
 
-The narrative quality gate follows the original Gumloop briefing style: formal Korean `합니다체`, 3-5 fact-rich sentences per article, 2-3 CRO implication sentences, 2-3 concrete watchpoints, and a cross-article insight covering transmission paths and near-term management questions.
+Since `v3-sectors` the briefing is built as one **group-common** section (지주 관점, target 7 articles, min 6, max 8, guaranteed slots for supervision / group / peer / market / overseas) plus five **sector** sections (은행 / 여신전문금융 / 저축은행 / 보험 / 증권·자산운용, target 3 articles each, min 2, max 4, one own-subsidiary article preferred). Sector definitions — companies, Korean/English keywords, scope, specialist sources — live in `config/sectors.json`; the code reads that file to build the sector research prompts, the scoring `sector` enum, the selection slots and the output structure. Selection is common-first: an event already chosen for the common section is never repeated in a sector section, event dedupe and the 3-briefing history check apply across all sections, and a sector with too few verified candidates ships short and records why in `meta.sector_shortfall[sector]`. Total output is roughly 20–23 articles. `critical[]` (≤2) is judged only on common articles; a sector article with score ≥90 and a severity flag is flagged `critical:true` inside its own section.
+
+Output JSON stays backward compatible: the existing top-level keys (`executive_judgment`, `critical`, `daily_news`, `subsidiary_news`, `additional_news`, `insights`, …) now contain **only the common articles**, so the current web page and mail render the common part of the full edition unchanged. New keys: each news item gets `sector` (`group` for common) and `sector_hook`; `sectors` holds `{ bank, card_capital, savings, insurance, securities_am }` each with `label_ko`, `label_en`, `companies`, `judgment` (2 sentences: today's biggest sector risk / the question for that subsidiary's risk team), `news[]` (same newsItem shape; `why_woori_cro` = one group-view sentence + 1–2 subsidiary-view sentences naming the company) and `shortfall_reason`; `editions` lists the renderable editions (`all` = common + all five sectors, `bank` = common + bank, …) with their `sections`; `meta` gains `pipeline_version: 'v3-sectors'`, `sector_counts`, `sector_shortfall`, `sector_selection_steps`, `editions`. History files written before v3 (no `sectors`) are still read for cross-day dedupe.
+
+If fewer than 6 qualified common articles exist, the briefing ships with what is verified (after promoting any sector candidate scoring ≥70 into the common section) and records the reason in `meta.shortfall_reason`; it never pads with promotional, political, or fabricated items. A failure notice is written only when every research stage returns nothing (API outage).
+
+The narrative quality gate: formal Korean `합니다체`, 3-sentence summaries (fact with figures → where it touches Woori → one question for today), 2-3 CRO implication sentences, 2-3 concrete watchpoints, no stock phrases such as "점검해야 합니다", and no process/meta commentary.
+
+Local dry run without an API key (mocked OpenAI calls, output to `public/briefing.dryrun.json`):
+
+```
+DRY_RUN=1 node scripts/generate-daily-briefing.mjs
+DRY_RUN=1 DRY_RUN_SCENARIO=sparse node scripts/generate-daily-briefing.mjs      # fallback ladder + sector shortfall
+DRY_RUN=1 DRY_RUN_SCENARIO=shortfall node scripts/generate-daily-briefing.mjs   # <6 common articles + shortfall_reason
+DRY_RUN=1 DRY_RUN_SCENARIO=outage node scripts/generate-daily-briefing.mjs      # failure notice
+node scripts/validate-briefing.mjs public/briefing.dryrun.json                   # schema + sectors/editions checks, exit 1 on failure
+```
 
 ### Gmail preparation
 
@@ -67,7 +83,7 @@ In the GitHub repository, open `Settings` → `Secrets and variables` → `Actio
 - `EMAIL_TO`: one or more recipients separated by commas.
 - `REPORT_URL`: the complete tokenized link, such as `https://YOUR-DOMAIN/report/YOUR_REPORT_ACCESS_TOKEN`.
 
-Optionally add the Actions variable `OPENAI_MODEL`; the default is `gpt-5.4-mini`.
+Optional Actions variables: `OPENAI_MODEL` (default `gpt-5.4-mini`, used for research and as the writing fallback), `OPENAI_MODEL_RESEARCH`, `OPENAI_MODEL_SCORING` (default `gpt-5.4-mini`), `OPENAI_MODEL_WRITING` (default `gpt-5.4`; the script falls back to `OPENAI_MODEL` automatically if that model returns 400/404).
 
 Under `Settings` → `Actions` → `General` → `Workflow permissions`, enable `Read and write permissions` so the workflow can commit `public/briefing.json`.
 

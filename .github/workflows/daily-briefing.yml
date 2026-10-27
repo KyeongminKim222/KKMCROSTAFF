@@ -3,8 +3,16 @@ name: Daily CRO Staff Briefing
 on:
   schedule:
     - cron: '7 22 * * *'
-    - cron: '37 22 * * *'
   workflow_dispatch:
+    inputs:
+      send_email:
+        description: 'Send the Gmail briefing after a successful deploy'
+        type: boolean
+        default: true
+      force_regenerate:
+        description: 'Regenerate even if today''s briefing already exists (overwrites public/briefing.json)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -28,15 +36,19 @@ jobs:
           node-version: '22'
 
       # Prevent duplicate emails: if today's briefing already exists on main,
-      # skip the whole pipeline (including the email step). This makes the
-      # two cron schedules act as failover (first success wins) without
-      # sending more than one email per day.
+      # skip the whole pipeline (including the email step). Manual runs with
+      # force_regenerate=true bypass this guard.
       - name: Skip if today's briefing already exists
         id: dupguard
+        env:
+          FORCE_REGENERATE: ${{ github.event_name == 'workflow_dispatch' && inputs.force_regenerate == true && '1' || '0' }}
         run: |
           TODAY=$(TZ=Asia/Seoul date +%F)
           SKIP=true
-          if [ ! -f public/briefing.json ]; then
+          if [ "$FORCE_REGENERATE" = "1" ]; then
+            echo "force_regenerate requested. Proceeding regardless of existing briefing."
+            SKIP=false
+          elif [ ! -f public/briefing.json ]; then
             echo "No briefing.json found on main. Proceeding."
             SKIP=false
           else
@@ -55,6 +67,10 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-5.4-mini' }}
+          OPENAI_MODEL_RESEARCH: ${{ vars.OPENAI_MODEL_RESEARCH || vars.OPENAI_MODEL || 'gpt-5.4-mini' }}
+          OPENAI_MODEL_SCORING: ${{ vars.OPENAI_MODEL_SCORING || 'gpt-5.4-mini' }}
+          OPENAI_MODEL_WRITING: ${{ vars.OPENAI_MODEL_WRITING || 'gpt-5.4' }}
+          FORCE_REGENERATE: ${{ github.event_name == 'workflow_dispatch' && inputs.force_regenerate == true && '1' || '0' }}
         run: node scripts/generate-daily-briefing.mjs
 
       - name: Commit briefing data
@@ -62,7 +78,7 @@ jobs:
         run: |
           git config user.name "CRO Staff Automation"
           git config user.email "actions@users.noreply.github.com"
-          git add public/briefing.json
+          git add public/briefing.json public/briefing_history
           git commit -m "Update daily CRO Staff briefing" || exit 0
           git push
 
@@ -100,10 +116,15 @@ jobs:
           fi
 
       - name: Send Gmail briefing email
-        if: steps.dupguard.outputs.skip != 'true'
+        if: ${{ steps.dupguard.outputs.skip != 'true' && (github.event_name != 'workflow_dispatch' || inputs.send_email == true) }}
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          EMAIL_TO_BANK: ${{ secrets.EMAIL_TO_BANK }}
+          EMAIL_TO_CARD_CAPITAL: ${{ secrets.EMAIL_TO_CARD_CAPITAL }}
+          EMAIL_TO_SAVINGS: ${{ secrets.EMAIL_TO_SAVINGS }}
+          EMAIL_TO_INSURANCE: ${{ secrets.EMAIL_TO_INSURANCE }}
+          EMAIL_TO_SECURITIES_AM: ${{ secrets.EMAIL_TO_SECURITIES_AM }}
           REPORT_URL: ${{ secrets.REPORT_URL }}
-        run: python scripts/send-gmail.py
+        run: python scripts/send-gmail.py --all-editions
