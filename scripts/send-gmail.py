@@ -195,9 +195,9 @@ SECTOR_PANEL_BORDER = {"bank": "1.5px solid #0067AC", "securities_am": "1.5px so
 
 def chip(text, color, bg, border):
     return (
-        f'<span style="display:inline-block;padding:2px 8px;margin:0 4px 4px 0;font-size:11px;font-weight:700;'
+        f'<span style="display:inline-block;padding:1px 7px;font-size:11px;font-weight:700;'
         f'line-height:16px;color:{color};background:{bg};border:1px solid {border};border-radius:10px;'
-        f'font-family:{FONT}">{escape(str(text))}</span>'
+        f'white-space:nowrap;font-family:{FONT}">{escape(str(text))}</span>'
     )
 
 
@@ -239,562 +239,116 @@ def fmt_generated(iso):
         return str(iso or "")
 
 
-def change_state(item):
-    ch = meta.get("changes") if isinstance(meta.get("changes"), dict) else None
-    key = item.get("event_key")
-    if not ch or not key:
-        return ""
-    if key in (ch.get("new") or []):
-        return "new"
-    if key in (ch.get("continued") or []):
-        return "cont"
-    return ""
-
-
-def section_title(title_kr, count=None, note="", sec="daily"):
-    bar, bar2, bg, line, title_c, kicker = SEC.get(sec, SEC["daily"])
-    cnt = ""
-    if count is not None:
-        cnt = (
-            f'<span style="display:inline-block;margin-left:8px;padding:1px 9px;font-size:12px;font-weight:700;'
-            f'color:{bar};background:#ffffff;border:1px solid {line};border-radius:10px;vertical-align:middle;font-family:{FONT}">{count}건</span>'
-        )
-    right = (
-        f'<td align="right" valign="bottom" style="font-size:10.5px;color:{MUTED};font-family:{FONT};letter-spacing:1.5px;white-space:nowrap;padding-bottom:2px">{escape(note.upper())}</td>'
-        if note else ""
-    )
-    return f"""
-    <tr><td style="padding:0 0 12px">
-      <div style="font-size:10px;font-weight:700;letter-spacing:2px;color:{bar};font-family:{FONT};margin:0 0 6px">{escape(kicker)}</div>
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tr>
-          <td style="font-family:{FONT}">
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-              <td width="5" style="width:5px;background:{bar};border-radius:3px;font-size:0;line-height:0">&nbsp;</td>
-              <td style="padding:0 0 0 10px;font-size:19px;font-weight:700;color:{title_c};font-family:{FONT};letter-spacing:-0.3px;line-height:22px">{escape(title_kr)}{cnt}</td>
-            </tr></table>
-          </td>
-          {right}
-        </tr>
-      </table>
-    </td></tr>
-    """
-
-
-def band_open(sec):
-    """섹션 틴트 패널(라운드 박스) 열기 — 내부는 중첩 테이블 행으로 채운다."""
-    bar, bar2, bg, line, title_c, kicker = SEC.get(sec, SEC["daily"])
-    border = SECTOR_PANEL_BORDER.get(sec, f"1px solid {line}")
-    return f"""
-    <tr><td style="padding:0 0 22px">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{bg};border:{border};border-radius:16px;border-collapse:separate">
-        <tr><td style="padding:16px 14px 6px">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-    """
-
-
-def band_close():
-    return """
-          </table>
-        </td></tr>
-      </table>
-    </td></tr>
-    """
-
-
-def band(sec, inner_rows):
-    return band_open(sec) + inner_rows + band_close()
-
-
-def empty_row():
-    return f"""
-    <tr><td style="padding:0">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tr><td style="padding:12px 14px;border:1px dashed #c9d5e2;border-radius:10px;background:{TINT2};font-size:13px;color:{MUTED};font-family:{FONT}">오늘 해당 없음</td></tr>
-      </table>
-    </td></tr>
-    """
-
-
-def render_news_item(item, idx, force_axis=None, sec="daily", hook_label=""):
-    """뉴스 항목 하나를 카드(테이블)로 변환. 새 파이프라인 필드(score/axis/event_key)는 있을 때만 표시."""
-    sbar, sbar2, sbg, sline, stitle, _k = SEC.get(sec, SEC["daily"])
-    callout_bg = CALLOUT_BG.get(sec, TINT)
-    callout_fg = sbar if sec in CALLOUT_BG else WOORI
-    title = escape(item.get("title", ""))
-    url = escape(item.get("url", ""))
-    published = escape(item.get("published", ""))
-    source_name = escape(item.get("source_name", "") or "")
-    urgency = item.get("urgency", "")
-    summary = escape(item.get("summary", ""))
-    why_woori = escape(item.get("why_woori_cro", ""))
-    watchpoints = item.get("watchpoints", []) or []
-    axis = axis_of(item)  # 축은 칩으로만 표시, 좌측 바는 섹션 색
-    bar_color = sbar
-    is_crit = bool(item.get("critical")) or sec == "critical"
-    border_color = SEC["critical"][0] if is_crit else sline
-
-    chips = f'<span style="font-size:12px;font-weight:700;color:{sbar};margin:0 8px 0 0;font-family:{FONT}">{idx:02d}</span>'
-    if axis:
-        label, color = AXIS_META[axis]
-        fg = NAVY if axis == "peer" else "#ffffff"
-        chips += chip(label, fg, color, color)
-    if item.get("source_type") == "official":
-        chips += chip("공식자료", WOORI, TINT, "#C9E0F1")
-    if source_name:
-        chips += chip(source_name, MUTED, "#F3F6F9", "#E4E9EF")
-    if item.get("entity") and not axis:
-        chips += chip(item["entity"], WOORI, TINT, "#C9E0F1")
-    if published:
-        chips += chip(published, MUTED, "#F3F6F9", "#E4E9EF")
-    if item.get("window") == "related":
-        chips += chip("유관(날짜외)", MUTED, "#F3F6F9", "#E4E9EF")
-    if urgency:
-        c, bg, bd = URGENCY_STYLE.get(urgency, (MUTED, "#F2F5F8", "#E4E9EF"))
-        chips += chip(f"긴급도 {urgency}", c, bg, bd)
-    st = change_state(item)
-    if st == "new":
-        chips += chip("신규", "#ffffff", WOORI, WOORI)
-    elif st == "cont":
-        chips += chip("지속", INK, "#F3F6F9", "#E4E9EF")
-
-    score_html = ""
-    score = item.get("score")
-    try:
-        if score is not None and score != "":
-            score_html = (
-                f'<td align="right" valign="top" style="padding:0 0 0 8px;white-space:nowrap">'
-                f'<span style="display:inline-block;padding:2px 8px;font-size:11px;font-weight:700;color:{sbar};'
-                f'background:{sbg};border:1px solid {sline};border-radius:10px;font-family:{FONT}">{int(round(float(score)))}'
-                f'<span style="font-weight:400;color:{MUTED};font-size:10px">/100</span></span></td>'
-            )
-    except (TypeError, ValueError):
-        score_html = ""
-
-    ribbon = ""
-    if is_crit:
-        ribbon = (
-            f'<tr><td colspan="2" style="background:{SEC["critical"][0]};color:#ffffff;font-size:11px;font-weight:700;letter-spacing:2px;'
-            f'padding:7px 16px;font-family:{FONT};border-radius:11px 11px 0 0">'
-            f'<span style="display:inline-block;width:8px;height:8px;border-radius:4px;background:#FFD3CE;margin:0 8px 1px 0"></span>CRITICAL · PRIORITY WATCH</td></tr>'
-        )
-
-    why_html = ""
-    if why_woori:
-        why_html = f"""
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:12px 0 0">
-            <tr><td style="background:{callout_bg};padding:10px 14px;border-radius:8px">
-              <div style="font-size:12px;font-weight:700;color:{callout_fg};margin:0 0 3px;font-family:{FONT}"><span style="display:inline-block;width:10px;height:10px;border-radius:5px;background:{callout_fg};margin:0 6px 0 0;vertical-align:-1px"></span>우리금융그룹 CRO 시사점</div>
-              <div style="font-size:13.5px;line-height:1.6;color:{INK};font-family:{FONT}">{why_woori}</div>
-            </td></tr>
-          </table>"""
-
-    hook_html = ""
-    if hook_label and item.get("sector_hook"):
-        hook_html = f"""
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 0">
-            <tr><td style="background:#ffffff;border:1px dashed {sline};border-left:3px solid {sbar};padding:8px 12px;border-radius:0 8px 8px 0">
-              <div style="font-size:11.5px;font-weight:700;color:{sbar};margin:0 0 2px;font-family:{FONT}">{escape(hook_label)}</div>
-              <div style="font-size:13px;line-height:1.6;color:{INK};font-family:{FONT}">{escape(str(item.get("sector_hook")))}</div>
-            </td></tr>
-          </table>"""
-
-    wp_html = ""
-    if watchpoints:
-        wp_list = "".join(f'<li style="margin:3px 0">{escape(w)}</li>' for w in watchpoints)
-        wp_html = (
-            f'<div style="margin:12px 0 0;font-size:13px;color:{INK};font-family:{FONT}">'
-            f'<b style="color:{NAVY}">Watchpoints</b>'
-            f'<ul style="padding-left:18px;margin:4px 0 0;line-height:1.6">{wp_list}</ul></div>'
-        )
-
-    tags = []
-    if item.get("entity") and axis:
-        tags.append(item["entity"])
-    if item.get("channel"):
-        tags.append(item["channel"])
-    if item.get("risk_type") and item.get("risk_type") != item.get("channel"):
-        tags.append(item["risk_type"])
-    tags_html = ""
-    if tags:
-        tags_html = '<div style="margin:10px 0 0">' + "".join(chip(t, MUTED, "#F3F6F9", "#E4E9EF") for t in tags) + "</div>"
-
-    radius_left = "0 0 0 11px" if is_crit else "11px 0 0 11px"
-    return f"""
-    <tr><td style="padding:0 0 14px">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid {border_color};border-radius:12px;border-collapse:separate;background:#ffffff">
-        {ribbon}
-        <tr>
-          <td width="4" style="width:4px;background:{bar_color};border-radius:{radius_left};font-size:0;line-height:0">&nbsp;</td>
-          <td style="padding:14px 18px 16px 16px;font-family:{FONT}">
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-              <tr>
-                <td valign="top" style="font-family:{FONT}">{chips}</td>
-                {score_html}
-              </tr>
-            </table>
-            <div style="font-size:16px;font-weight:700;line-height:1.45;margin:6px 0 6px;font-family:{FONT}">
-              <a href="{url}" style="color:{NAVY};text-decoration:none">{title}</a>
-            </div>
-            <div style="font-size:14px;line-height:1.6;color:{INK};font-family:{FONT}">{summary}</div>
-            {why_html}
-            {hook_html}
-            {wp_html}
-            {tags_html}
-          </td>
-        </tr>
-      </table>
-    </td></tr>
-    """
-
-
-def render_news_section(title_kr, items, note="", force_axis=None, sec="daily"):
-    html = section_title(title_kr, len(items), note, sec)
-    if not items:
-        return band(sec, html + empty_row())
-    return band(sec, html + "".join(render_news_item(item, i + 1, force_axis, sec) for i, item in enumerate(items)))
-
-
-def render_sector_section(sid):
-    """업권 패널: 키커(label_en) + 제목(label_ko) + 계열사 칩 + 업권 판단 박스 + 카드."""
-    s = SECTORS.get(sid) or {}
-    bar, bar2, bg, line, title_c, kicker = SEC.get(sid, SEC["daily"])
-    items = s.get("news") or []
-    comps = [str(c) for c in (s.get("companies") or [])]
-    comp_chips = "".join(chip(c, "#ffffff", bar, bar) for c in comps)
-    label_ko = SECTOR_NAV.get(sid) or str(s.get("label_ko") or sid)
-    html = f"""
-    <tr><td style="padding:0 0 12px">
-      <div style="font-size:10px;font-weight:700;letter-spacing:2px;color:{bar};font-family:{FONT};margin:0 0 6px">{escape(str(kicker or s.get("label_en") or sid).upper())}</div>
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tr>
-          <td style="font-family:{FONT}">
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-              <td width="5" style="width:5px;background:{bar};border-radius:3px;font-size:0;line-height:0">&nbsp;</td>
-              <td style="padding:0 0 0 10px;font-size:19px;font-weight:700;color:{title_c};font-family:{FONT};letter-spacing:-0.3px;line-height:22px">{escape(label_ko)}<span style="display:inline-block;margin-left:8px;padding:1px 9px;font-size:12px;font-weight:700;color:{bar};background:#ffffff;border:1px solid {line};border-radius:10px;vertical-align:middle;font-family:{FONT}">{len(items)}건</span></td>
-            </tr></table>
-          </td>
-          <td align="right" valign="bottom" style="font-family:{FONT};white-space:nowrap">{comp_chips}</td>
-        </tr>
-      </table>
-    </td></tr>
-    """
-    if s.get("judgment"):
-        html += f"""
-    <tr><td style="padding:0 0 14px">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tr><td style="background:{bg};border:1px solid {line};border-left:4px solid {bar};padding:12px 16px;border-radius:0 10px 10px 0;font-family:{FONT}">
-          <div style="font-size:11.5px;font-weight:700;color:{bar};letter-spacing:1px;margin:0 0 4px">{escape(label_ko)} 업권 판단 · {escape("·".join(comps))}</div>
-          <div style="font-size:14px;line-height:1.7;color:{INK}">{escape(str(s["judgment"]))}</div>
-        </td></tr>
-      </table>
-    </td></tr>
-    """
-    hook_label = ("·".join(comps) if comps else label_ko) + " 관점"
-    if items:
-        html += "".join(render_news_item(it, i + 1, None, sid, hook_label=hook_label) for i, it in enumerate(items))
-    else:
-        html += empty_row()
-    if s.get("shortfall_reason"):
-        html += f'<tr><td style="padding:0 0 8px;font-size:12px;color:{MUTED};font-family:{FONT}">※ {escape(str(s["shortfall_reason"]))}</td></tr>'
-    return band(sid, html)
-
-
-def render_bullets(title_kr, bullets, note="", sec="monitor"):
-    if not bullets:
-        return ""
-    bar, bar2, bg, line, title_c, kicker = SEC[sec]
-    body = "".join(f'<li style="margin:6px 0">{escape(b)}</li>' for b in bullets)
-    return band(sec, section_title(title_kr, None, note, sec) + f"""
-    <tr><td style="padding:0 0 8px">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid {line};border-left:4px solid {bar};border-radius:0 12px 12px 0;border-collapse:separate;background:#ffffff">
-        <tr><td style="padding:14px 18px;font-size:14px;line-height:1.6;color:{INK};font-family:{FONT}">
-          <ul style="padding-left:20px;margin:0">{body}</ul>
-        </td></tr>
-      </table>
-    </td></tr>
-    """)
-
-
-def render_forward_looking(items):
-    bar, bar2, bg, line, title_c, kicker = SEC["forward"]
-    html = section_title("전망 · 발생가능 포인트", len(items), "Outlook", "forward")
-    if not items:
-        return band("forward", html + empty_row())
-    rows = ""
-    for i, it in enumerate(items):
-        meta_bits = [f'<span style="font-size:12px;font-weight:700;color:{bar};margin:0 8px 0 0;font-family:{FONT}">{i + 1:02d}</span>']
-        if it.get("horizon"):
-            meta_bits.append(chip(it["horizon"], MUTED, "#F3F6F9", "#E4E9EF"))
-        if it.get("likelihood"):
-            meta_bits.append(chip(f"가능성 {it['likelihood']}", bar, "#FFF3DF", line))
-        trig = (
-            f'<div style="margin:8px 0 0;font-size:12.5px;color:{MUTED};font-family:{FONT}"><b style="color:{bar}">Trigger</b> · {escape(it.get("trigger", ""))}</div>'
-            if it.get("trigger") else ""
-        )
-        rows += f"""
-        <tr><td style="padding:0 0 12px">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid {line};border-top:4px solid {bar2};border-radius:12px;border-collapse:separate;background:#ffffff">
-            <tr><td style="padding:14px 18px;font-family:{FONT}">
-              <div>{''.join(meta_bits)}</div>
-              <div style="font-size:15px;font-weight:700;color:{NAVY};margin:6px 0 6px;line-height:1.45">{escape(it.get('title', ''))}</div>
-              <div style="font-size:14px;line-height:1.6;color:{INK}">{escape(it.get('cro_angle', ''))}</div>
-              {trig}
-            </td></tr>
-          </table>
-        </td></tr>
-        """
-    return band("forward", html + rows)
-
-
-def render_insights(ins):
-    if not ins:
-        return ""
-    has = ins.get("headline") or ins.get("bullets") or ins.get("action_items") or ins.get("stance")
-    bar, bar2, bg, line, title_c, kicker = SEC["insights"]
-    html = section_title("오늘 CRO Staff 인사이트", None, "CRO Staff View", "insights")
-    if not has:
-        return band("insights", html + empty_row())
-    body = ""
-    if ins.get("as_of"):
-        body += f'<div style="font-size:12px;color:{MUTED};margin:0 0 8px">{escape(ins["as_of"])} · 우리금융그룹 CRO 스태프 판단</div>'
-    if ins.get("headline"):
-        body += f'<div style="font-size:17px;font-weight:700;color:{NAVY};line-height:1.5;margin:0 0 10px">{escape(ins["headline"])}</div>'
-    if ins.get("bullets"):
-        body += '<ul style="padding-left:20px;margin:0 0 12px;font-size:14px;line-height:1.6;color:' + INK + '">' + "".join(
-            f'<li style="margin:5px 0">{escape(b)}</li>' for b in ins["bullets"]) + "</ul>"
-    if ins.get("action_items"):
-        body += f'<div style="font-size:12px;font-weight:700;color:{bar};margin:0 0 4px;letter-spacing:1px">권고 액션</div>'
-        body += '<ol style="padding-left:20px;margin:0 0 12px;font-size:14px;line-height:1.6;color:' + INK + '">' + "".join(
-            f'<li style="margin:5px 0">{escape(a)}</li>' for a in ins["action_items"]) + "</ol>"
-    if ins.get("stance"):
-        body += f"""
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-            <tr><td style="background:#F1ECFB;border-left:4px solid {bar};padding:10px 14px;border-radius:0 8px 8px 0;font-family:{FONT}">
-              <div style="font-size:12px;font-weight:700;color:{bar};margin:0 0 3px;letter-spacing:1px">STANCE</div>
-              <div style="font-size:14px;line-height:1.6;color:{INK}">{escape(ins["stance"])}</div>
-            </td></tr>
-          </table>"""
-    return band("insights", html + f"""
-    <tr><td style="padding:0 0 8px">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid {line};border-top:4px solid {bar};border-radius:12px;border-collapse:separate;background:#ffffff">
-        <tr><td style="padding:16px 18px;font-family:{FONT}">{body}</td></tr>
-      </table>
-    </td></tr>
-    """)
-
-
-def judgment_lines(b):
-    arr = b.get("executive_judgment_bullets") or []
-    return [str(x) for x in arr if x]
-
-
 def split_sentences(text):
     import re as _re
     raw = str(text or "").strip()
     if not raw:
         return []
-    parts = [p.strip() for p in _re.split(r"(?<=[.!?])\s+", raw) if p.strip()]
-    return parts
+    return [p.strip() for p in _re.split(r"(?<=[.!?])\s+", raw) if p.strip()]
 
 
-# ===== 오늘 한눈에 (At a Glance): 판단 3문장 + 카테고리별 기사 목차 (웹 index.html renderGlance 와 동일 구성) =====
-GLANCE_CATS = [
-    ("critical", "긴급", "#B42318"),
-    ("supervision", "감독·규제", "#0B2A4A"),
-    ("group", "그룹·계열사", "#0067AC"),
-    ("peer", "경쟁사", "#1F8BCB"),
-    ("market", "시장·거시", "#B86E00"),
-    ("overseas", "해외", "#0B6B47"),
-    ("other", "기타", "#6b7684"),
-]
+# ===== 질문형 문장 제거 (웹 index.html stripQuestions 와 동일 규칙) =====
+import re as _qre
+_QUESTION_RE = _qre.compile(r"(\?|까요|합니까|입니까|습니까|나요|는가)[.?!)\s]*$")
 
 
-def glance_buckets(groups):
-    buckets = {k: [] for k, _, _ in GLANCE_CATS}
-    seen = set()
-
-    def put(cat, it):
-        key = it.get("url") or it.get("title")
-        if not key or key in seen:
-            return
-        seen.add(key)
-        buckets.setdefault(cat, buckets["other"]).append(it)
-
-    for it in groups["critical"]:
-        put("critical", it)
-    for it in groups["subsidiary"]:
-        put(axis_of(it) or "group", it)
-    for it in groups["daily"]:
-        put("critical" if it.get("critical") else (axis_of(it) or "other"), it)
-    for it in groups["overseas"]:
-        put("overseas", it)
-    return buckets
+def is_question(s):
+    return bool(_QUESTION_RE.search(str(s or "").strip()))
 
 
-def glance_row(it, color):
-    urgency = it.get("urgency", "")
-    urg = ""
-    if urgency:
-        c, bg, bd = URGENCY_STYLE.get(urgency, (MUTED, "#F2F5F8", "#E4E9EF"))
-        urg = (
-            f'<td align="right" valign="top" style="padding:3px 0 3px 8px;white-space:nowrap">'
-            f'<span style="display:inline-block;padding:0 7px;font-size:10.5px;font-weight:700;line-height:16px;color:{c};background:{bg};border:1px solid {bd};border-radius:9px;font-family:{FONT}">{escape(urgency)}</span></td>'
-        )
+def strip_questions(text):
+    return " ".join(s for s in split_sentences(text) if not is_question(s))
+
+
+# ===== 메일 v6: CTA 최상단 + 핵심판단 3문장 + 챕터별 기사 리스트(번호·제목·매체·긴급) =====
+# 본문은 짧게 (기사 15건 기준 모바일 3~4화면). summary/시사점/체크포인트는 웹 리포트에서.
+CHAPTER_COLOR = {"group": NAVY, "bank": "#0067AC", "card_capital": "#4F46E5", "insurance": "#BE185D", "securities_am": "#155E75"}
+
+
+def pages_anchor(ed, anchor):
+    base = report_url_for(ed)
+    return base + "#" + anchor
+
+
+def cta_button(url, label="리포트 보기 →", on_dark=True):
+    """전폭 48px CTA. 네이비 밴드 위에서는 흰 배경 + 네이비 글자."""
+    bg, fg, border = ("#ffffff", NAVY, "#ffffff") if on_dark else (WOORI, "#ffffff", WOORI)
     return (
-        f'<tr><td width="14" valign="top" style="padding:3px 0;width:14px"><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:{color};vertical-align:middle"></span></td>'
-        f'<td valign="top" style="padding:3px 0;font-size:13.5px;font-weight:700;line-height:1.45;font-family:{FONT}">'
-        f'<a href="{escape(it.get("url", ""))}" style="color:{INK};text-decoration:none">{escape(it.get("title", ""))}</a></td>{urg}</tr>'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
+        f'<td align="center" style="background:{bg};border:1px solid {border};border-radius:8px;height:48px">'
+        f'<a href="{escape(url)}" style="display:block;line-height:48px;height:48px;font-family:{FONT};font-size:16px;font-weight:700;'
+        f'color:{fg};text-decoration:none;letter-spacing:-0.2px">{escape(label)}</a>'
+        f'</td></tr></table>'
     )
 
 
-def render_glance(b, groups, ed, sector_ids=()):
-    sentences = split_sentences(b.get("executive_judgment"))
-    buckets = glance_buckets(groups)
-    bar, bar2, bg, line, title_c, kicker = SEC["judgment"]
-
-    judg = f'<div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:{WOORI};margin:0 0 8px;font-family:{FONT}">EXECUTIVE JUDGMENT · CRO STAFF</div>'
-    if sentences:
-        for i, t in enumerate(sentences):
-            sep = f"border-top:1px dashed {LINE};margin-top:9px;padding-top:9px;" if i else ""
-            judg += f'<div style="{sep}font-size:16px;font-weight:700;line-height:1.6;color:{NAVY};font-family:{FONT}">{escape(t)}</div>'
-    else:
-        judg += f'<div style="font-size:14px;color:{MUTED};font-family:{FONT}">오늘 해당 없음</div>'
-
-    toc = f'<div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:{MUTED};margin:0 0 8px;font-family:{FONT}">기사 목차 · 제목을 누르면 원문으로 이동</div>'
-    for key, label, color in GLANCE_CATS:
-        items = buckets.get(key) or []
-        if not items:
-            continue
-        toc += (
-            f'<div style="margin:0 0 4px;font-size:12.5px;font-weight:700;color:{color};font-family:{FONT}">'
-            f'<span style="display:inline-block;width:9px;height:9px;border-radius:5px;background:{color};margin:0 6px 1px 0;vertical-align:middle"></span>{escape(label)} <span style="font-weight:400;color:{MUTED};font-size:12px">{len(items)}</span></div>'
-        )
-        toc += '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 10px 15px">' + "".join(glance_row(it, color) for it in items) + "</table>"
-    sector_items = []
-    sector_html = ""
-    for sid in sector_ids:
-        sdef = SECTORS.get(sid) or {}
-        news = sdef.get("news") or []
-        if not news:
-            continue
-        sector_items += news
-        color = SEC.get(sid, SEC["daily"])[0]
-        comps = "·".join(str(c) for c in (sdef.get("companies") or []))
-        sector_html += (
-            f'<div style="margin:6px 0 2px 15px;font-size:12px;font-weight:700;color:{color};font-family:{FONT}">{escape(SECTOR_NAV.get(sid, sid))}{(" · " + escape(comps)) if comps else ""} '
-            f'<span style="font-weight:400;color:{MUTED};font-size:11.5px">{len(news)}</span></div>'
-            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 6px 15px">' + "".join(glance_row(it, color) for it in news) + "</table>"
-        )
-    if sector_html:
-        toc += (
-            f'<div style="margin:0 0 2px;font-size:12.5px;font-weight:700;color:{NAVY};font-family:{FONT}">'
-            f'<span style="display:inline-block;width:9px;height:9px;border-radius:5px;background:{NAVY};margin:0 6px 1px 0;vertical-align:middle"></span>업권별 <span style="font-weight:400;color:{MUTED};font-size:12px">{len(sector_items)}</span></div>' + sector_html
-        )
-
-    all_items = [it for v in groups.values() for it in v] + sector_items
-    crit = len(groups["critical"]) + sum(1 for it in sector_items if it.get("critical"))
-    official = sum(1 for it in all_items if it.get("source_type") == "official")
-    ed_label = str((ed or {}).get("label_ko") or "전체")
-    foot = (
-        f'<div style="margin:12px 0 0;padding-top:9px;border-top:1px solid {LINE};font-size:12px;color:{MUTED};font-family:{FONT}">'
-        f'전체 <b style="color:{NAVY}">{len(all_items)}건</b> · 긴급 <b style="color:{NAVY}">{crit}</b> · 공식자료 <b style="color:{NAVY}">{official}</b> · {escape(ed_label)} 기준</div>'
+def render_judgment_short(b):
+    sents = [s for s in split_sentences(b.get("executive_judgment")) if not is_question(s)][:3]
+    if not sents:
+        return ""
+    body = "".join(
+        f'<p style="margin:0 0 8px;font-family:{FONT};font-size:14.5px;line-height:1.65;color:{NAVY};font-weight:700">{escape(s)}</p>'
+        for s in sents
     )
     return f"""
-    <tr><td style="padding:0 0 22px">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border:1px solid {line};border-radius:16px;border-collapse:separate">
-        <tr><td style="padding:16px 16px 14px">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-            {section_title("오늘 한눈에", None, "At a Glance · " + fmt_date(date), "judgment").replace("EXECUTIVE JUDGMENT", "TODAY AT A GLANCE")}
-            <tr><td style="padding:0 0 14px;font-family:{FONT}">{judg}</td></tr>
-            <tr><td style="padding:12px 14px 10px;background:#F7F9FB;border:1px solid {LINE};border-radius:10px;font-family:{FONT}">{toc}</td></tr>
-            <tr><td style="font-family:{FONT}">{foot}</td></tr>
-          </table>
-        </td></tr>
-      </table>
+    <tr><td style="padding:18px 20px 6px">
+      <div style="font-family:{FONT};font-size:12px;font-weight:700;color:{WOORI};margin:0 0 8px">핵심 판단</div>
+      <div style="border-left:3px solid {WOORI};padding:2px 0 0 12px">{body}</div>
     </td></tr>
     """
 
 
-def render_judgment(b, groups, sector_ids=()):
-    """핵심 판단 포인트: executive_judgment_bullets 만 (판단 본문·기사 목록은 '오늘 한눈에'로 이동)."""
-    lines = judgment_lines(b)
-    bar, bar2, bg, line, title_c, kicker = SEC["judgment"]
-    body = ""
-    if lines:
-        body += '<ul style="padding-left:20px;margin:0">' + "".join(
-            f'<li style="margin:6px 0;font-size:14.5px;line-height:1.65;color:{INK};font-family:{FONT}">{escape(x)}</li>' for x in lines
-        ) + "</ul>"
-    ch = meta.get("changes") if isinstance(meta.get("changes"), dict) else None
-    if ch and ((ch.get("new") or []) or (ch.get("continued") or [])):
-        body += '<div style="margin:12px 0 0">' + chip(f"신규 {len(ch.get('new') or [])}", "#ffffff", WOORI, WOORI) + chip(f"지속 {len(ch.get('continued') or [])}", INK, "#F3F6F9", "#E4E9EF") + "</div>"
-    if meta.get("shortfall_reason"):
-        body += f'<div style="margin:8px 0 0;font-size:12px;color:{MUTED};font-family:{FONT}">※ {escape(str(meta["shortfall_reason"]))}</div>'
-    if not body:
-        body = f'<div style="font-size:14px;color:{MUTED};font-family:{FONT}">오늘 해당 없음 · 판단 요지는 상단 \'오늘 한눈에\'를 참고하세요.</div>'
-    return band("judgment", section_title("핵심 판단 포인트", len(lines) or None, "CRO Staff · " + fmt_date(date), "judgment").replace("EXECUTIVE JUDGMENT", "KEY JUDGMENT POINTS") + f"""
-    <tr><td style="padding:0 0 8px">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tr><td style="background:#ffffff;border:1px solid {line};border-left:4px solid {bar};padding:16px 18px;border-radius:0 10px 10px 0;font-family:{FONT}">
-          {body}
-        </td></tr>
-      </table>
-    </td></tr>
-    """)
+def list_row(item, idx, last):
+    title = escape(str(item.get("title") or "").strip())
+    url = escape(str(item.get("url") or "").strip())
+    src = escape(str(item.get("source_name") or "").strip())
+    urg = str(item.get("urgency") or "").strip()
+    crit = bool(item.get("critical"))
+    uc = URGENCY_STYLE.get(urg)
+    chips = ""
+    if crit:
+        chips += chip("긴급", "#ffffff", CRIT, CRIT)
+    elif uc:
+        chips += chip(urg, *uc)
+    border = "" if last else f"border-bottom:1px solid {LINE};"
+    link = f'<a href="{url}" style="color:{NAVY};text-decoration:none;font-weight:700">{title}</a>' if url else f'<b style="color:{NAVY}">{title}</b>'
+    return (
+        f'<tr>'
+        f'<td valign="top" width="26" style="padding:9px 0 9px;{border}font-family:{FONT};font-size:12px;color:{MUTED};font-weight:700">{idx:02d}</td>'
+        f'<td valign="top" style="padding:9px 8px 9px 0;{border}font-family:{FONT};font-size:14px;line-height:1.5;color:{INK}">'
+        f'{link}'
+        f'<div style="font-size:12px;color:{MUTED};margin-top:2px">{src}</div>'
+        f'</td>'
+        f'<td valign="top" align="right" width="46" style="padding:10px 0 9px;{border}">{chips}</td>'
+        f'</tr>'
+    )
 
 
-def render_summary_strip(b, groups, ed=None, sector_ids=()):
-    common_total = sum(len(v) for v in groups.values())
-    sector_items = [it for sid in sector_ids for it in ((SECTORS.get(sid) or {}).get("news") or [])]
-    total = common_total + len(sector_items)
-    crit = len(groups.get("critical", [])) + sum(1 for it in sector_items if it.get("critical"))
-    mix = meta.get("source_mix") if isinstance(meta.get("source_mix"), dict) else {}
-    official = mix.get("official")
-    if official is None or sector_ids:
-        official = sum(1 for items in groups.values() for it in items if it.get("source_type") == "official") + \
-            sum(1 for it in sector_items if it.get("source_type") == "official")
-    media = mix.get("media") if not sector_ids else None
-    if media is None:
-        media = total - official
-    sel_hint = f"공통 {common_total} · 업권 {len(sector_items)}" if (ed and SECTORS) else f"언론 {media} · 공식 {official}"
-    cells = [
-        ("긴급", f"{crit}<span style='font-size:12px;font-weight:400;color:{MUTED}'> 건</span>", "Critical · 즉시 확인"),
-        ("선정 기사", f"{total}<span style='font-size:12px;font-weight:400;color:{MUTED}'> 건</span>", sel_hint),
-        ("공식자료", f"{official}<span style='font-size:12px;font-weight:400;color:{MUTED}'> 건</span>", "금융위·금감원·한은·DART"),
-    ]
-    ch = meta.get("changes") if isinstance(meta.get("changes"), dict) else None
-    if ch and (isinstance(ch.get("new"), list) or isinstance(ch.get("continued"), list)):
-        n, c = len(ch.get("new") or []), len(ch.get("continued") or [])
-        cells.append(("신규 · 지속", f"{n}<span style='font-size:12px;font-weight:400;color:{MUTED}'> 신규</span> / {c}<span style='font-size:12px;font-weight:400;color:{MUTED}'> 지속</span>", "최근 3일 대비"))
-    elif ed and ed.get("id") != "all":
-        comps = [c for sid in sector_ids for c in ((SECTORS.get(sid) or {}).get("companies") or [])]
-        cells.append(("관점", f"<span style='font-size:15px'>{escape(str(ed.get('label_ko') or ''))}</span>", "·".join(comps) or "Sector Risk Lens"))
-    else:
-        cells.append(("관점", f"<span style='font-size:15px'>우리금융그룹 CRO</span>", "Group Risk Lens · 전체" if SECTORS else "Group Risk Lens"))
-
-    def cell(label, value, hint, last):
-        pad = "0" if last else "0 8px 0 0"
-        return f"""
-          <td width="25%" valign="top" style="padding:{pad}">
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid {LINE};border-top:3px solid {SKY};border-radius:8px;border-collapse:separate;background:#ffffff">
-              <tr><td style="padding:10px 12px;font-family:{FONT}">
-                <div style="font-size:11px;font-weight:700;color:{NAVY};white-space:nowrap;letter-spacing:0.3px">{escape(label)}</div>
-                <div style="font-size:22px;font-weight:700;color:{NAVY};line-height:1.2;margin-top:2px;white-space:nowrap">{value}</div>
-                <div style="font-size:11px;color:{MUTED};margin-top:3px;white-space:nowrap;overflow:hidden">{escape(hint)}</div>
-              </td></tr>
-            </table>
-          </td>"""
-
-    tds = "".join(cell(*c, last=(i == len(cells) - 1)) for i, c in enumerate(cells))
+def render_chapter_list(ed, cid, title, items, sub=""):
+    color = CHAPTER_COLOR.get(cid, NAVY)
+    rows = "".join(list_row(it, i + 1, i == len(items) - 1) for i, it in enumerate(items))
+    if not rows:
+        rows = f'<tr><td style="padding:8px 0;font-family:{FONT};font-size:13px;color:{MUTED}">오늘 해당 업권 기사 없음</td></tr>'
+    web = escape(pages_anchor(ed, "ch-" + cid))
+    subtxt = f' <span style="font-weight:400;color:{MUTED};font-size:12px">· {escape(sub)}</span>' if sub else ""
     return f"""
-    <tr><td style="padding:0 0 24px">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>{tds}</tr></table>
+    <tr><td style="padding:16px 20px 0">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td valign="bottom" style="padding:0 0 6px;border-bottom:2px solid {color};font-family:{FONT};font-size:15px;font-weight:700;color:{color}">
+            {escape(title)} <span style="font-size:12px;color:{MUTED};font-weight:700">{len(items)}건</span>{subtxt}
+          </td>
+          <td valign="bottom" align="right" style="padding:0 0 6px;border-bottom:2px solid {color};font-family:{FONT};font-size:12px;white-space:nowrap">
+            <a href="{web}" style="color:{WOORI};text-decoration:none">웹에서 보기 →</a>
+          </td>
+        </tr>
+      </table>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">{rows}</table>
     </td></tr>
     """
 
 
 insights = briefing.get("insights", {})
-
 critical_items = briefing.get("critical", []) or []
 daily_items = (briefing.get("daily_news", []) or []) + (briefing.get("additional_news", []) or [])
 subsidiary_items = briefing.get("subsidiary_news", []) or []
@@ -807,30 +361,31 @@ if not overseas_items:
 groups = {"critical": critical_items, "daily": daily_items, "subsidiary": subsidiary_items, "overseas": overseas_items}
 
 
+def group_items_ordered(groups):
+    """그룹 공통 기사: 긴급 → 뉴스 → 계열사 → 해외 순, 중복(url) 제거."""
+    out, seen = [], set()
+    for k in ("critical", "daily", "subsidiary", "overseas"):
+        for it in groups.get(k) or []:
+            key = it.get("url") or it.get("title")
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(it)
+    return out
+
+
 def build_sections(ed):
-    """판별 섹션 순서.
-    all   : 핵심판단 → 긴급 → 뉴스 → 계열사 → 글로벌 → 업권 5개 → 전망 이하
-    업권본 : 핵심판단 → 해당 업권 → 긴급 → 뉴스 → 계열사 → 글로벌 → 전망 이하
+    """판별 리스트 순서.
+    all   : 핵심판단 → 그룹 공통 리스트 → 업권 리스트 4개
+    업권본 : 핵심판단 → 그룹 공통 리스트 → 해당 업권 리스트
     """
     sector_ids = edition_sectors(ed)
-    is_sector_ed = ed.get("id") != "all"
-    sector_blocks = "".join(render_sector_section(sid) for sid in sector_ids)
-    parts = [render_glance(briefing, groups, ed, sector_ids), render_judgment(briefing, groups, sector_ids)]
-    if is_sector_ed:
-        parts.append(sector_blocks)
-    parts += [
-        render_news_section("긴급", critical_items, "Priority Watch", sec="critical"),
-        render_news_section("오늘의 리스크 뉴스", daily_items, "Daily News", sec="daily"),
-        render_news_section("우리금융그룹 · 계열사", subsidiary_items, "Group & Subsidiaries", sec="subsidiary"),
-        render_news_section("해외 · 글로벌", overseas_items, "Overseas & Global", sec="overseas") if overseas_items else "",
-    ]
-    if not is_sector_ed:
-        parts.append(sector_blocks)
-    parts += [
-        render_forward_looking(briefing.get("forward_looking_points", []) or []),
-        render_insights(insights),
-        render_bullets("모니터링 포인트", briefing.get("monitoring_points", []) or [], "Watchlist", sec="monitor"),
-    ]
+    parts = [render_judgment_short(briefing)]
+    parts.append(render_chapter_list(ed, "group", "그룹 공통", group_items_ordered(groups)))
+    for sid in sector_ids:
+        s = SECTORS.get(sid) or {}
+        comps = [str(c) for c in (s.get("companies") or [])]
+        parts.append(render_chapter_list(ed, sid, SECTOR_NAV.get(sid, sid), list(s.get("news") or []), "·".join(comps)))
     return "".join(parts)
 
 
@@ -839,20 +394,15 @@ generated_label = fmt_generated(meta.get("generated_at"))
 if LOGO_URL:
     logo_html = (
         f'<a href="{escape(report_url)}" style="text-decoration:none">'
-        f'<img src="{escape(LOGO_URL)}" width="160" alt="우리금융그룹" style="display:block;width:160px;height:auto;border:0;outline:none"></a>'
+        f'<img src="{escape(LOGO_URL)}" width="150" alt="우리금융그룹" style="display:block;width:150px;height:auto;border:0;outline:none"></a>'
     )
-    logo_html_dark = logo_html
 else:
-    # 텍스트 워드마크: 스카이블루 구체 + 우리금융그룹 (이미지 호스팅 불가 시)
-    def wordmark(color, sphere):
-        return (
-            f'<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
-            f'<td valign="middle" style="padding:0 7px 0 0"><span style="display:inline-block;width:20px;height:20px;border-radius:10px;background:{sphere};font-size:0;line-height:0">&nbsp;</span></td>'
-            f'<td valign="middle" style="font-family:{FONT};font-size:20px;font-weight:700;color:{color};letter-spacing:-0.5px;white-space:nowrap">우리금융그룹</td>'
-            f'</tr></table>'
-        )
-    logo_html = wordmark(WOORI, WOORI)
-    logo_html_dark = wordmark("#ffffff", SKY)
+    logo_html = (
+        f'<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
+        f'<td valign="middle" style="padding:0 7px 0 0"><span style="display:inline-block;width:20px;height:20px;border-radius:10px;background:{WOORI};font-size:0;line-height:0">&nbsp;</span></td>'
+        f'<td valign="middle" style="font-family:{FONT};font-size:20px;font-weight:700;color:{WOORI};letter-spacing:-0.5px;white-space:nowrap">우리금융그룹</td>'
+        f'</tr></table>'
+    )
 
 
 def report_url_for(ed):
@@ -875,21 +425,14 @@ def build_html(ed):
     sector_ids = edition_sectors(ed)
     eid = ed.get("id") or "all"
     ed_label = str(ed.get("label_ko") or "전체")
-    comps = [c for sid in sector_ids for c in ((SECTORS.get(sid) or {}).get("companies") or [])]
-    common_n = sum(len(v) for v in groups.values())
+    common_n = len(group_items_ordered(groups))
     sector_n = sum(len((SECTORS.get(sid) or {}).get("news") or []) for sid in sector_ids)
     if not SECTORS:
-        hero_line = "우리금융그룹 CRO 관점 · 어제·오늘(KST) 우선, 부족 시 최근 3일 이내 유관·배경 자료"
-        hero_badge = ""
+        hero_line = "우리금융그룹 CRO 관점"
     elif eid == "all":
-        hero_line = f"우리금융그룹 CRO 관점 · 전체 · 그룹 공통 {common_n}건 + 업권 {sector_n}건"
-        hero_badge = ""
+        hero_line = f"우리금융그룹 CRO 관점 · 그룹 공통 {common_n}건 + 업권 {sector_n}건"
     else:
-        hero_line = f"{escape(ed_label)} · {escape('·'.join(comps) or ed_label)} 리스크관리부 · 그룹 공통 {common_n}건 + {escape(edition_short(ed))} {sector_n}건"
-        hero_badge = (
-            f'<div style="margin:0 0 12px"><span style="display:inline-block;padding:3px 12px;font-family:{FONT};font-size:11.5px;font-weight:700;'
-            f'letter-spacing:1px;color:#ffffff;background:{SEC.get(sector_ids[0], SEC["daily"])[0] if sector_ids else WOORI};border-radius:12px">{escape(ed_label)}</span></div>'
-        )
+        hero_line = f"{escape(ed_label)} · 그룹 공통 {common_n}건 + {escape(edition_short(ed))} {sector_n}건"
     this_report_url = report_url_for(ed)
     title_tag = edition_title_tag(ed)
     html_body = f"""<!DOCTYPE html>
@@ -901,54 +444,33 @@ def build_html(ed):
     </head>
     <body style="margin:0;padding:0;background:{OUTER};">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{OUTER}">
-      <tr><td align="center" style="padding:20px 10px">
+      <tr><td align="center" style="padding:16px 8px">
         <table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" style="width:640px;max-width:100%;background:#ffffff;border-collapse:collapse">
-          <!-- Sky line -->
           <tr><td style="height:4px;background:{SKY};font-size:0;line-height:0">&nbsp;</td></tr>
-          <!-- White brand bar (공식 홈: 중앙 로고) -->
-          <tr><td align="center" style="padding:14px 28px 12px;border-bottom:1px solid {LINE}">
+          <!-- (1) 흰 브랜드 바 -->
+          <tr><td align="center" style="padding:12px 20px 10px;border-bottom:1px solid {LINE}">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-              <td valign="middle" style="font-family:{FONT};font-size:11.5px;color:{MUTED};white-space:nowrap"><b style="color:{NAVY}">리스크관리부문</b> · CRO Staff</td>
               <td valign="middle" align="center">{logo_html}</td>
-              <td valign="middle" align="right" style="font-family:{FONT};font-size:12px;color:{NAVY};font-weight:700;white-space:nowrap">{escape(date_label)} <span style="font-weight:400;color:{MUTED};font-size:10.5px">KST</span></td>
             </tr></table>
           </td></tr>
-          <!-- Navy key-visual header (중앙 정렬) -->
-          <tr><td align="center" style="background:{NAVY};background-image:linear-gradient(180deg,#061B33,#0B2A4A 60%,#123E6B);padding:34px 28px 36px">
-            {hero_badge}<div style="font-family:{FONT};font-size:10.5px;font-weight:700;letter-spacing:3px;color:#9FC9E8;margin:0 0 12px">WOORI FINANCIAL GROUP · RISK MANAGEMENT</div>
-            <div style="font-family:{FONT};font-size:30px;font-weight:700;color:#ffffff;line-height:1.2;letter-spacing:-0.5px">일일 리스크 브리핑</div>
-            <div style="font-family:{FONT};font-size:15px;color:{SKY};line-height:1.5;margin-top:10px"><b style="color:#9FD6F7">{escape(fmt_date_ko(date))}</b> · {escape(date_label)} KST</div>
-            <div style="font-family:{FONT};font-size:12px;color:#C9DCEC;margin-top:6px">{hero_line}</div>
+          <!-- (2) 네이비 밴드 + 큰 CTA -->
+          <tr><td align="center" style="background:{NAVY};background-image:linear-gradient(180deg,#061B33,#0B2A4A 60%,#123E6B);padding:22px 20px 20px">
+            <div style="font-family:{FONT};font-size:24px;font-weight:700;color:#ffffff;line-height:1.25;letter-spacing:-0.5px">일일 리스크 브리핑</div>
+            <div style="font-family:{FONT};font-size:14px;color:{SKY};line-height:1.5;margin-top:6px"><b style="color:#9FD6F7">{escape(fmt_date_ko(date))}</b> · {escape(date_label)} KST</div>
+            <div style="font-family:{FONT};font-size:12px;color:#C9DCEC;margin:4px 0 16px">{hero_line}</div>
+            {cta_button(this_report_url)}
           </td></tr>
-          <!-- Body -->
-          <tr><td style="padding:18px 20px 10px;font-family:{FONT};color:{INK};background:#F7F9FB">
+          <!-- (3) 핵심판단 (4) 챕터별 기사 리스트 -->
+          <tr><td style="padding:0 0 10px;font-family:{FONT};color:{INK}">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-              {render_summary_strip(briefing, groups, ed, sector_ids)}
               {sections_html}
-              <!-- CTA -->
-              <tr><td align="center" style="padding:32px 0 8px">
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                  <tr><td align="center" style="background:{WOORI};border-radius:24px">
-                    <a href="{escape(this_report_url)}" style="display:inline-block;padding:13px 30px;font-family:{FONT};font-size:15px;font-weight:700;color:#ffffff;text-decoration:none">리포트 전체 보기 →</a>
-                  </td></tr>
-                </table>
-              </td></tr>
-              <tr><td align="center" style="padding:0 0 12px;font-family:{FONT};font-size:12px;color:{MUTED};line-height:1.6">
-                웹 리포트(GitHub Pages)에서는 우하단 'AI에게 질문' 버튼으로 브리핑 근거 답변을 받을 수 있습니다.<br>사내망에서 링크가 열리지 않는 경우, 이 메일 본문이 전체 브리핑 내용입니다.
-              </td></tr>
+              <!-- (5) 푸터 CTA -->
+              <tr><td style="padding:22px 20px 6px">{cta_button(this_report_url, on_dark=False)}</td></tr>
+              <tr><td align="center" style="padding:0 20px 14px;font-family:{FONT};font-size:11.5px;color:{MUTED};line-height:1.6">기사 요약·시사점·체크포인트는 웹 리포트에서 확인</td></tr>
             </table>
           </td></tr>
-          <!-- Footer -->
-          <tr><td style="padding:18px 28px 20px;background:{NAVY};border-top:4px solid {SKY};font-family:{FONT};font-size:11.5px;color:#B9CCDD;line-height:1.6">
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-              <tr>
-                <td valign="middle" style="font-family:{FONT};font-size:14px;font-weight:700;color:#ffffff;white-space:nowrap">우리금융그룹 리스크관리부문</td>
-                <td valign="middle" align="right" style="font-family:{FONT};font-size:11.5px;color:#B9CCDD;line-height:1.6">
-                  <b style="color:#ffffff">CRO Staff</b> · 내부 참고용{(' · 생성 ' + escape(generated_label)) if generated_label else ''}<br>
-                  기사 요약·시사점은 CRO Staff 분석이며 그룹의 공식 입장이 아닙니다.
-                </td>
-              </tr>
-            </table>
+          <tr><td align="center" style="padding:12px 20px;background:{NAVY};border-top:3px solid {SKY};font-family:{FONT};font-size:11.5px;color:#B9CCDD;line-height:1.6">
+            <b style="color:#ffffff;font-size:12.5px">우리금융그룹 리스크관리부문</b> · CRO Staff · 내부 참고용{(' · 생성 ' + escape(generated_label)) if generated_label else ''}
           </td></tr>
         </table>
       </td></tr>
