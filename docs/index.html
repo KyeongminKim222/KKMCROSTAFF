@@ -1032,7 +1032,7 @@ body.chat-open .chat-fab { display: none; }
 @media(max-width:859px){.chat-robot,.chat-robot img.rf{width:132px;height:132px}}
 @media(prefers-reduced-motion:reduce){.chat-robot,.chat-robot.is-talk{animation:none!important}}
 </style>
-<style id="herologo-off">.hero-logo{display:none!important}</style></head>
+<style id="herologo-off">.hero-logo{display:none!important}</style><style id="chat-suggest-v13">#chatSuggest.is-hidden{display:none!important}.chat-panel .chat-log{flex:1 1 auto;min-height:0}</style></head>
 <body>
   <div id="app"></div>
   <script>
@@ -1321,16 +1321,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 function openArticleLink(url) {
+  /* 메인 페이지는 그대로 두고 기사만 새 탭에서 연다 */
   if (!url) return;
-  try {
-    if (window.top && window.top !== window) {
-      window.top.location.href = url;
-      return;
-    }
-  } catch (e) {}
   var w = null;
   try { w = window.open(url, '_blank', 'noopener,noreferrer'); } catch (e2) { w = null; }
-  if (!w) window.location.href = url;
+  return w;
 }
 
 document.addEventListener('click', function (e) {
@@ -1338,8 +1333,9 @@ document.addEventListener('click', function (e) {
   if (!a) return;
   var url = a.getAttribute('href');
   if (!url || url.charAt(0) === '#') return;
-  e.preventDefault();
-  openArticleLink(url);
+  /* 기본 동작(target=_blank)에 맡긴다. 현재 페이지 이동 방지용으로만 속성을 보장 */
+  a.setAttribute('target', '_blank');
+  a.setAttribute('rel', 'noopener noreferrer');
 }, true);
 
 /* 호스팅 분리: 정적 페이지(GitHub Pages)와 AI 질문 API(Render)가 다른 도메인에 있다 */
@@ -1463,7 +1459,7 @@ var LOGO_TABS = [
   { id: 'group',         name: '그룹 공통',    ch: 'ch-group',         logos: ['woori_group_kr.png'] },
   { id: 'bank',          name: '은행업',       ch: 'ch-bank',          logos: ['logos/wooribank.png'] },
   { id: 'card_capital',  name: '여전·저축은행업', ch: 'ch-card_capital',  logos: ['logos/wooricard.png', 'logos/wooricapital.png', 'logos/woorisb.png'] },
-  { id: 'insurance',     name: '보험업',       ch: 'ch-insurance',     logos: ['logos/abllife.png', 'logos/tongyang.png'] },
+  { id: 'insurance',     name: '보험업',       ch: 'ch-insurance',     logos: ['logos/tongyang.png', 'logos/abllife.png'] },
   { id: 'securities_am', name: '증권·운용업',  ch: 'ch-securities_am', logos: ['logos/wooriib.png', 'logos/wooriam.png'] }
 ];
 var TAB_COLORS = { group: '#0B2A4A', bank: '#0067AC', card_capital: '#4F46E5', insurance: '#BE185D', securities_am: '#155E75' };
@@ -1591,7 +1587,7 @@ function renderRelated(list) {
   if (!list || !list.length) return '';
   var html = '<div class="related"><p class="lbl">유관 · 배경</p><ul>';
   list.forEach(function (r) {
-    html += '<li><a class="article-link" href="' + esc(r.url) + '" target="_top" rel="noopener noreferrer">' + esc(r.title) + '</a>';
+    html += '<li><a class="article-link" href="' + esc(r.url) + '" target="_blank" rel="noopener noreferrer">' + esc(r.title) + '</a>';
     if (r.published) html += ' <span>(' + esc(r.published) + ')</span>';
     if (r.note) html += '<div>' + esc(stripQuestions(r.note)) + '</div>';
     html += '</li>';
@@ -1610,7 +1606,7 @@ function renderNewsCard(item, idx, opts) {
   var html = '<article class="' + cls + '" id="' + cardId(item) + '">';
   if (isCrit) html += '<div class="ribbon">긴급 · 즉시 확인</div>';
   html += '<div class="card-top"><span class="card-idx">' + (idx + 1) + '</span>';
-  html += '<h3><a class="article-link" href="' + esc(item.url) + '" target="_top" rel="noopener noreferrer">' + esc(item.title) + '</a></h3>';
+  html += '<h3><a class="article-link" href="' + esc(item.url) + '" target="_blank" rel="noopener noreferrer">' + esc(item.title) + '</a></h3>';
   if (item.urgency) html += '<span class="chip ' + urgencyClass(item.urgency) + '">' + esc(item.urgency) + '</span>';
   html += '</div>';
 
@@ -2014,6 +2010,7 @@ function sendServerQuestion() {
   if (!question) return;
 
   input.value = '';
+  var sg = document.getElementById('chatSuggest'); if (sg) sg.classList.add('is-hidden');
   appendChat('user', question);
   __croChatHistory.push({ role: 'user', content: question });
   setChatBusy(true);
@@ -2079,7 +2076,7 @@ function appendChat(role, content, meta) {
     src.className = 'chat-sources';
     src.innerHTML = '근거 · ' + meta.sources.map(function (s) {
       var t = esc(s.title || '');
-      return s.url ? '<a class="article-link" href="' + esc(s.url) + '" target="_top" rel="noopener noreferrer">' + t + '</a>' : t;
+      return s.url ? '<a class="article-link" href="' + esc(s.url) + '" target="_blank" rel="noopener noreferrer">' + t + '</a>' : t;
     }).join(' · ');
     row.appendChild(src);
   }
