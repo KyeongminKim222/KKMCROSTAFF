@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
   <title>CRO Staff 일일 리스크 브리핑 | 우리금융그룹</title>
+  <script>window.CRO_API_BASE='https://kkmcrostaff.onrender.com';</script>
   <style>
 /* ─────────────────────────────────────────────────────────────
    우리금융그룹 CRO Staff — 일일 리스크 브리핑
@@ -110,6 +112,7 @@ button, textarea, input { font: inherit; }
 }
 .top-right strong { color: var(--navy); font-weight: 700; letter-spacing: 0.01em; }
 .top-right span { color: var(--muted); font-size: 11.5px; margin-left: 6px; letter-spacing: 0.08em; }
+.topbar > * { min-width: 0; }
 .subnav {
   border-top: 1px solid var(--line);
   overflow-x: auto;
@@ -153,6 +156,7 @@ button, textarea, input { font: inherit; }
 .subnav a.nav-insights { --sc: var(--sc-ins); --sc-title: var(--sc-ins-title); }
 .subnav a.nav-monitor { --sc: var(--sc-mon); --sc-title: var(--sc-mon-title); }
 .subnav a.nav-chat { --sc: var(--sc-chat); --sc-title: var(--sc-chat-title); }
+.subnav a.nav-glance { --sc: var(--navy); --sc-title: var(--navy); }
 .subnav-inner.is-dense a { padding: 12px 13px 11px; font-size: 13.5px; }
 .subnav-inner.is-dense a::before { width: 6px; height: 6px; margin-right: 6px; }
 
@@ -704,7 +708,7 @@ a.hi-title:hover { color: var(--woori); text-decoration: underline; }
 .fade-in { animation: fade .28s ease both; }
 @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-/* ── 판 선택 탭 (전체본 / 은행본 / 여전본 / 저축은행본 / 보험본 / 증권·운용본) ── */
+/* ── 판 선택 탭 (전체 / 은행업 / 여전·저축은행업 / 보험업 / 증권·운용업) ── */
 .edition-bar { position: relative; z-index: 3; margin: 18px auto 0; max-width: var(--max); padding: 0 20px; }
 .edition-tabs {
   display: flex; gap: 8px; justify-content: center; flex-wrap: nowrap;
@@ -723,10 +727,9 @@ a.hi-title:hover { color: var(--woori); text-decoration: underline; }
 .ed-tab.is-active { background: var(--woori); border-color: var(--woori); color: #fff; box-shadow: 0 6px 16px rgba(0,103,172,0.22); }
 .edition-note { margin: 8px 0 0; text-align: center; font-size: 12px; color: var(--muted); }
 
-/* ── 업권 섹션 팔레트 (은행 우리블루 / 여전 인디고 / 저축은행 테라코타 / 보험 로즈 / 증권·운용 시안) ── */
+/* ── 업권 섹션 팔레트 (은행 우리블루 / 여전·저축은행 인디고 / 보험 로즈 / 증권·운용 시안) ── */
 .sec-bank          { --sc: #0067AC; --sc2: #4FB3E8; --sc-bg: #EDF5FC; --sc-line: #9CC2E0; --sc-title: #053E6B; border: 1.5px solid #0067AC; box-shadow: 0 10px 28px rgba(0,103,172,0.08); }
 .sec-card_capital  { --sc: #4F46E5; --sc2: #A5B4FC; --sc-bg: #F1F0FD; --sc-line: #C7C4F5; --sc-title: #3730A3; box-shadow: 0 10px 28px rgba(79,70,229,0.07); }
-.sec-savings       { --sc: #9A3412; --sc2: #FB923C; --sc-bg: #FFF4EE; --sc-line: #EFC4AC; --sc-title: #7C2D12; box-shadow: 0 10px 28px rgba(154,52,18,0.07); }
 .sec-insurance     { --sc: #BE185D; --sc2: #F9A8D4; --sc-bg: #FDF2F8; --sc-line: #F0BFD6; --sc-title: #9D174D; box-shadow: 0 10px 28px rgba(190,24,93,0.07); }
 .sec-securities_am { --sc: #155E75; --sc2: #67E8F9; --sc-bg: #ECF8FA; --sc-line: #9FCBD6; --sc-title: #164E63; border: 1.5px solid #155E75; box-shadow: 0 10px 28px rgba(21,94,117,0.08); }
 .sec-sector .callout { background: var(--sc-bg); }
@@ -752,22 +755,115 @@ a.hi-title:hover { color: var(--woori); text-decoration: underline; }
 .chip-sec { color: #fff; border-color: transparent; }
 .chip-sec.sc-bank { background: #0067AC; }
 .chip-sec.sc-card_capital { background: #4F46E5; }
-.chip-sec.sc-savings { background: #9A3412; }
 .chip-sec.sc-insurance { background: #BE185D; }
 .chip-sec.sc-securities_am { background: #155E75; }
 .subnav a.nav-sector-bank { --sc: #0067AC; --sc-title: #053E6B; }
 .subnav a.nav-sector-card_capital { --sc: #4F46E5; --sc-title: #3730A3; }
-.subnav a.nav-sector-savings { --sc: #9A3412; --sc-title: #7C2D12; }
 .subnav a.nav-sector-insurance { --sc: #BE185D; --sc-title: #9D174D; }
 .subnav a.nav-sector-securities_am { --sc: #155E75; --sc-title: #164E63; }
 
+/* ── 오늘 한눈에 (At a Glance): 판단 3문장 + 카테고리별 목차 ── */
+.sec-glance {
+  --sc: var(--navy); --sc2: var(--sky); --sc-bg: #fff; --sc-line: var(--sc-judg-line); --sc-title: var(--navy);
+  background: #fff;
+  border: 1px solid var(--sc-judg-line);
+  box-shadow: 0 14px 34px rgba(11, 42, 74, 0.08);
+}
+.glance-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.glance-grid > * { min-width: 0; max-width: 100%; }
+.sec-glance, .sec-glance .section-head { max-width: 100%; overflow: hidden; }
+.glance-judg p { overflow-wrap: anywhere; }
+@media (min-width: 860px) { .glance-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 26px; align-items: start; } }
+.glance-judg .lbl { margin: 0 0 10px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--woori); }
+.glance-judg p { margin: 0; font-size: 18.5px; line-height: 1.7; font-weight: 700; color: var(--navy); letter-spacing: -0.012em; }
+.glance-judg p + p { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.glance-judg p.q { color: var(--woori); }
+.glance-toc { background: var(--page-bg); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px 12px; }
+.glance-toc .lbl { margin: 0 0 10px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.glance-cat { --gc: var(--navy); margin: 0 0 12px; }
+.glance-cat:last-child { margin-bottom: 0; }
+.glance-cat-h { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 12.5px; font-weight: 700; color: var(--gc); letter-spacing: 0.02em; }
+.glance-cat-h::before { content: ""; flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; background: var(--gc); }
+.glance-cat-h .n { font-weight: 400; color: var(--muted); font-size: 12px; }
+.glance-sub { --gc: var(--navy); margin: 8px 0 0 17px; }
+.glance-sub-h { display: flex; align-items: center; gap: 6px; margin: 0 0 2px; font-size: 12px; font-weight: 700; color: var(--gc); }
+.glance-sub-h .n { font-weight: 400; color: var(--muted); font-size: 11.5px; }
+.glance-list { list-style: none; margin: 0; padding: 0 0 0 17px; }
+.glance-list li { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 3px 0; }
+.glance-dot { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: var(--gc); opacity: 0.85; }
+.glance-link { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 700; color: var(--ink); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.5; }
+.glance-link:hover { color: var(--woori); text-decoration: underline; }
+.glance-urg { flex: 0 0 auto; font-size: 10.5px; padding: 0 7px; line-height: 17px; }
+.glance-foot { margin: 14px 0 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+.glance-foot b { color: var(--navy); }
+.card { scroll-margin-top: 126px; }
+.card.is-flash { animation: cardflash 1.2s ease both; }
+@keyframes cardflash {
+  0% { box-shadow: 0 0 0 0 rgba(0,103,172,0); }
+  25% { box-shadow: 0 0 0 5px rgba(0,103,172,0.38); background: #EAF4FB; }
+  100% { box-shadow: var(--shadow-sm); }
+}
+
+/* ── AI 질문 플로팅 버튼 + 패널 ── */
+.chat-fab {
+  position: fixed; right: 22px; bottom: 22px; z-index: 80;
+  display: flex; align-items: center; gap: 10px;
+  border: 0; background: transparent; padding: 0; cursor: pointer; font: inherit;
+}
+.chat-fab-label {
+  background: #fff; color: var(--navy); font-size: 13px; font-weight: 700;
+  padding: 7px 13px; border-radius: 999px; border: 1px solid var(--line);
+  box-shadow: 0 6px 18px rgba(11,42,74,0.16); white-space: nowrap;
+}
+.chat-fab-btn {
+  width: 56px; height: 56px; border-radius: 50%; background: var(--woori); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 10px 24px rgba(0,103,172,0.36);
+  transition: transform .15s, background .15s;
+}
+.chat-fab:hover .chat-fab-btn { background: #005a97; transform: translateY(-1px); }
+.chat-fab-btn svg { width: 26px; height: 26px; display: block; }
+.chat-fab.is-limited .chat-fab-btn { background: #94A3B8; box-shadow: 0 6px 16px rgba(71,85,105,0.25); }
+.chat-fab.is-limited .chat-fab-label { color: var(--muted); }
+.chat-panel {
+  position: fixed; right: 22px; bottom: 92px; z-index: 90;
+  width: 380px; height: 560px; max-height: calc(100vh - 112px);
+  background: #fff; border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(6,27,51,0.28);
+  display: none; flex-direction: column; overflow: hidden;
+}
+.chat-panel.is-open { display: flex; }
+.chat-panel-head { padding: 12px 16px; background: var(--navy); color: #fff; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex: 0 0 auto; }
+.chat-panel-head h3 { margin: 0; font-size: 15px; font-weight: 700; color: #fff; }
+.chat-panel-head p { margin: 2px 0 0; font-size: 11.5px; color: rgba(255,255,255,0.72); }
+.chat-close { flex: 0 0 auto; border: 0; background: rgba(255,255,255,0.14); color: #fff; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 18px; line-height: 30px; padding: 0; }
+.chat-close:hover { background: rgba(255,255,255,0.26); }
+.chat-panel .chat-llm-status { margin: 0; padding: 6px 16px; font-size: 11.5px; background: var(--tint-2); border-bottom: 1px solid var(--line); flex: 0 0 auto; }
+.chat-panel .chat-log { flex: 1 1 auto; height: auto; min-height: 0; padding: 12px 14px; }
+.chat-panel .chat-suggest { flex: 0 0 auto; padding: 8px 12px 0; }
+.chat-panel .chat-chip { font-size: 11.5px; padding: 5px 9px; }
+.chat-panel .chat-form { flex: 0 0 auto; padding: 10px 12px; grid-template-columns: 1fr auto; }
+.chat-panel .chat-input { min-height: 42px; }
+.chat-panel .chat-send { min-height: 42px; padding: 0 14px; width: auto; }
+.chat-panel .chat-footnote { flex: 0 0 auto; padding: 0 12px 10px; font-size: 10.5px; }
+
 /* ── 모바일 ── */
 @media (max-width: 859px) {
-  .topbar { grid-template-columns: auto 1fr; height: 56px; }
-  .top-left { display: none; }
-  .brand { justify-content: flex-start; }
+  .topbar { grid-template-columns: auto minmax(0, 1fr); height: 56px; gap: 10px; }
+  .topbar .top-left { display: none !important; }
+  .brand { justify-content: flex-start; grid-column: 1; }
   .brand-logo { height: 24px; }
-  .top-right { font-size: 12.5px; }
+  .top-right { font-size: 13px; grid-column: 2; }
+  .top-right span { display: none; }
+  .card { scroll-margin-top: 108px; }
+  .glance-judg p { font-size: 16.5px; }
+  .glance-toc { padding: 12px 12px 10px; }
+  .glance-link { font-size: 13.5px; }
+  .chat-fab { right: 16px; bottom: 16px; }
+  .chat-fab-label { display: none; }
+  .chat-panel { inset: 0; right: 0; bottom: 0; width: auto; height: auto; max-height: none; border-radius: 0; border: 0; }
+  body.chat-open { overflow: hidden; }
+  body.chat-open .chat-fab { display: none; }
   .subnav a { padding: 10px 14px 9px; font-size: 13.5px; }
   .hero { height: 400px; }
   .hero-photo { background-position: 62% 40%; }
@@ -792,8 +888,6 @@ a.hi-title:hover { color: var(--woori); text-decoration: underline; }
   .card h3 { font-size: 16px; }
   .judgment-box { padding: 14px 16px 14px; }
   .hi-sec { min-width: 56px; }
-  .chat-form { grid-template-columns: 1fr; }
-  .chat-send { width: 100%; }
   .foot-inner { justify-content: center; text-align: center; }
   .foot-brand { justify-content: center; }
   .foot-text { text-align: center; }
@@ -806,7 +900,7 @@ a.hi-title:hover { color: var(--woori); text-decoration: underline; }
 /* ── 인쇄 ── */
 @media print {
   .site-head { position: static; }
-  .subnav, #chat, .status, .edition-bar { display: none !important; }
+  .subnav, .chat-fab, .chat-panel, .status, .edition-bar { display: none !important; }
   .hero { height: auto; padding: 30px 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .kpi-strip { margin-top: 12px; }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
@@ -1059,6 +1153,7 @@ document.addEventListener('DOMContentLoaded', function () {
     '<div id="docHeader"></div>',
     '<main class="wrap page">',
     '  <p id="status" class="status">브리핑 로딩 중…</p>',
+    '  <section id="glance" class="section sec-band sec-glance fade-in"></section>',
     '  <section id="judgment" class="section sec-band sec-judgment fade-in"></section>',
     '  <section id="critical" class="section sec-band sec-critical fade-in"></section>',
     '  <div id="sectorsTop"></div>',
@@ -1069,12 +1164,16 @@ document.addEventListener('DOMContentLoaded', function () {
     '  <section id="forward" class="section sec-band sec-forward fade-in"></section>',
     '  <section id="insights" class="section sec-band sec-insights fade-in"></section>',
     '  <section id="monitor" class="section sec-band sec-monitor fade-in"></section>',
-    '  <section id="chat" class="section sec-band sec-chat fade-in"></section>',
     '</main>',
     '<footer class="site-foot"><div class="wrap foot-inner">',
     '  <div class="foot-brand">우리금융그룹 리스크관리부문 <span>· CRO Staff</span></div>',
     '  <div class="foot-text" id="footText"><b>우리금융그룹 리스크관리부문 · CRO Staff</b> · 내부 참고용</div>',
-    '</div></footer>'
+    '</div></footer>',
+    '<button type="button" class="chat-fab" id="chatFab" aria-label="AI에게 질문" aria-expanded="false" aria-controls="chatPanel">',
+    '  <span class="chat-fab-label" id="chatFabLabel">AI에게 질문</span>',
+    '  <span class="chat-fab-btn" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z"/><circle cx="8.5" cy="11.5" r="0.6" fill="currentColor"/><circle cx="12.5" cy="11.5" r="0.6" fill="currentColor"/><circle cx="16.5" cy="11.5" r="0.6" fill="currentColor"/></svg></span>',
+    '</button>',
+    '<div class="chat-panel" id="chatPanel" role="dialog" aria-label="AI에게 질문" aria-hidden="true"></div>'
   ].join('');
 
   function newsCount(d) {
@@ -1084,7 +1183,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   var embedded = (typeof window.__EMBEDDED_BRIEFING__ === 'object' && window.__EMBEDDED_BRIEFING__) ? window.__EMBEDDED_BRIEFING__ : null;
-  fetch('/briefing.json', { cache: 'no-store', credentials: 'same-origin' })
+  fetch('./briefing.json', { cache: 'no-store' })
     .then(function (response) { return response.ok ? response.json() : null; })
     .catch(function () { return null; })
     .then(function (live) { return [embedded, live]; })
@@ -1130,6 +1229,30 @@ document.addEventListener('click', function (e) {
   openArticleLink(url);
 }, true);
 
+/* 호스팅 분리: 정적 페이지(GitHub Pages)와 AI 질문 API(Render)가 다른 도메인에 있다 */
+var API_BASE = String(window.CRO_API_BASE || '').replace(/\/+$/, '');
+
+/* 판 탭 라벨 (config/sectors.json edition_label_ko 와 동일 · 예전 briefing.json의 '○○본' 라벨을 덮어쓴다) */
+var EDITION_LABELS = {
+  all: '전체',
+  bank: '은행업',
+  card_capital: '여전·저축은행업',
+  insurance: '보험업',
+  securities_am: '증권·운용업'
+};
+function edLabel(ed) {
+  if (!ed) return '전체';
+  return EDITION_LABELS[ed.id] || String(ed.label_ko || ed.id || '').replace(/본$/, '');
+}
+
+/* 기사 카드 id (한눈에 목차 → 카드 스크롤용) */
+function cardId(item) {
+  var key = String((item && (item.url || item.title)) || '');
+  var h = 5381;
+  for (var i = 0; i < key.length; i++) h = ((h * 33) ^ key.charCodeAt(i)) >>> 0;
+  return 'art-' + h.toString(36);
+}
+
 function esc(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;')
@@ -1158,6 +1281,11 @@ function formatDateKo(dateStr) {
   var p = parseYmd(dateStr);
   if (!p) return dateStr || '';
   return p.y + '년 ' + p.m + '월 ' + p.d + '일';
+}
+function formatDow(dateStr) {
+  var p = parseYmd(dateStr);
+  if (!p) return '';
+  return '일월화수목금토'.charAt(new Date(p.y, p.m - 1, p.d).getDay()) + '요일';
 }
 function formatGenerated(iso) {
   if (!iso) return '';
@@ -1198,20 +1326,6 @@ function changeState(item, meta) {
   return '';
 }
 
-function judgmentBullets(data) {
-  var arr = data.executive_judgment_bullets;
-  if (Array.isArray(arr) && arr.length) return arr.filter(Boolean).map(String);
-  var raw = String(data.executive_judgment || '').trim();
-  if (!raw) return [];
-  var lines = raw.split(/\n+/).map(function (line) {
-    return line.replace(/^[\s•\-\u2022]+/, '').trim();
-  }).filter(Boolean);
-  if (lines.length === 1) {
-    lines = lines[0].split(/(?<=다\.)\s+/).map(function (s) { return s.trim(); }).filter(Boolean);
-  }
-  return lines;
-}
-
 function groupNews(data) {
   var critical = (data.critical || []).slice();
   var daily = (data.daily_news || []).slice();
@@ -1234,58 +1348,126 @@ function groupNews(data) {
   };
 }
 
-function collectHeadlineRows(data, groups) {
-  var rows = [];
-  function push(it, fallbackLabel, fallbackCls) {
-    var ax = axisOf(it);
-    rows.push({
-      cls: ax ? ('chip-ax ax-' + ax) : fallbackCls,
-      label: ax ? AXIS_META[ax].label : fallbackLabel,
-      title: it.title || '',
-      url: it.url || ''
-    });
-  }
-  groups.critical.forEach(function (it) { push(it, 'CRITICAL', 'chip-crit'); });
-  groups.daily.forEach(function (it) { push(it, '뉴스', 'chip-blue'); });
-  groups.subsidiary.forEach(function (it) { push(it, '계열사', 'chip-ax ax-group'); });
-  groups.overseas.forEach(function (it) { push(it, '해외', 'chip-ax ax-overseas'); });
-  (__croEd.sectors || []).forEach(function (sid) {
-    sectorNews(data, sid).forEach(function (it) {
-      rows.push({ cls: 'chip-sec sc-' + sid, label: sectorNav(data, sid), title: it.title || '', url: it.url || '' });
-    });
-  });
-  return rows;
+function splitSentences(text) {
+  var raw = String(text || '').trim();
+  if (!raw) return [];
+  var parts = raw.split(/(?<=[다요음임])\.\s+/).map(function (x) { return x.trim(); }).filter(Boolean);
+  return parts.map(function (x) { return /[.!?]$/.test(x) ? x : x + '.'; });
 }
+
+/* ── 오늘 한눈에: 판단 3문장 + 카테고리별 목차 ── */
+var GLANCE_CATS = [
+  { id: 'critical',    label: '긴급',        color: '#B42318' },
+  { id: 'supervision', label: '감독·규제',   color: '#0B2A4A' },
+  { id: 'group',       label: '그룹·계열사', color: '#0067AC' },
+  { id: 'peer',        label: '경쟁사',      color: '#1F8BCB' },
+  { id: 'market',      label: '시장·거시',   color: '#B86E00' },
+  { id: 'overseas',    label: '해외',        color: '#0B6B47' },
+  { id: 'other',       label: '기타',        color: '#6b7684' }
+];
+var SECTOR_COLORS = { bank: '#0067AC', card_capital: '#4F46E5', insurance: '#BE185D', securities_am: '#155E75' };
+
+function glanceRow(item) {
+  var h = '<li>';
+  h += '<span class="glance-dot" aria-hidden="true"></span>';
+  h += '<a class="glance-link" href="#' + cardId(item) + '" title="' + esc(item.title) + '">' + esc(item.title) + '</a>';
+  if (item.urgency) h += '<span class="chip glance-urg ' + urgencyClass(item.urgency) + '">' + esc(item.urgency) + '</span>';
+  h += '</li>';
+  return h;
+}
+
+function renderGlance(data, groups) {
+  var meta = data.meta || {};
+  var sentences = splitSentences(data.executive_judgment);
+  var ed = __croEd;
+
+  var buckets = {};
+  var seen = {};
+  GLANCE_CATS.forEach(function (c) { buckets[c.id] = []; });
+  function put(cat, it) {
+    var id = cardId(it);
+    if (seen[id]) return;
+    seen[id] = 1;
+    (buckets[cat] || buckets.other).push(it);
+  }
+  groups.critical.forEach(function (it) { put('critical', it); });
+  groups.subsidiary.forEach(function (it) { put(axisOf(it) || 'group', it); });
+  groups.daily.forEach(function (it) { put(it.critical ? 'critical' : (axisOf(it) || 'other'), it); });
+  groups.overseas.forEach(function (it) { put('overseas', it); });
+
+  var sectorBlocks = [];
+  var extra = [];
+  (ed.sectors || []).forEach(function (sid) {
+    var news = sectorNews(data, sid);
+    if (!news.length) return;
+    extra = extra.concat(news);
+    var sdef = (data.sectors || {})[sid] || {};
+    var comps = Array.isArray(sdef.companies) ? sdef.companies : [];
+    sectorBlocks.push(
+      '<div class="glance-sub" style="--gc:' + (SECTOR_COLORS[sid] || '#0B2A4A') + '">' +
+      '<p class="glance-sub-h">' + esc(sectorNav(data, sid)) + (comps.length ? ' · ' + esc(comps.join('·')) : '') + ' <span class="n">' + news.length + '</span></p>' +
+      '<ul class="glance-list" style="padding-left:0">' + news.map(glanceRow).join('') + '</ul></div>'
+    );
+  });
+
+  var toc = '';
+  GLANCE_CATS.forEach(function (c) {
+    var list = buckets[c.id];
+    if (!list.length) return;
+    toc += '<div class="glance-cat" style="--gc:' + c.color + '"><p class="glance-cat-h">' + esc(c.label) + ' <span class="n">' + list.length + '</span></p>';
+    toc += '<ul class="glance-list">' + list.map(glanceRow).join('') + '</ul></div>';
+  });
+  if (sectorBlocks.length) {
+    toc += '<div class="glance-cat" style="--gc:#0B2A4A"><p class="glance-cat-h">업권별 <span class="n">' + extra.length + '</span></p>' + sectorBlocks.join('') + '</div>';
+  }
+
+  var all = groups.all.concat(extra);
+  var crit = groups.critical.length + extra.filter(function (it) { return !!it.critical; }).length;
+  var official = all.filter(function (it) { return it.source_type === 'official'; }).length;
+
+  var html = sectionHead('오늘 한눈에', null, 'At a Glance · ' + formatDateDots(meta.briefing_date), null);
+  html += '<div class="glance-grid">';
+  html += '<div class="glance-judg"><p class="lbl">Executive Judgment · CRO Staff</p>';
+  if (sentences.length) {
+    sentences.forEach(function (t, i) {
+      html += '<p' + (i === sentences.length - 1 && /\?$/.test(t) ? ' class="q"' : '') + '>' + esc(t) + '</p>';
+    });
+  } else {
+    html += '<p class="empty">오늘 해당 없음</p>';
+  }
+  html += '</div>';
+  html += '<div class="glance-toc"><p class="lbl">기사 목차 · 클릭하면 해당 카드로 이동</p>' + (toc || '<p class="empty">오늘 해당 없음</p>') + '</div>';
+  html += '</div>';
+  html += '<p class="glance-foot">전체 <b>' + all.length + '건</b> · 긴급 <b>' + crit + '</b> · 공식자료 <b>' + official + '</b>' +
+    (ed.editions && ed.editions.length ? ' · ' + esc(edLabel(ed.editions.filter(function (e) { return e.id === ed.id; })[0])) + ' 기준' : '') + '</p>';
+  return html;
+}
+
+document.addEventListener('click', function (e) {
+  var a = e.target && e.target.closest ? e.target.closest('a.glance-link') : null;
+  if (!a) return;
+  var id = (a.getAttribute('href') || '').slice(1);
+  var el = id ? document.getElementById(id) : null;
+  if (!el) return;
+  e.preventDefault();
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  el.classList.remove('is-flash');
+  void el.offsetWidth;
+  el.classList.add('is-flash');
+  setTimeout(function () { el.classList.remove('is-flash'); }, 1300);
+});
 
 function renderJudgmentBlock(data, groups) {
   var meta = data.meta || {};
-  var bullets = judgmentBullets(data);
-  var rows = collectHeadlineRows(data, groups);
-  var html = sectionHead('핵심 판단', null, 'CRO Staff · ' + esc(formatDateDots(meta.briefing_date)), 'EXECUTIVE JUDGMENT');
+  var bullets = (Array.isArray(data.executive_judgment_bullets) ? data.executive_judgment_bullets : []).filter(Boolean).map(String);
+  var html = sectionHead('핵심 판단 포인트', bullets.length || null, 'CRO Staff · ' + esc(formatDateDots(meta.briefing_date)), 'KEY JUDGMENT POINTS');
   html += '<div class="judgment-box">';
-  if (rows.length) {
-    html += '<p class="headline-index-kicker">오늘 브리핑 ' + rows.length + '건</p>';
-    html += '<ol class="headline-index-list">';
-    rows.forEach(function (row) {
-      html += '<li>';
-      html += '<span class="chip hi-sec ' + row.cls + '">' + esc(row.label) + '</span>';
-      if (row.url) {
-        html += '<a class="hi-title article-link" href="' + esc(row.url) + '" target="_top" rel="noopener noreferrer">' + esc(row.title) + '</a>';
-      } else {
-        html += '<span class="hi-title">' + esc(row.title) + '</span>';
-      }
-      html += '</li>';
-    });
-    html += '</ol>';
-  }
   if (bullets.length) {
-    html += '<ul class="judgment-bullets"' + (rows.length ? '' : ' style="margin-top:0;padding-top:0;border-top:0"') + '>';
+    html += '<ul class="judgment-bullets" style="margin-top:0;padding-top:0;border-top:0">';
     bullets.forEach(function (b) { html += '<li>' + esc(b) + '</li>'; });
     html += '</ul>';
-  } else if (data.executive_judgment) {
-    html += '<p style="margin:14px 0 0;font-size:15px;line-height:1.7;color:var(--ink-2)">' + esc(data.executive_judgment) + '</p>';
-  } else if (!rows.length) {
-    html += '<p class="empty">오늘 해당 없음</p>';
+  } else {
+    html += '<p class="empty">오늘 해당 없음 · 판단 요지는 상단 \'오늘 한눈에\'를 참고하세요.</p>';
   }
   var ch = meta.changes && typeof meta.changes === 'object' ? meta.changes : null;
   if (ch && ((ch['new'] || []).length || (ch.continued || []).length)) {
@@ -1322,7 +1504,7 @@ function renderNewsCard(item, idx, opts, meta) {
   if (isCrit) cls += ' critical';
   if ((item.cro_gate || {}).decision === 'KEEP_SECONDARY') cls += ' secondary';
 
-  var html = '<article class="' + cls + '">';
+  var html = '<article class="' + cls + '" id="' + cardId(item) + '">';
   if (isCrit) html += '<div class="ribbon">CRITICAL · PRIORITY WATCH</div>';
   if (item.score != null && item.score !== '' && !isNaN(Number(item.score))) {
     html += '<span class="score" title="선정 점수">' + Math.round(Number(item.score)) + '<small>/100</small></span>';
@@ -1426,16 +1608,16 @@ function renderHero(data, groups) {
     var lens = (SECTOR_META[ed.sectors[0]] || {}).lens || 'Sector Risk Lens';
     kpis += '<div class="kpi"><div class="kpi-label">관점</div><div class="kpi-value small">' + esc(ed.label) + '<br>' + esc(comps.join('·') || '우리금융그룹') + '</div><div class="kpi-hint">' + esc(lens) + '</div></div>';
   } else {
-    kpis += '<div class="kpi"><div class="kpi-label">관점</div><div class="kpi-value small">우리금융그룹<br>CRO</div><div class="kpi-hint">Group Risk Lens' + (hasEditions ? ' · 전체본' : '') + '</div></div>';
+    kpis += '<div class="kpi"><div class="kpi-label">관점</div><div class="kpi-value small">우리금융그룹<br>CRO</div><div class="kpi-hint">Group Risk Lens' + (hasEditions ? ' · 전체' : '') + '</div></div>';
   }
 
   var sub;
   if (!hasEditions) {
     sub = esc(meta.perspective || '우리금융그룹 CRO') + ' 관점 · ' + esc(meta.primary_window || '어제·오늘 우선 · 최근 3일');
   } else if (ed.id === 'all') {
-    sub = '전체본 · ' + esc(meta.perspective || '우리금융그룹 CRO') + ' 관점 · 그룹 공통 ' + groups.all.length + '건 + 업권 ' + extra.length + '건';
+    sub = esc(meta.perspective || '우리금융그룹 CRO') + ' 관점 · 전체 · 그룹 공통 ' + groups.all.length + '건 + 업권 ' + extra.length + '건';
   } else {
-    sub = esc(ed.label) + ' · ' + esc(comps.join('·') || ed.label) + ' 리스크관리부 · 그룹 공통 ' + groups.all.length + '건 + ' + esc(sectorLabel(data, ed.sectors[0])) + ' ' + extra.length + '건';
+    sub = esc(ed.label) + ' · ' + esc(comps.join('·') || ed.label) + ' 리스크관리부 · 그룹 공통 ' + groups.all.length + '건 + ' + esc(sectorNav(data, ed.sectors[0])) + ' ' + extra.length + '건';
   }
 
   return [
@@ -1444,7 +1626,7 @@ function renderHero(data, groups) {
     '  <div class="wrap hero-inner">',
     '    <p class="hero-kicker">Woori Financial Group · Risk Management</p>',
     '    <h1 class="hero-title">일일 리스크 브리핑</h1>',
-    '    <p class="hero-date"><b>' + esc(formatDateKo(meta.briefing_date)) + '</b> · ' + esc(formatDateDots(meta.briefing_date)) + ' KST</p>',
+    '    <p class="hero-date"><b>' + esc(formatDateKo(meta.briefing_date)) + '</b> ' + esc(formatDow(meta.briefing_date)) + ' · KST</p>',
     '    <p class="hero-sub">' + sub + '</p>',
     '  </div>',
     '</section>',
@@ -1457,6 +1639,7 @@ function setupScrollSpy() {
   var links = Array.prototype.slice.call(document.querySelectorAll('.subnav a'));
   if (!links.length || !('IntersectionObserver' in window)) return;
   var map = {};
+  links = links.filter(function (a) { var id = (a.getAttribute('href') || '').slice(1); return id && document.getElementById(id); });
   links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
   var current = null;
   function activate(id) {
@@ -1479,29 +1662,27 @@ function setupScrollSpy() {
 }
 
 /* ── 판(edition) · 업권 섹션: briefing.json에 sectors/editions가 있을 때만 활성 ── */
+/* 알 수 없는 sector id(예: 2026-10-27 이전 파일의 'savings')는 렌더에서 건너뛴다 — SECTOR_META 에 있는 업권만 표시 */
 var SECTOR_META = {
-  bank:          { nav: '은행',     kicker: 'BANK',                          lens: 'Bank Risk Lens' },
-  card_capital:  { nav: '여전',     kicker: 'CARD & CAPITAL',                lens: 'Card & Capital Lens' },
-  savings:       { nav: '저축은행', kicker: 'SAVINGS BANK',                  lens: 'Savings Bank Lens' },
-  insurance:     { nav: '보험',     kicker: 'INSURANCE',                     lens: 'Insurance Lens' },
-  securities_am: { nav: '증권·운용', kicker: 'SECURITIES & ASSET MANAGEMENT', lens: 'Securities & AM Lens' }
+  bank:          { nav: '은행',          kicker: 'BANK',                                 lens: 'Bank Risk Lens' },
+  card_capital:  { nav: '여전·저축은행', kicker: 'CARD, CAPITAL & SAVINGS BANK',         lens: 'Card, Capital & Savings Lens' },
+  insurance:     { nav: '보험',          kicker: 'INSURANCE',                            lens: 'Insurance Lens' },
+  securities_am: { nav: '증권·운용',     kicker: 'SECURITIES & ASSET MANAGEMENT',        lens: 'Securities & AM Lens' }
 };
-var SECTOR_ORDER = ['bank', 'card_capital', 'savings', 'insurance', 'securities_am'];
-var __croEd = { id: 'all', label: '전체본', sectors: [], editions: [], data: null };
+var SECTOR_ORDER = ['bank', 'card_capital', 'insurance', 'securities_am'];
+function knownSector(id) { return Object.prototype.hasOwnProperty.call(SECTOR_META, id); }
+var __croEd = { id: 'all', label: '전체', sectors: [], editions: [], data: null };
 
 function editionsOf(data) {
   var secs = data && data.sectors && typeof data.sectors === 'object' ? data.sectors : null;
   var eds = data && Array.isArray(data.editions) ? data.editions : [];
   if (!secs || !eds.length) return [];
-  return eds.filter(function (e) { return e && e.id && (e.id === 'all' || !!secs[e.id]); });
+  return eds.filter(function (e) { return e && e.id && (e.id === 'all' || (!!secs[e.id] && knownSector(e.id))); });
 }
 function sectorIdsForEdition(data, ed) {
   var secs = data.sectors || {};
-  var ids = (ed && Array.isArray(ed.sections) ? ed.sections : []).filter(function (s) { return s !== 'common' && !!secs[s]; });
-  if (ed && ed.id === 'all') {
-    var ordered = SECTOR_ORDER.filter(function (s) { return ids.indexOf(s) >= 0; });
-    ids = ordered.concat(ids.filter(function (s) { return SECTOR_ORDER.indexOf(s) < 0; }));
-  }
+  var ids = (ed && Array.isArray(ed.sections) ? ed.sections : []).filter(function (s) { return s !== 'common' && !!secs[s] && knownSector(s); });
+  if (ed && ed.id === 'all') ids = SECTOR_ORDER.filter(function (s) { return ids.indexOf(s) >= 0; });
   return ids;
 }
 function sectorNews(data, id) {
@@ -1513,9 +1694,6 @@ function sectorLabel(data, id) {
   return s.label_ko || (SECTOR_META[id] || {}).nav || id;
 }
 function sectorNav(data, id) {
-  var eds = (data && Array.isArray(data.editions)) ? data.editions : [];
-  var ed = eds.filter(function (e) { return e && e.id === id; })[0];
-  if (ed && ed.label_ko) return String(ed.label_ko).replace(/본$/, '');
   return (SECTOR_META[id] || {}).nav || sectorLabel(data, id);
 }
 function editionFromUrl(editions) {
@@ -1549,7 +1727,7 @@ function renderEditionBar(editions, current) {
   var h = '<div class="edition-bar"><div class="edition-tabs" role="tablist" aria-label="판 선택">';
   editions.forEach(function (e) {
     var on = e.id === current;
-    h += '<button type="button" class="ed-tab' + (on ? ' is-active' : '') + '" role="tab" aria-selected="' + (on ? 'true' : 'false') + '" data-edition="' + esc(e.id) + '">' + esc(e.label_ko || e.id) + '</button>';
+    h += '<button type="button" class="ed-tab' + (on ? ' is-active' : '') + '" role="tab" aria-selected="' + (on ? 'true' : 'false') + '" data-edition="' + esc(e.id) + '">' + esc(edLabel(e)) + '</button>';
   });
   h += '</div></div>';
   return h;
@@ -1559,16 +1737,16 @@ function renderSectorSection(data, id, meta) {
   var m = SECTOR_META[id] || {};
   var news = sectorNews(data, id);
   var comps = Array.isArray(s.companies) ? s.companies : [];
-  var h = '<p class="sec-kicker">' + esc(s.label_en || m.kicker || id) + '</p>';
-  h += '<div class="section-head"><h2 class="section-title">' + esc(s.label_ko || m.nav || id) + '<span class="cnt">' + news.length + '건</span></h2>';
+  var h = '<p class="sec-kicker">' + esc(m.kicker || s.label_en || id) + '</p>';
+  h += '<div class="section-head"><h2 class="section-title">' + esc(m.nav || s.label_ko || id) + '<span class="cnt">' + news.length + '건</span></h2>';
   if (comps.length) {
     h += '<div class="company-chips">' + comps.map(function (c) { return '<span class="chip chip-company">' + esc(c) + '</span>'; }).join('') + '</div>';
   }
   h += '</div>';
   if (s.judgment) {
-    h += '<div class="sector-judg"><p class="lbl">' + esc(s.label_ko || m.nav || '') + ' 업권 판단 · ' + esc(comps.join('·')) + '</p><p>' + esc(s.judgment) + '</p></div>';
+    h += '<div class="sector-judg"><p class="lbl">' + esc(m.nav || s.label_ko || '') + ' 업권 판단 · ' + esc(comps.join('·')) + '</p><p>' + esc(s.judgment) + '</p></div>';
   }
-  h += renderCardGrid(news, { tone: 'sector', hookLabel: (comps.length ? comps.join('·') : (s.label_ko || '')) + ' 관점' }, meta, 'grid-2');
+  h += renderCardGrid(news, { tone: 'sector', hookLabel: (comps.length ? comps.join('·') : (m.nav || s.label_ko || '')) + ' 관점' }, meta, 'grid-2');
   if (s.shortfall_reason) h += '<p class="shortfall">※ ' + esc(s.shortfall_reason) + '</p>';
   return h;
 }
@@ -1587,13 +1765,14 @@ function renderBriefing(data, editionId) {
     if (!ed) ed = editionFromUrl(editions);
   }
   var sectorIds = ed ? sectorIdsForEdition(data, ed) : [];
-  __croEd = { id: ed ? ed.id : 'all', label: ed ? (ed.label_ko || ed.id) : '전체본', sectors: sectorIds, editions: editions, data: data };
+  __croEd = { id: ed ? ed.id : 'all', label: edLabel(ed), sectors: sectorIds, editions: editions, data: data };
   var isSectorEd = !!(ed && ed.id !== 'all');
 
   document.getElementById('topDate').textContent = formatDateDots(meta.briefing_date) || '일일 리스크 브리핑';
   document.getElementById('docHeader').innerHTML = renderHero(data, groups);
 
   var tabs = [
+    ['glance', '한눈에'],
     ['judgment', '핵심판단'],
     ['critical', '긴급']
   ];
@@ -1603,6 +1782,7 @@ function renderBriefing(data, editionId) {
   if (!isSectorEd) sectorIds.forEach(function (sid) { tabs.push(['sector-' + sid, sectorNav(data, sid)]); });
   tabs.push(['forward', '전망'], ['insights', '인사이트'], ['monitor', '모니터링'], ['chat', '질문하기']);
   document.getElementById('toc').innerHTML = tabs.map(function (t) {
+    if (t[0] === 'chat') return '<a class="nav-chat" href="#chatPanel" data-open-chat="1">' + t[1] + '</a>';
     return '<a class="nav-' + t[0] + '" href="#' + t[0] + '">' + t[1] + '</a>';
   }).join('');
   document.getElementById('toc').classList.toggle('is-dense', tabs.length > 10);
@@ -1619,6 +1799,7 @@ function renderBriefing(data, editionId) {
     (isSectorEd ? topHost : botHost).appendChild(sec);
   });
 
+  document.getElementById('glance').innerHTML = renderGlance(data, groups);
   document.getElementById('judgment').innerHTML = renderJudgmentBlock(data, groups);
 
   document.getElementById('critical').innerHTML =
@@ -1708,28 +1889,60 @@ function renderBriefing(data, editionId) {
   setupScrollSpy();
 }
 
+function openChat() {
+  var panel = document.getElementById('chatPanel');
+  var fab = document.getElementById('chatFab');
+  if (!panel) return;
+  panel.classList.add('is-open');
+  panel.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('chat-open');
+  if (fab) fab.setAttribute('aria-expanded', 'true');
+  var input = document.getElementById('chatInput');
+  if (input && window.matchMedia && window.matchMedia('(min-width: 860px)').matches) { try { input.focus(); } catch (e) {} }
+}
+function closeChat() {
+  var panel = document.getElementById('chatPanel');
+  var fab = document.getElementById('chatFab');
+  if (!panel) return;
+  panel.classList.remove('is-open');
+  panel.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('chat-open');
+  if (fab) fab.setAttribute('aria-expanded', 'false');
+}
+function toggleChat() {
+  var panel = document.getElementById('chatPanel');
+  if (panel && panel.classList.contains('is-open')) closeChat(); else openChat();
+}
+document.addEventListener('click', function (e) {
+  var t = e.target;
+  if (!t || !t.closest) return;
+  if (t.closest('#chatFab')) { e.preventDefault(); toggleChat(); return; }
+  if (t.closest('#chatClose')) { e.preventDefault(); closeChat(); return; }
+  if (t.closest('[data-open-chat]')) { e.preventDefault(); openChat(); return; }
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') closeChat();
+});
+
 function setupServerChatPanel(data) {
   var meta = data.meta || {};
   var date = meta.briefing_date || '';
-  var el = document.getElementById('chat');
+  var el = document.getElementById('chatPanel');
   if (!el) return;
 
   el.innerHTML = [
-    '<div class="section-head"><h2 class="section-title">CRO Staff 대화</h2><span class="badge badge-blue">SECURE GPT</span></div>',
-    '<div class="chat-shell">',
-    '  <div class="chat-head">',
-    '    <h3>오늘 기사에 대해 질문</h3>',
-    '    <p>기준일 ' + esc(date) + ' · 브리핑 컨텍스트 기반 · 우리금융그룹 CRO 관점</p>',
-    '    <p id="serverLlmStatus" class="chat-llm-status">보안 답변 서버 연결 확인 중…</p>',
-    '  </div>',
-    '  <div id="chatLog" class="chat-log"></div>',
-    '  <div class="chat-suggest" id="chatSuggest"></div>',
-    '  <form id="chatForm" class="chat-form">',
-    '    <textarea id="chatInput" class="chat-input" rows="2" placeholder="예: 오늘 크리티컬 이슈가 우리금융 자본에 미치는 영향은?"></textarea>',
-    '    <button type="submit" id="chatSend" class="chat-send">질문</button>',
-    '  </form>',
-    '  <p class="chat-footnote">OpenAI API Key 입력 불필요 · 질문 전송 시에만 AI 사용량 발생 · 당일 브리핑 근거</p>',
-    '</div>'
+    '<div class="chat-panel-head">',
+    '  <div><h3>AI에게 질문 · CRO Staff</h3><p>기준일 ' + esc(date) + ' · 오늘 브리핑 근거 · 우리금융그룹 CRO 관점</p></div>',
+    '  <button type="button" class="chat-close" id="chatClose" aria-label="닫기">×</button>',
+    '</div>',
+    '<p id="serverLlmStatus" class="chat-llm-status">보안 답변 서버 연결 확인 중…</p>',
+    '<div id="chatLog" class="chat-log"></div>',
+    '<div class="chat-suggest" id="chatSuggest"></div>',
+    '<form id="chatForm" class="chat-form">',
+    '  <textarea id="chatInput" class="chat-input" rows="2" placeholder="예: 오늘 크리티컬 이슈가 우리금융 자본에 미치는 영향은?"></textarea>',
+    '  <button type="submit" id="chatSend" class="chat-send">질문</button>',
+    '</form>',
+    '<p class="chat-footnote">API Key 입력 불필요 · 질문 전송 시에만 AI 사용량 발생 · 당일 브리핑 근거</p>'
   ].join('');
 
   var suggestions = [
@@ -1773,14 +1986,28 @@ function setServerStatus(ok, detail) {
   el.className = 'chat-llm-status ' + (ok ? 'is-ok' : 'is-bad');
 }
 
+function setFabLimited(limited) {
+  var fab = document.getElementById('chatFab');
+  var label = document.getElementById('chatFabLabel');
+  if (!fab) return;
+  fab.classList.toggle('is-limited', !!limited);
+  var msg = limited ? '사내망에서는 AI 질문이 제한됩니다' : 'AI에게 질문';
+  fab.setAttribute('title', msg);
+  fab.setAttribute('aria-label', msg);
+  if (label) label.textContent = msg;
+}
+
 function probeServerHealth() {
-  fetch('/api/health', { credentials: 'same-origin' })
+  fetch(API_BASE + '/api/health', { credentials: 'omit', cache: 'no-store' })
     .then(function (response) {
       if (!response.ok) throw new Error('HTTP ' + response.status);
       return response.json();
     })
-    .then(function (data) { setServerStatus(true, data.model || 'OpenAI'); })
-    .catch(function () { setServerStatus(false, '이메일의 전체 보고서 링크로 다시 열어 주세요'); });
+    .then(function (data) { setServerStatus(true, data.model || 'OpenAI'); setFabLimited(false); })
+    .catch(function () {
+      setServerStatus(false, '사내망에서는 AI 질문이 제한됩니다 · 브리핑 본문은 정상 표시됩니다');
+      setFabLimited(true);
+    });
 }
 
 function sendServerQuestion() {
@@ -1805,9 +2032,9 @@ function sendServerQuestion() {
   }
 
   var local = localBriefingAnswer(question, window.__CRO_BRIEFING__ || {});
-  fetch('/api/ask', {
+  fetch(API_BASE + '/api/ask', {
     method: 'POST',
-    credentials: 'same-origin',
+    credentials: 'omit',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       question: question,
@@ -1838,130 +2065,8 @@ function sendServerQuestion() {
     .finally(function () { setChatBusy(false); });
 }
 
-function setupQuestionGuide(data) {
-  var meta = data.meta || {};
-  var date = meta.briefing_date || '';
-  var el = document.getElementById('chat');
-  if (!el) return;
-
-  var defaultPrompt = '오늘 크리티컬 3건을 우리금융그룹 CRO 관점에서 한 줄씩 요약해 주세요. 각 답변에 원문 링크를 붙여 주세요.';
-  el.innerHTML = [
-    '<div class="section-head"><h2 class="section-title">CRO STAFF에게 질문 이어가기</h2><span class="badge badge-blue">CHATGPT · SLACK</span></div>',
-    '<div class="chat-shell">',
-    '  <div class="chat-head">',
-    '    <h3>이 보고서는 독립 실행형 HTML입니다</h3>',
-    '    <p>기준일 ' + esc(date) + ' · 아래 질문을 복사해 현재 CRO STAFF의 ChatGPT 대화 또는 구성된 Slack 대화에서 이어가세요.</p>',
-    '    <p class="chat-llm-status is-ok">별도 플러그인 · MCP 서버 · UI 브리지 불필요</p>',
-    '  </div>',
-    '  <div class="chat-suggest" id="questionSuggest"></div>',
-    '  <div class="chat-form">',
-    '    <textarea id="questionHandoff" class="chat-input" rows="3" aria-label="CRO STAFF에 전달할 질문">' + esc(defaultPrompt) + '</textarea>',
-    '    <button type="button" id="copyQuestion" class="chat-send">질문 복사</button>',
-    '  </div>',
-    '  <p id="copyStatus" class="chat-footnote" role="status" aria-live="polite">보고서 안에서는 LLM 답변을 생성하지 않습니다. 최신 확인이 필요한 질문은 CRO STAFF 대화에서 공개 출처와 함께 답변합니다.</p>',
-    '</div>'
-  ].join('');
-
-  var suggests = [
-    '오늘 크리티컬 3건만 한 줄씩 요약',
-    'PF 보증 확대와 자본규제 유예의 CRO 우선순위 비교',
-    '계열사 뉴스 중 자본·신용 영향이 있는 이슈',
-    '향후 90일 모니터링 질문과 지표'
-  ];
-  var sg = document.getElementById('questionSuggest');
-  var handoff = document.getElementById('questionHandoff');
-  suggests.forEach(function (s) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'chat-chip';
-    b.textContent = s;
-    b.addEventListener('click', function () {
-      handoff.value = s + '에 대해 오늘 브리핑과 공개 원문을 근거로 답해 주세요. 확인된 사실과 분석을 구분하고 출처 링크를 붙여 주세요.';
-      handoff.focus();
-    });
-    sg.appendChild(b);
-  });
-
-  document.getElementById('copyQuestion').addEventListener('click', function () {
-    var status = document.getElementById('copyStatus');
-    var value = handoff.value;
-    function done() {
-      status.textContent = '질문을 복사했습니다. 현재 CRO STAFF의 ChatGPT 또는 Slack 대화에 붙여 넣어 주세요.';
-    }
-    if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(value).then(done).catch(function () {
-        handoff.select();
-        document.execCommand('copy');
-        done();
-      });
-    } else {
-      handoff.select();
-      document.execCommand('copy');
-      done();
-    }
-  });
-}
-
 var __croChatHistory = [];
 var __croChatBusy = false;
-
-function setupChatPanel(data) {
-  var meta = data.meta || {};
-  var date = meta.briefing_date || '';
-  var el = document.getElementById('chat');
-  if (!el) return;
-
-  el.innerHTML = [
-    '<div class="section-head"><h2 class="section-title">CRO Staff 대화</h2><span class="badge badge-blue">TODAY Q&A</span></div>',
-    '<div class="chat-shell">',
-    '  <div class="chat-head">',
-    '    <h3>오늘 기사에 대해 질문</h3>',
-    '    <p>기준일 ' + esc(date) + ' · 브리핑 컨텍스트 기반 · 우리금융그룹 CRO 관점</p>',
-    '    <p id="llmStatus" class="chat-llm-status">LLM 연결 확인 중…</p>',
-    '  </div>',
-    '  <div id="chatLog" class="chat-log"></div>',
-    '  <div class="chat-suggest" id="chatSuggest"></div>',
-    '  <form id="chatForm" class="chat-form">',
-    '    <textarea id="chatInput" class="chat-input" rows="2" placeholder="예: PF 자기자본규제 유예가 우리은행 자본에 미치는 영향은?"></textarea>',
-    '    <button type="submit" id="chatSend" class="chat-send">질문</button>',
-    '  </form>',
-    '  <p class="chat-footnote">LLM + 오늘 브리핑 근거 · 질문마다 새로 작성 · 출처 URL 필수 · 수치 추정 금지</p>',
-    '</div>'
-  ].join('');
-
-  var suggests = [
-    '오늘 크리티컬 3건만 한 줄씩 요약',
-    'PF 보증 확대 vs 자본규제 유예, CRO 우선순위는?',
-    '계열사 뉴스 중 자본·신용 영향 있는 건?',
-    '90일 내 발생 가능 리스크 포인트는?'
-  ];
-  var sg = document.getElementById('chatSuggest');
-  suggests.forEach(function (s) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'chat-chip';
-    b.textContent = s;
-    b.addEventListener('click', function () {
-      document.getElementById('chatInput').value = s;
-      document.getElementById('chatForm').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-    });
-    sg.appendChild(b);
-  });
-
-  appendChat('assistant', '오늘(' + date + ') 브리핑을 축으로 답합니다. LLM이 질문마다 새로 작성합니다. 유관 기사 참고 가능 · 숫자/사실 추정 금지 · 답변마다 근거 URL 필수.');
-  probeLlmHealth();
-
-  document.getElementById('chatForm').addEventListener('submit', function (e) {
-    e.preventDefault();
-    sendChatQuestion();
-  });
-  document.getElementById('chatInput').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendChatQuestion();
-    }
-  });
-}
 
 function appendChat(role, content, meta) {
   var log = document.getElementById('chatLog');
@@ -2003,30 +2108,6 @@ function setChatBusy(busy) {
   if (input) input.disabled = busy;
 }
 
-function setLlmStatus(ok, detail) {
-  var el = document.getElementById('llmStatus');
-  if (!el) return;
-  if (ok) {
-    el.textContent = 'LLM 연결됨 · gpt-4o-mini · 오늘 브리핑 근거';
-    el.className = 'chat-llm-status is-ok';
-  } else {
-    el.textContent = 'LLM 재시도 중 · ' + (detail || '브리핑 근거로 답변');
-    el.className = 'chat-llm-status is-bad';
-  }
-}
-
-function probeLlmHealth() {
-  fetch('/gumloop/data/llm_health')
-    .then(function (r) { return r.ok ? r.json() : { ok: false, error: 'health ' + r.status }; })
-    .then(function (d) {
-      if (d && d.ok) setLlmStatus(true);
-      else setLlmStatus(false, (d && d.error) ? d.error : 'OpenAI 키가 대시보드 런타임에 없습니다');
-    })
-    .catch(function () {
-      setLlmStatus(false, '헬스체크 호출 실패');
-    });
-}
-
 function slimBriefing(data) {
   data = data || {};
   function slimItem(it) {
@@ -2065,82 +2146,6 @@ function slimBriefing(data) {
       return { title: f.title || '', horizon: f.horizon || '', cro_angle: String(f.cro_angle || '').slice(0, 160) };
     })
   };
-}
-
-function sendChatQuestion() {
-  if (__croChatBusy) return;
-  var input = document.getElementById('chatInput');
-  if (!input) return;
-  var q = (input.value || '').trim();
-  if (!q) return;
-  input.value = '';
-  appendChat('user', q);
-  __croChatHistory.push({ role: 'user', content: q });
-  setChatBusy(true);
-
-  var log = document.getElementById('chatLog');
-  var typing = document.createElement('div');
-  typing.className = 'chat-row is-bot';
-  typing.id = 'chatTyping';
-  typing.innerHTML = '<div class="chat-bubble chat-typing">LLM이 브리핑 근거로 답변 작성 중…</div>';
-  if (log) {
-    log.appendChild(typing);
-    log.scrollTop = log.scrollHeight;
-  }
-
-  var local = localBriefingAnswer(q, window.__CRO_BRIEFING__ || {});
-
-  function showAnswer(data) {
-    var t = document.getElementById('chatTyping');
-    if (t) t.remove();
-    var mode = (data && data.mode) || '';
-    var answer = (data && data.answer) ? String(data.answer) : '';
-    var sources = (data && data.sources) || [];
-    var emptyish = !answer || mode === 'empty' || mode === 'no_briefing' || answer.indexOf('질문을 입력해 주세요') >= 0 || answer.indexOf('브리핑 데이터가 없습니다') >= 0;
-    if (!emptyish && mode === 'llm') {
-      appendChat('assistant', answer, { sources: sources });
-      __croChatHistory.push({ role: 'assistant', content: answer });
-      setLlmStatus(true);
-      return;
-    }
-    if (!emptyish && mode && mode !== 'retrieval') {
-      appendChat('assistant', answer, { sources: sources.length ? sources : (local.sources || []) });
-      __croChatHistory.push({ role: 'assistant', content: answer });
-      return;
-    }
-    appendChat('assistant', local.answer || answer || '브리핑에서 답변을 만들지 못했습니다. 새로고침 후 다시 질문해 주세요.', { sources: local.sources || sources });
-    __croChatHistory.push({ role: 'assistant', content: local.answer || answer || '' });
-  }
-
-  function fetchChat(question) {
-    var getUrl = '/gumloop/data/ask?q=' + encodeURIComponent(question);
-    return fetch(getUrl)
-      .then(function (r) {
-        if (!r.ok) throw new Error('ask GET failed: ' + r.status);
-        return r.json();
-      })
-      .then(function (data) {
-        if (data && data.answer && data.mode !== 'empty' && data.mode !== 'no_briefing') return data;
-        throw new Error('ask empty');
-      })
-      .catch(function () {
-        return fetch('/gumloop/action/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question: question, edition: __croEd.id, briefing: slimBriefing(window.__CRO_BRIEFING__ || {}) })
-        }).then(function (r) {
-          if (!r.ok) throw new Error('chat POST failed: ' + r.status);
-          return r.json();
-        });
-      });
-  }
-
-  fetchChat(q)
-    .then(showAnswer)
-    .catch(function () {
-      showAnswer({ mode: 'local', answer: local.answer, sources: local.sources || [] });
-    })
-    .finally(function () { setChatBusy(false); });
 }
 
 function localBriefingAnswer(q, data) {

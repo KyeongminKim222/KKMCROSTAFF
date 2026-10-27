@@ -7,13 +7,14 @@ import time
 from email.message import EmailMessage
 from html import escape
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import urlparse
 
 
 # 사용법
 #   python scripts/send-gmail.py                         전체본(all) 발송 → EMAIL_TO
-#   python scripts/send-gmail.py --edition bank          은행본 발송 → EMAIL_TO_BANK (비어 있으면 skip)
-#   python scripts/send-gmail.py --all-editions          전체본 + 수신자가 있는 업권본 순차 발송
+#   python scripts/send-gmail.py --edition bank          은행업 판 발송 → EMAIL_TO_BANK (비어 있으면 skip)
+#   python scripts/send-gmail.py --all-editions          전체 + 수신자가 있는 업권 판 순차 발송
+#   REPORT_URL = 웹 리포트 주소 (GitHub Pages, 기본 https://kyeongminkim222.github.io/KKMCROSTAFF/). 판 링크는 ?edition=<id>.
 #   python scripts/send-gmail.py --preview out.html [--edition bank]   HTML만 생성 (SMTP·수신자 env 불필요)
 PREVIEW_PATH = None
 EDITION_ARG = "all"
@@ -38,11 +39,20 @@ while _i < len(_argv):
 EDITION_RECIPIENT_ENV = {
     "all": "EMAIL_TO",
     "bank": "EMAIL_TO_BANK",
-    "card_capital": "EMAIL_TO_CARD_CAPITAL",
-    "savings": "EMAIL_TO_SAVINGS",
+    "card_capital": "EMAIL_TO_CARD_CAPITAL",  # 여전·저축은행 (2026-10-27 savings 병합)
     "insurance": "EMAIL_TO_INSURANCE",
     "securities_am": "EMAIL_TO_SECURITIES_AM",
 }
+DEFAULT_REPORT_URL = "https://kyeongminkim222.github.io/KKMCROSTAFF/"
+
+
+def normalize_report_url(raw):
+    """REPORT_URL: 임의의 https URL 허용 (GitHub Pages). 비어 있으면 기본 Pages 주소."""
+    url = (raw or "").strip() or DEFAULT_REPORT_URL
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise RuntimeError(f"REPORT_URL must be an https URL (got: {url!r})")
+    return url
 
 
 def recipients_for(edition_id):
@@ -55,17 +65,7 @@ if PREVIEW_PATH is None:
     gmail_user = os.environ["GMAIL_USER"].strip()
     gmail_password = os.environ["GMAIL_APP_PASSWORD"].replace(" ", "").strip()
     recipients = recipients_for("all")
-    report_url = os.environ["REPORT_URL"].strip()
-
-    parsed_report_url = urlparse(report_url)
-    report_path_parts = [unquote(part) for part in parsed_report_url.path.split("/") if part]
-    if parsed_report_url.scheme != "https" or len(report_path_parts) != 2 or report_path_parts[0] != "report":
-        raise RuntimeError(
-            "REPORT_URL must be the complete HTTPS link: "
-            "https://kkmcrostaff.onrender.com/report/YOUR_REPORT_ACCESS_TOKEN"
-        )
-    if len(report_path_parts[1]) < 32:
-        raise RuntimeError("The token inside REPORT_URL must contain at least 32 characters.")
+    report_url = normalize_report_url(os.environ.get("REPORT_URL", ""))
 
     if not recipients and (ALL_EDITIONS or EDITION_ARG == "all"):
         raise RuntimeError("EMAIL_TO has no recipients")
@@ -73,32 +73,54 @@ else:
     gmail_user = ""
     gmail_password = ""
     recipients = []
-    report_url = os.environ.get("REPORT_URL", "").strip() or "https://kkmcrostaff.onrender.com/report/PREVIEW_TOKEN_PLACEHOLDER_0000000000"
+    report_url = normalize_report_url(os.environ.get("REPORT_URL", ""))
 
-briefing = json.loads(Path("public/briefing.json").read_text(encoding="utf-8"))
+briefing = json.loads(Path("docs/briefing.json").read_text(encoding="utf-8"))
 meta = briefing.get("meta", {})
 date = meta.get("briefing_date", "")
 headline = briefing.get("insights", {}).get("headline") or briefing.get("executive_judgment", "오늘의 CRO STAFF 브리핑")
 
+# ===== 업권 정의: config/sectors.json 이 기준 (라벨·순서). briefing.json 의 옛 라벨('은행본')이나 알 수 없는 sector id(savings)는 무시 =====
+_SECTOR_CFG_PATH = Path(__file__).resolve().parent.parent / "config" / "sectors.json"
+try:
+    _SECTOR_CFG = json.loads(_SECTOR_CFG_PATH.read_text(encoding="utf-8"))
+except Exception:  # noqa: BLE001 - 설정 파일이 없으면 코드 기본값 사용
+    _SECTOR_CFG = {}
+SECTOR_ORDER = [s["id"] for s in (_SECTOR_CFG.get("sectors") or []) if isinstance(s, dict) and s.get("id")] or ["bank", "card_capital", "insurance", "securities_am"]
+SECTOR_NAV = {s["id"]: str(s.get("label_ko") or s["id"]) for s in (_SECTOR_CFG.get("sectors") or []) if isinstance(s, dict) and s.get("id")}
+SECTOR_NAV.setdefault("bank", "은행"); SECTOR_NAV.setdefault("card_capital", "여전·저축은행")
+SECTOR_NAV.setdefault("insurance", "보험"); SECTOR_NAV.setdefault("securities_am", "증권·자산운용")
+EDITION_LABELS = {"all": str((_SECTOR_CFG.get("group") or {}).get("edition_label_ko") or "전체")}
+for _s in (_SECTOR_CFG.get("sectors") or []):
+    if isinstance(_s, dict) and _s.get("id"):
+        EDITION_LABELS[_s["id"]] = str(_s.get("edition_label_ko") or f"{_s.get('label_ko', _s['id'])}업")
+for _k, _v in {"bank": "은행업", "card_capital": "여전·저축은행업", "insurance": "보험업", "securities_am": "증권·운용업"}.items():
+    EDITION_LABELS.setdefault(_k, _v)
+
 SECTORS = briefing.get("sectors") if isinstance(briefing.get("sectors"), dict) else {}
-EDITIONS = [e for e in (briefing.get("editions") or []) if isinstance(e, dict) and e.get("id")]
+SECTORS = {k: v for k, v in SECTORS.items() if k in SECTOR_ORDER and isinstance(v, dict)}
+EDITIONS = [e for e in (briefing.get("editions") or []) if isinstance(e, dict) and e.get("id") and (e["id"] == "all" or e["id"] in SECTORS)]
 if not SECTORS or not EDITIONS:
-    EDITIONS = [{"id": "all", "label_ko": "전체본", "sections": ["common"]}]
+    EDITIONS = [{"id": "all", "label_ko": "전체", "sections": ["common"]}]
     SECTORS = {}
+for _e in EDITIONS:
+    _e["label_ko"] = EDITION_LABELS.get(_e["id"], str(_e.get("label_ko") or _e["id"]).removesuffix("본"))
 EDITION_BY_ID = {e["id"]: e for e in EDITIONS}
-SECTOR_ORDER = ["bank", "card_capital", "savings", "insurance", "securities_am"]
 
 
 def edition_sectors(ed):
     ids = [s for s in (ed.get("sections") or []) if s != "common" and s in SECTORS]
     if ed.get("id") == "all":
-        ids = [s for s in SECTOR_ORDER if s in ids] + [s for s in ids if s not in SECTOR_ORDER]
+        ids = [s for s in SECTOR_ORDER if s in ids]
     return ids
 
 
 def edition_short(ed):
-    """'은행본' → '은행' (제목 태그·네비용)."""
-    return str(ed.get("label_ko") or ed.get("id") or "").replace("본", "", 1) if str(ed.get("label_ko") or "").endswith("본") else str(ed.get("label_ko") or ed.get("id") or "")
+    """판 짧은 이름 (제목 태그·목차용): '은행업' → '은행', '여전·저축은행업' → '여전·저축은행'."""
+    eid = ed.get("id") or ""
+    if eid in SECTOR_NAV:
+        return SECTOR_NAV[eid]
+    return str(ed.get("label_ko") or eid or "")
 
 # ===== 안전장치: 기사가 너무 적으면 28명에게 발송하지 않는다 =====
 # 얇은(1~2건) 브리핑이 전 수신자에게 가는 사고(2026-10-11) 재발 방지.
@@ -120,9 +142,15 @@ TINT2 = "#F4F9FD"
 OUTER = "#F4F6F9"
 CRIT = "#B42318"
 FONT = "'Malgun Gothic','맑은 고딕','Apple SD Gothic Neo','Noto Sans KR',Arial,sans-serif"
-# server.mjs는 /assets 정적 서빙을 하지 않으므로 기본은 텍스트 워드마크.
-# 정적 서빙이 추가되면 MAIL_LOGO_URL=https://.../assets/woori_group_kr.png 로 지정 (public/assets/woori_group_kr.png 준비됨).
-LOGO_URL = os.environ.get("MAIL_LOGO_URL", "").strip()
+# 로고: GitHub Pages 가 docs/assets/woori_group_kr.png 를 서빙하므로 REPORT_URL 폴더 기준으로 자동 지정. MAIL_LOGO_URL 로 덮어쓸 수 있다.
+def _default_logo_url(url):
+    try:
+        p = urlparse(url)
+        base = p.path if p.path.endswith("/") else p.path.rsplit("/", 1)[0] + "/"
+        return f"{p.scheme}://{p.netloc}{base}assets/woori_group_kr.png"
+    except Exception:  # noqa: BLE001
+        return ""
+LOGO_URL = os.environ.get("MAIL_LOGO_URL", "").strip() or _default_logo_url(report_url)
 
 URGENCY_STYLE = {
     "높음": ("#B42318", "#FFF1F0", "#F3C6C2"),
@@ -155,8 +183,7 @@ CALLOUT_BG = {"critical": "#FFF1EF", "subsidiary": "#EAF7EF", "overseas": "#E6F5
 # 업권 섹션 팔레트 (웹 .sec-bank 등과 동일): bar, bar_light, panel_bg, panel_line, title, kicker
 SECTOR_SEC = {
     "bank":          ("#0067AC", "#4FB3E8", "#EDF5FC", "#9CC2E0", "#053E6B", "BANK"),
-    "card_capital":  ("#4F46E5", "#A5B4FC", "#F1F0FD", "#C7C4F5", "#3730A3", "CARD & CAPITAL"),
-    "savings":       ("#9A3412", "#FB923C", "#FFF4EE", "#EFC4AC", "#7C2D12", "SAVINGS BANK"),
+    "card_capital":  ("#4F46E5", "#A5B4FC", "#F1F0FD", "#C7C4F5", "#3730A3", "CARD, CAPITAL & SAVINGS BANK"),
     "insurance":     ("#BE185D", "#F9A8D4", "#FDF2F8", "#F0BFD6", "#9D174D", "INSURANCE"),
     "securities_am": ("#155E75", "#67E8F9", "#ECF8FA", "#9FCBD6", "#164E63", "SECURITIES & ASSET MANAGEMENT"),
 }
@@ -435,10 +462,10 @@ def render_sector_section(sid):
     items = s.get("news") or []
     comps = [str(c) for c in (s.get("companies") or [])]
     comp_chips = "".join(chip(c, "#ffffff", bar, bar) for c in comps)
-    label_ko = str(s.get("label_ko") or sid)
+    label_ko = SECTOR_NAV.get(sid) or str(s.get("label_ko") or sid)
     html = f"""
     <tr><td style="padding:0 0 12px">
-      <div style="font-size:10px;font-weight:700;letter-spacing:2px;color:{bar};font-family:{FONT};margin:0 0 6px">{escape(str(s.get("label_en") or kicker).upper())}</div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:2px;color:{bar};font-family:{FONT};margin:0 0 6px">{escape(str(kicker or s.get("label_en") or sid).upper())}</div>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
           <td style="font-family:{FONT}">
@@ -559,72 +586,153 @@ def render_insights(ins):
 
 def judgment_lines(b):
     arr = b.get("executive_judgment_bullets") or []
-    lines = [str(x) for x in arr if x]
-    if not lines:
-        raw = str(b.get("executive_judgment", "") or "").strip()
-        lines = [ln.strip(" •-\u2022") for ln in raw.split("\n") if ln.strip()]
-    return lines
+    return [str(x) for x in arr if x]
 
 
-def headline_rows(groups, sector_ids=()):
-    rows = []
+def split_sentences(text):
+    import re as _re
+    raw = str(text or "").strip()
+    if not raw:
+        return []
+    parts = [p.strip() for p in _re.split(r"(?<=[.!?])\s+", raw) if p.strip()]
+    return parts
 
-    def push(it, fallback_label, fallback_fg, fallback_bg):
-        a = axis_of(it)
-        if a:
-            label, color = AXIS_META[a]
-            fg = NAVY if a == "peer" else "#ffffff"
-            rows.append((label, fg, color, it))
-        else:
-            rows.append((fallback_label, fallback_fg, fallback_bg, it))
+
+# ===== 오늘 한눈에 (At a Glance): 판단 3문장 + 카테고리별 기사 목차 (웹 index.html renderGlance 와 동일 구성) =====
+GLANCE_CATS = [
+    ("critical", "긴급", "#B42318"),
+    ("supervision", "감독·규제", "#0B2A4A"),
+    ("group", "그룹·계열사", "#0067AC"),
+    ("peer", "경쟁사", "#1F8BCB"),
+    ("market", "시장·거시", "#B86E00"),
+    ("overseas", "해외", "#0B6B47"),
+    ("other", "기타", "#6b7684"),
+]
+
+
+def glance_buckets(groups):
+    buckets = {k: [] for k, _, _ in GLANCE_CATS}
+    seen = set()
+
+    def put(cat, it):
+        key = it.get("url") or it.get("title")
+        if not key or key in seen:
+            return
+        seen.add(key)
+        buckets.setdefault(cat, buckets["other"]).append(it)
 
     for it in groups["critical"]:
-        push(it, "CRITICAL", "#ffffff", NAVY)
-    for it in groups["daily"]:
-        push(it, "뉴스", WOORI, TINT)
+        put("critical", it)
     for it in groups["subsidiary"]:
-        push(it, "계열사", "#ffffff", WOORI)
+        put(axis_of(it) or "group", it)
+    for it in groups["daily"]:
+        put("critical" if it.get("critical") else (axis_of(it) or "other"), it)
     for it in groups["overseas"]:
-        push(it, "해외", "#ffffff", AXIS_META["overseas"][1])
+        put("overseas", it)
+    return buckets
+
+
+def glance_row(it, color):
+    urgency = it.get("urgency", "")
+    urg = ""
+    if urgency:
+        c, bg, bd = URGENCY_STYLE.get(urgency, (MUTED, "#F2F5F8", "#E4E9EF"))
+        urg = (
+            f'<td align="right" valign="top" style="padding:3px 0 3px 8px;white-space:nowrap">'
+            f'<span style="display:inline-block;padding:0 7px;font-size:10.5px;font-weight:700;line-height:16px;color:{c};background:{bg};border:1px solid {bd};border-radius:9px;font-family:{FONT}">{escape(urgency)}</span></td>'
+        )
+    return (
+        f'<tr><td width="14" valign="top" style="padding:3px 0;width:14px"><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:{color};vertical-align:middle"></span></td>'
+        f'<td valign="top" style="padding:3px 0;font-size:13.5px;font-weight:700;line-height:1.45;font-family:{FONT}">'
+        f'<a href="{escape(it.get("url", ""))}" style="color:{INK};text-decoration:none">{escape(it.get("title", ""))}</a></td>{urg}</tr>'
+    )
+
+
+def render_glance(b, groups, ed, sector_ids=()):
+    sentences = split_sentences(b.get("executive_judgment"))
+    buckets = glance_buckets(groups)
+    bar, bar2, bg, line, title_c, kicker = SEC["judgment"]
+
+    judg = f'<div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:{WOORI};margin:0 0 8px;font-family:{FONT}">EXECUTIVE JUDGMENT · CRO STAFF</div>'
+    if sentences:
+        for i, t in enumerate(sentences):
+            sep = f"border-top:1px dashed {LINE};margin-top:9px;padding-top:9px;" if i else ""
+            judg += f'<div style="{sep}font-size:16px;font-weight:700;line-height:1.6;color:{NAVY};font-family:{FONT}">{escape(t)}</div>'
+    else:
+        judg += f'<div style="font-size:14px;color:{MUTED};font-family:{FONT}">오늘 해당 없음</div>'
+
+    toc = f'<div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:{MUTED};margin:0 0 8px;font-family:{FONT}">기사 목차 · 제목을 누르면 원문으로 이동</div>'
+    for key, label, color in GLANCE_CATS:
+        items = buckets.get(key) or []
+        if not items:
+            continue
+        toc += (
+            f'<div style="margin:0 0 4px;font-size:12.5px;font-weight:700;color:{color};font-family:{FONT}">'
+            f'<span style="display:inline-block;width:9px;height:9px;border-radius:5px;background:{color};margin:0 6px 1px 0;vertical-align:middle"></span>{escape(label)} <span style="font-weight:400;color:{MUTED};font-size:12px">{len(items)}</span></div>'
+        )
+        toc += '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 10px 15px">' + "".join(glance_row(it, color) for it in items) + "</table>"
+    sector_items = []
+    sector_html = ""
     for sid in sector_ids:
-        s = SECTORS.get(sid) or {}
-        ed = EDITION_BY_ID.get(sid) or {}
-        label = edition_short(ed) if ed else str(s.get("label_ko") or sid)
-        for it in (s.get("news") or []):
-            rows.append((label, "#ffffff", SEC.get(sid, SEC["daily"])[0], it))
-    return rows
+        sdef = SECTORS.get(sid) or {}
+        news = sdef.get("news") or []
+        if not news:
+            continue
+        sector_items += news
+        color = SEC.get(sid, SEC["daily"])[0]
+        comps = "·".join(str(c) for c in (sdef.get("companies") or []))
+        sector_html += (
+            f'<div style="margin:6px 0 2px 15px;font-size:12px;font-weight:700;color:{color};font-family:{FONT}">{escape(SECTOR_NAV.get(sid, sid))}{(" · " + escape(comps)) if comps else ""} '
+            f'<span style="font-weight:400;color:{MUTED};font-size:11.5px">{len(news)}</span></div>'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 6px 15px">' + "".join(glance_row(it, color) for it in news) + "</table>"
+        )
+    if sector_html:
+        toc += (
+            f'<div style="margin:0 0 2px;font-size:12.5px;font-weight:700;color:{NAVY};font-family:{FONT}">'
+            f'<span style="display:inline-block;width:9px;height:9px;border-radius:5px;background:{NAVY};margin:0 6px 1px 0;vertical-align:middle"></span>업권별 <span style="font-weight:400;color:{MUTED};font-size:12px">{len(sector_items)}</span></div>' + sector_html
+        )
+
+    all_items = [it for v in groups.values() for it in v] + sector_items
+    crit = len(groups["critical"]) + sum(1 for it in sector_items if it.get("critical"))
+    official = sum(1 for it in all_items if it.get("source_type") == "official")
+    ed_label = str((ed or {}).get("label_ko") or "전체")
+    foot = (
+        f'<div style="margin:12px 0 0;padding-top:9px;border-top:1px solid {LINE};font-size:12px;color:{MUTED};font-family:{FONT}">'
+        f'전체 <b style="color:{NAVY}">{len(all_items)}건</b> · 긴급 <b style="color:{NAVY}">{crit}</b> · 공식자료 <b style="color:{NAVY}">{official}</b> · {escape(ed_label)} 기준</div>'
+    )
+    return f"""
+    <tr><td style="padding:0 0 22px">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border:1px solid {line};border-radius:16px;border-collapse:separate">
+        <tr><td style="padding:16px 16px 14px">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+            {section_title("오늘 한눈에", None, "At a Glance · " + fmt_date(date), "judgment").replace("EXECUTIVE JUDGMENT", "TODAY AT A GLANCE")}
+            <tr><td style="padding:0 0 14px;font-family:{FONT}">{judg}</td></tr>
+            <tr><td style="padding:12px 14px 10px;background:#F7F9FB;border:1px solid {LINE};border-radius:10px;font-family:{FONT}">{toc}</td></tr>
+            <tr><td style="font-family:{FONT}">{foot}</td></tr>
+          </table>
+        </td></tr>
+      </table>
+    </td></tr>
+    """
 
 
 def render_judgment(b, groups, sector_ids=()):
-    rows = headline_rows(groups, sector_ids)
+    """핵심 판단 포인트: executive_judgment_bullets 만 (판단 본문·기사 목록은 '오늘 한눈에'로 이동)."""
     lines = judgment_lines(b)
     bar, bar2, bg, line, title_c, kicker = SEC["judgment"]
     body = ""
-    if rows:
-        body += f'<div style="font-size:12px;font-weight:700;color:{bar};margin:0 0 8px;font-family:{FONT}">오늘 브리핑 {len(rows)}건</div>'
-        body += '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">'
-        for label, fg, bg, it in rows:
-            bd = bg if bg != TINT else "#C9E0F1"
-            body += (
-                f'<tr><td width="76" valign="top" style="padding:0 8px 6px 0;white-space:nowrap">'
-                f'<span style="display:inline-block;min-width:60px;text-align:center;padding:1px 6px;font-size:10.5px;font-weight:700;line-height:16px;color:{fg};background:{bg};border:1px solid {bd};border-radius:10px;font-family:{FONT}">{escape(label)}</span></td>'
-                f'<td valign="top" style="padding:0 0 6px;font-size:14px;font-weight:700;line-height:1.45;font-family:{FONT}">'
-                f'<a href="{escape(it.get("url", ""))}" style="color:{NAVY};text-decoration:none">{escape(it.get("title", ""))}</a></td></tr>'
-            )
-        body += "</table>"
     if lines:
-        sep = f'border-top:1px solid {LINE};margin-top:10px;padding-top:12px;' if rows else ""
-        body += f'<div style="{sep}"><ul style="padding-left:20px;margin:0">' + "".join(
+        body += '<ul style="padding-left:20px;margin:0">' + "".join(
             f'<li style="margin:6px 0;font-size:14.5px;line-height:1.65;color:{INK};font-family:{FONT}">{escape(x)}</li>' for x in lines
-        ) + "</ul></div>"
+        ) + "</ul>"
     ch = meta.get("changes") if isinstance(meta.get("changes"), dict) else None
     if ch and ((ch.get("new") or []) or (ch.get("continued") or [])):
         body += '<div style="margin:12px 0 0">' + chip(f"신규 {len(ch.get('new') or [])}", "#ffffff", WOORI, WOORI) + chip(f"지속 {len(ch.get('continued') or [])}", INK, "#F3F6F9", "#E4E9EF") + "</div>"
     if meta.get("shortfall_reason"):
         body += f'<div style="margin:8px 0 0;font-size:12px;color:{MUTED};font-family:{FONT}">※ {escape(str(meta["shortfall_reason"]))}</div>'
     if not body:
-        body = f'<div style="font-size:14px;color:{MUTED};font-family:{FONT}">오늘 해당 없음</div>'
-    return band("judgment", section_title("핵심 판단", None, "CRO Staff · " + fmt_date(date), "judgment") + f"""
+        body = f'<div style="font-size:14px;color:{MUTED};font-family:{FONT}">오늘 해당 없음 · 판단 요지는 상단 \'오늘 한눈에\'를 참고하세요.</div>'
+    return band("judgment", section_title("핵심 판단 포인트", len(lines) or None, "CRO Staff · " + fmt_date(date), "judgment").replace("EXECUTIVE JUDGMENT", "KEY JUDGMENT POINTS") + f"""
     <tr><td style="padding:0 0 8px">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr><td style="background:#ffffff;border:1px solid {line};border-left:4px solid {bar};padding:16px 18px;border-radius:0 10px 10px 0;font-family:{FONT}">
@@ -662,7 +770,7 @@ def render_summary_strip(b, groups, ed=None, sector_ids=()):
         comps = [c for sid in sector_ids for c in ((SECTORS.get(sid) or {}).get("companies") or [])]
         cells.append(("관점", f"<span style='font-size:15px'>{escape(str(ed.get('label_ko') or ''))}</span>", "·".join(comps) or "Sector Risk Lens"))
     else:
-        cells.append(("관점", f"<span style='font-size:15px'>우리금융그룹 CRO</span>", "Group Risk Lens"))
+        cells.append(("관점", f"<span style='font-size:15px'>우리금융그룹 CRO</span>", "Group Risk Lens · 전체" if SECTORS else "Group Risk Lens"))
 
     def cell(label, value, hint, last):
         pad = "0" if last else "0 8px 0 0"
@@ -707,7 +815,7 @@ def build_sections(ed):
     sector_ids = edition_sectors(ed)
     is_sector_ed = ed.get("id") != "all"
     sector_blocks = "".join(render_sector_section(sid) for sid in sector_ids)
-    parts = [render_judgment(briefing, groups, sector_ids)]
+    parts = [render_glance(briefing, groups, ed, sector_ids), render_judgment(briefing, groups, sector_ids)]
     if is_sector_ed:
         parts.append(sector_blocks)
     parts += [
@@ -766,7 +874,7 @@ def build_html(ed):
     sections_html = build_sections(ed)
     sector_ids = edition_sectors(ed)
     eid = ed.get("id") or "all"
-    ed_label = str(ed.get("label_ko") or "전체본")
+    ed_label = str(ed.get("label_ko") or "전체")
     comps = [c for sid in sector_ids for c in ((SECTORS.get(sid) or {}).get("companies") or [])]
     common_n = sum(len(v) for v in groups.values())
     sector_n = sum(len((SECTORS.get(sid) or {}).get("news") or []) for sid in sector_ids)
@@ -774,7 +882,7 @@ def build_html(ed):
         hero_line = "우리금융그룹 CRO 관점 · 어제·오늘(KST) 우선, 부족 시 최근 3일 이내 유관·배경 자료"
         hero_badge = ""
     elif eid == "all":
-        hero_line = f"전체본 · 우리금융그룹 CRO 관점 · 그룹 공통 {common_n}건 + 업권 {sector_n}건"
+        hero_line = f"우리금융그룹 CRO 관점 · 전체 · 그룹 공통 {common_n}건 + 업권 {sector_n}건"
         hero_badge = ""
     else:
         hero_line = f"{escape(ed_label)} · {escape('·'.join(comps) or ed_label)} 리스크관리부 · 그룹 공통 {common_n}건 + {escape(edition_short(ed))} {sector_n}건"
@@ -826,7 +934,7 @@ def build_html(ed):
                 </table>
               </td></tr>
               <tr><td align="center" style="padding:0 0 12px;font-family:{FONT};font-size:12px;color:{MUTED};line-height:1.6">
-                웹 리포트에서는 AI 질문하기(브리핑 근거 답변)를 사용할 수 있습니다.<br>사내망에서 링크가 열리지 않는 경우, 이 메일 본문이 전체 브리핑 내용입니다.
+                웹 리포트(GitHub Pages)에서는 우하단 'AI에게 질문' 버튼으로 브리핑 근거 답변을 받을 수 있습니다.<br>사내망에서 링크가 열리지 않는 경우, 이 메일 본문이 전체 브리핑 내용입니다.
               </td></tr>
             </table>
           </td></tr>

@@ -1,28 +1,53 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
+// CRO Staff — AI 질문(Q&A) API 전용 서버 (Render).
+// 브리핑 웹 페이지와 briefing.json 은 GitHub Pages(docs/)에서 서빙한다. 이 서버는 OpenAI 키를 가진 /api/ask 중계만 담당하고,
+// 예전 링크(/, /report/TOKEN)로 들어온 요청은 Pages 로 302 리다이렉트한다.
+
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
-const reportPath = path.join(rootDir, 'public', 'index.html');
-const briefingPath = path.join(rootDir, 'public', 'briefing.json');
+const briefingPath = path.join(rootDir, 'docs', 'briefing.json');
 const port = Number(process.env.PORT || 8080);
 const openAiKey = process.env.OPENAI_API_KEY || '';
-const accessToken = process.env.REPORT_ACCESS_TOKEN || '';
 const model = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
 const dailyLimit = Math.max(1, Number(process.env.DAILY_REQUEST_LIMIT_PER_IP || 30));
+const minuteLimit = Math.max(1, Number(process.env.MINUTE_REQUEST_LIMIT_PER_IP || 10));
+const pagesBaseUrl = String(process.env.PAGES_BASE_URL || 'https://kyeongminkim222.github.io/KKMCROSTAFF/').replace(/\/+$/, '') + '/';
+// 허용 Origin: Pages 도메인(기본) + ALLOWED_ORIGINS(콤마 구분)로 추가. 로컬 미리보기는 NODE_ENV!=production 일 때만.
+const allowedOrigins = new Set([
+  new URL(pagesBaseUrl).origin,
+  ...String(process.env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean)
+]);
 const isProduction = process.env.NODE_ENV === 'production';
 const rateBuckets = new Map();
+const minuteBuckets = new Map();
 
 if (!openAiKey.startsWith('sk-')) {
   throw new Error('OPENAI_API_KEY is missing or invalid.');
 }
-if (accessToken.length < 32) {
-  throw new Error('REPORT_ACCESS_TOKEN must contain at least 32 characters.');
+
+function originAllowed(origin) {
+  if (!origin) return false;
+  if (allowedOrigins.has(origin)) return true;
+  if (!isProduction && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  return false;
 }
 
-function secureHeaders(contentType) {
+function corsHeaders(req) {
+  const origin = req.headers.origin;
+  if (!originAllowed(origin)) return {};
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'content-type',
+    'Access-Control-Max-Age': '600',
+    Vary: 'Origin'
+  };
+}
+
+function secureHeaders(req, contentType) {
   return {
     'Content-Type': contentType,
     'Cache-Control': 'no-store',
@@ -30,36 +55,19 @@ function secureHeaders(contentType) {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-    'Content-Security-Policy': "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    ...corsHeaders(req)
   };
 }
 
-function json(res, status, body) {
-  res.writeHead(status, secureHeaders('application/json; charset=utf-8'));
+function json(req, res, status, body) {
+  res.writeHead(status, secureHeaders(req, 'application/json; charset=utf-8'));
   res.end(JSON.stringify(body));
 }
 
-function parseCookies(req) {
-  return Object.fromEntries(
-    String(req.headers.cookie || '')
-      .split(';')
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .map((part) => {
-        const index = part.indexOf('=');
-        return index < 0 ? [part, ''] : [part.slice(0, index), decodeURIComponent(part.slice(index + 1))];
-      })
-  );
-}
-
-function sameSecret(actual, expected) {
-  const a = createHash('sha256').update(String(actual || '')).digest();
-  const b = createHash('sha256').update(String(expected || '')).digest();
-  return timingSafeEqual(a, b);
-}
-
-function isAuthorized(req) {
-  return sameSecret(parseCookies(req).cro_report_access, accessToken);
+function redirect(req, res, location) {
+  res.writeHead(302, { Location: location, 'Cache-Control': 'no-store', ...corsHeaders(req) });
+  res.end();
 }
 
 function clientIp(req) {
@@ -78,24 +86,27 @@ function kstDay() {
 }
 
 function consumeRateLimit(req) {
-  const key = `${kstDay()}:${clientIp(req)}`;
+  const ip = clientIp(req);
+  // 분당 한도 (메모리)
+  const minuteKey = `${Math.floor(Date.now() / 60_000)}:${ip}`;
+  const usedMinute = minuteBuckets.get(minuteKey) || 0;
+  if (usedMinute >= minuteLimit) return { ok: false, reason: `분당 질문 한도(${minuteLimit}회)를 넘었습니다. 잠시 후 다시 시도해 주세요.` };
+  minuteBuckets.set(minuteKey, usedMinute + 1);
+  if (minuteBuckets.size > 5000) {
+    const current = `${Math.floor(Date.now() / 60_000)}:`;
+    for (const existing of minuteBuckets.keys()) if (!existing.startsWith(current)) minuteBuckets.delete(existing);
+  }
+  // 일일 한도 (KST 기준)
+  const key = `${kstDay()}:${ip}`;
   const used = rateBuckets.get(key) || 0;
-  if (used >= dailyLimit) return false;
+  if (used >= dailyLimit) return { ok: false, reason: `일일 질문 한도(${dailyLimit}회)에 도달했습니다.` };
   rateBuckets.set(key, used + 1);
   if (rateBuckets.size > 5000) {
     for (const existing of rateBuckets.keys()) {
       if (!existing.startsWith(`${kstDay()}:`)) rateBuckets.delete(existing);
     }
   }
-  return true;
-}
-
-function hasSameOrigin(req) {
-  const origin = req.headers.origin;
-  if (!origin) return true;
-  const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
-  const protocol = forwardedProto || (req.socket.encrypted ? 'https' : 'http');
-  return origin === `${protocol}://${req.headers.host}`;
+  return { ok: true };
 }
 
 async function readJsonBody(req, maxBytes = 256_000) {
@@ -138,22 +149,22 @@ async function currentBriefingDate() {
 }
 
 async function handleAsk(req, res) {
-  if (!isAuthorized(req)) return json(res, 401, { error: '보고서 링크 인증이 필요합니다.' });
-  if (!hasSameOrigin(req)) return json(res, 403, { error: '허용되지 않은 출처입니다.' });
-  if (!consumeRateLimit(req)) return json(res, 429, { error: `일일 질문 한도(${dailyLimit}회)에 도달했습니다.` });
+  if (!originAllowed(req.headers.origin)) return json(req, res, 403, { error: '허용되지 않은 출처입니다.' });
+  const limit = consumeRateLimit(req);
+  if (!limit.ok) return json(req, res, 429, { error: limit.reason });
 
   let body;
   try {
     body = await readJsonBody(req);
   } catch (error) {
     const status = error.message === 'request_too_large' ? 413 : 400;
-    return json(res, status, { error: status === 413 ? '요청 데이터가 너무 큽니다.' : '요청 형식이 올바르지 않습니다.' });
+    return json(req, res, status, { error: status === 413 ? '요청 데이터가 너무 큽니다.' : '요청 형식이 올바르지 않습니다.' });
   }
 
   const question = String(body.question || '').trim().slice(0, 2000);
   const briefing = body.briefing && typeof body.briefing === 'object' ? body.briefing : {};
   const history = cleanHistory(body.history);
-  if (!question) return json(res, 400, { error: '질문을 입력해 주세요.' });
+  if (!question) return json(req, res, 400, { error: '질문을 입력해 주세요.' });
 
   const input = [
     '아래 JSON은 오늘의 CRO STAFF 브리핑입니다.',
@@ -196,16 +207,16 @@ async function handleAsk(req, res) {
       const message = upstream.status === 429
         ? 'OpenAI 사용량 또는 결제 한도를 확인해 주세요.'
         : 'AI 답변 서버가 요청을 처리하지 못했습니다.';
-      return json(res, 502, { error: message });
+      return json(req, res, 502, { error: message });
     }
     const answer = extractOutputText(response);
-    if (!answer) return json(res, 502, { error: 'AI 응답에서 답변 텍스트를 찾지 못했습니다.' });
-    return json(res, 200, { answer, model });
+    if (!answer) return json(req, res, 502, { error: 'AI 응답에서 답변 텍스트를 찾지 못했습니다.' });
+    return json(req, res, 200, { answer, model });
   } catch (error) {
     const message = error.name === 'AbortError'
       ? 'AI 답변 시간이 초과되었습니다. 다시 시도해 주세요.'
       : 'AI 서버에 연결하지 못했습니다.';
-    return json(res, 504, { error: message });
+    return json(req, res, 504, { error: message });
   } finally {
     clearTimeout(timer);
   }
@@ -214,56 +225,37 @@ async function handleAsk(req, res) {
 const server = createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
 
+  // CORS preflight (Pages → Render 크로스오리진)
+  if (req.method === 'OPTIONS' && url.pathname.startsWith('/api/')) {
+    if (!originAllowed(req.headers.origin)) return json(req, res, 403, { error: '허용되지 않은 출처입니다.' });
+    res.writeHead(204, { ...corsHeaders(req), 'Cache-Control': 'no-store' });
+    return res.end();
+  }
+
   if (req.method === 'GET' && url.pathname === '/healthz') {
-    return json(res, 200, { ok: true, briefing_date: await currentBriefingDate() });
-  }
-
-  if (req.method === 'GET' && url.pathname.startsWith('/report/')) {
-    const supplied = decodeURIComponent(url.pathname.slice('/report/'.length));
-    if (!sameSecret(supplied, accessToken)) return json(res, 404, { error: '유효하지 않은 보고서 링크입니다.' });
-    const cookie = [
-      `cro_report_access=${encodeURIComponent(accessToken)}`,
-      'HttpOnly',
-      'SameSite=Strict',
-      'Path=/',
-      'Max-Age=2592000',
-      isProduction ? 'Secure' : ''
-    ].filter(Boolean).join('; ');
-    const html = await readFile(reportPath);
-    res.writeHead(200, { ...secureHeaders('text/html; charset=utf-8'), 'Set-Cookie': cookie });
-    return res.end(html);
-  }
-
-  if (req.method === 'GET' && url.pathname === '/') {
-    if (!isAuthorized(req)) return json(res, 401, { error: '이메일로 받은 전체 보고서 링크를 사용해 주세요.' });
-    const html = await readFile(reportPath);
-    res.writeHead(200, secureHeaders('text/html; charset=utf-8'));
-    return res.end(html);
-  }
-
-  if (req.method === 'GET' && url.pathname === '/briefing.json') {
-    if (!isAuthorized(req)) return json(res, 401, { error: '보고서 링크 인증이 필요합니다.' });
-    try {
-      const briefing = await readFile(briefingPath);
-      res.writeHead(200, secureHeaders('application/json; charset=utf-8'));
-      return res.end(briefing);
-    } catch {
-      return json(res, 404, { error: '브리핑 데이터가 아직 생성되지 않았습니다.' });
-    }
+    return json(req, res, 200, { ok: true, briefing_date: await currentBriefingDate() });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/health') {
-    if (!isAuthorized(req)) return json(res, 401, { ok: false });
-    return json(res, 200, { ok: true, model });
+    if (!originAllowed(req.headers.origin)) return json(req, res, 403, { ok: false, error: '허용되지 않은 출처입니다.' });
+    return json(req, res, 200, { ok: true, model });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/ask') {
     return handleAsk(req, res);
   }
 
-  return json(res, 404, { error: 'Not found' });
+  // 예전 링크 호환: 브리핑 페이지는 GitHub Pages 로 이동 (판 파라미터 유지)
+  if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html' || url.pathname.startsWith('/report/'))) {
+    return redirect(req, res, pagesBaseUrl + (url.search || ''));
+  }
+  if (req.method === 'GET' && url.pathname === '/briefing.json') {
+    return redirect(req, res, pagesBaseUrl + 'briefing.json');
+  }
+
+  return json(req, res, 404, { error: 'Not found' });
 });
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`CRO Staff secure briefing server listening on port ${port}`);
+  console.log(`CRO Staff Q&A API server listening on port ${port} (pages: ${pagesBaseUrl}, origins: ${[...allowedOrigins].join(', ')})`);
 });

@@ -34,7 +34,7 @@ function buildFixture(date) {
     { stage: 'korean_media', url: 'https://n.news.naver.com/mnews/article/018/0006200003', title: '원·달러 환율 1,450원 돌파…외환당국 구두개입', age: 0, time: '15:30',
       s: { axis: 'market', score: 75, entity: '원·달러 환율', event_key: '환율|1450원 돌파', fact: '원·달러 환율은 장중 1,452원까지 올라 전일 대비 1.1% 상승했고 외환당국은 구두개입에 나섰습니다.', hook: '우리은행 외화 유동성비율과 외화 RWA, 해외법인 자본의 원화 환산 손익에 닿습니다.', severity: true } },
     { stage: 'korean_media', url: 'https://www.sedaily.com/NewsView/2GZ1234ABC', title: '저축은행 PF 정리 지연…2차 경·공매 성과 미흡', age: 1, time: '',
-      s: { axis: 'market', sector: 'savings', shook: '우리금융저축은행의 PF 경·공매 대상 잔액과 매각 진행률, 충당금 커버리지에 닿습니다.', score: 60, entity: '저축은행 부동산 PF', event_key: '저축은행|PF 경공매 지연', fact: '저축은행중앙회에 따르면 2차 PF 경·공매 대상 1조2천억원 중 실제 매각은 3,100억원에 그쳤습니다.', hook: '우리금융저축은행과 우리금융캐피탈의 PF 익스포저 회수율과 충당금 커버리지에 연결됩니다.', severity: false } },
+      s: { axis: 'market', sector: 'card_capital', shook: '우리금융저축은행의 PF 경·공매 대상 잔액과 매각 진행률, 충당금 커버리지에 닿습니다.', score: 60, entity: '저축은행 부동산 PF', event_key: '저축은행|PF 경공매 지연', fact: '저축은행중앙회에 따르면 2차 PF 경·공매 대상 1조2천억원 중 실제 매각은 3,100억원에 그쳤습니다.', hook: '우리금융저축은행과 우리금융캐피탈의 PF 익스포저 회수율과 충당금 커버리지에 연결됩니다.', severity: false } },
     { stage: 'korean_media', url: 'https://www.mk.co.kr/news/economy/12190005', title: '10월 가계대출 증가폭 다시 확대…주담대 4조원 늘어', age: 2, time: '11:05',
       s: { axis: 'market', score: 55, entity: '가계대출', event_key: '가계대출|10월 증가폭 확대', fact: '금융당국 속보치 기준 10월 1~24일 5대 은행 주택담보대출은 4조원 증가했습니다.', hook: '우리은행 가계대출 총량 관리 목표와 월별 한도 소진 속도에 닿습니다.', severity: false } },
     { stage: 'korean_media', url: 'https://www.edaily.co.kr/news/read?newsId=01234567890006', title: '[사설] 금융규제 완화, 속도보다 방향이 중요하다', age: 0, time: '05:00',
@@ -103,13 +103,13 @@ function buildFixture(date) {
     { stage: 'sector_nonbank_lending', url: 'https://www.fnnews.com/news/202610270000034', title: '금감원, ○○캐피탈 PF 대출 한도 위반에 기관경고…과태료 12억', age: 1, time: '10:30',
       s: { axis: 'supervision', sector: 'card_capital', score: 78, entity: '금융감독원', event_key: '금감원|○○캐피탈 기관경고 PF', fact: '금융감독원은 ○○캐피탈의 부동산 PF 대출 한도 위반에 기관경고와 과태료 12억원을 부과했습니다.', hook: '우리금융캐피탈 PF 대출 한도 준수 여부와 동일 유형 위반 가능성에 닿습니다.', shook: '우리금융캐피탈의 PF 대출 총량 한도 준수 현황과 자체 점검 결과에 닿습니다.', severity: true } },
     { stage: 'sector_nonbank_lending', url: 'https://www.sedaily.com/NewsView/2GZ1234ABC', title: '저축은행 PF 정리 지연…2차 경·공매 성과 미흡', age: 1, time: '',
-      s: { axis: 'market', sector: 'savings', score: 60, entity: '저축은행 부동산 PF', event_key: '저축은행|PF 경공매 지연', fact: '저축은행중앙회에 따르면 2차 PF 경·공매 대상 1조2천억원 중 실제 매각은 3,100억원에 그쳤습니다.', hook: '우리금융저축은행과 우리금융캐피탈의 PF 익스포저 회수율과 충당금 커버리지에 연결됩니다.', shook: '우리금융저축은행의 PF 경·공매 대상 잔액과 매각 진행률, 충당금 커버리지에 닿습니다.', severity: false } },
+      s: { axis: 'market', sector: 'card_capital', score: 60, entity: '저축은행 부동산 PF', event_key: '저축은행|PF 경공매 지연', fact: '저축은행중앙회에 따르면 2차 PF 경·공매 대상 1조2천억원 중 실제 매각은 3,100억원에 그쳤습니다.', hook: '우리금융저축은행과 우리금융캐피탈의 PF 익스포저 회수율과 충당금 커버리지에 연결됩니다.', shook: '우리금융저축은행의 PF 경·공매 대상 잔액과 매각 진행률, 충당금 커버리지에 닿습니다.', severity: false } },
     { stage: 'sector_nonbank_lending', url: 'https://n.news.naver.com/mnews/article/011/0004500035', title: '저축은행 연체율 9%대 진입…79개사 중 12곳 BIS 비율 권고치 하회', age: 0, time: '09:30',
-      s: { axis: 'market', sector: 'savings', score: 74, entity: '저축은행 업권', event_key: '저축은행|연체율 9%대', fact: '금융감독원 집계 기준 9월 말 저축은행 연체율은 9.1%였고 12개사의 BIS 비율이 권고치를 밑돌았습니다.', hook: '우리금융저축은행 연체율·BIS 비율과 업권 구조조정 전이 위험에 닿습니다.', shook: '우리금융저축은행의 연체율 추이와 BIS 비율 버퍼, 권고치 하회 저축은행과의 거래 익스포저에 닿습니다.', severity: true } },
+      s: { axis: 'market', sector: 'card_capital', score: 74, entity: '저축은행 업권', event_key: '저축은행|연체율 9%대', fact: '금융감독원 집계 기준 9월 말 저축은행 연체율은 9.1%였고 12개사의 BIS 비율이 권고치를 밑돌았습니다.', hook: '우리금융저축은행 연체율·BIS 비율과 업권 구조조정 전이 위험에 닿습니다.', shook: '우리금융저축은행의 연체율 추이와 BIS 비율 버퍼, 권고치 하회 저축은행과의 거래 익스포저에 닿습니다.', severity: true } },
     { stage: 'sector_nonbank_lending', url: 'https://www.hankyung.com/article/2026102770036', title: '○○저축은행, 금감원 적기시정조치 유예 종료…경영개선명령 가능성', age: 3, time: '',
-      s: { axis: 'supervision', sector: 'savings', score: 72, entity: '금융감독원', event_key: '금감원|○○저축은행 적기시정조치', fact: '금융감독원은 ○○저축은행의 적기시정조치 유예가 종료돼 경영개선명령 부과를 검토한다고 밝혔습니다.', hook: '저축은행 업권 신뢰 저하가 우리금융저축은행 예금 이탈 위험에 닿습니다.', shook: '우리금융저축은행의 예금 잔액 일별 변동과 예금자보호 한도 초과 예금 비중에 닿습니다.', severity: true } },
+      s: { axis: 'supervision', sector: 'card_capital', score: 72, entity: '금융감독원', event_key: '금감원|○○저축은행 적기시정조치', fact: '금융감독원은 ○○저축은행의 적기시정조치 유예가 종료돼 경영개선명령 부과를 검토한다고 밝혔습니다.', hook: '저축은행 업권 신뢰 저하가 우리금융저축은행 예금 이탈 위험에 닿습니다.', shook: '우리금융저축은행의 예금 잔액 일별 변동과 예금자보호 한도 초과 예금 비중에 닿습니다.', severity: true } },
     { stage: 'sector_nonbank_lending', url: 'https://www.etoday.co.kr/news/view/2640037', title: '저축은행 연체율 9% 돌파…부동산 PF 부실이 주범', age: 0, time: '11:00',
-      s: { axis: 'market', sector: 'savings', score: 66, entity: '저축은행 업권', event_key: '저축은행|연체율 9%대', fact: '저축은행 연체율은 9월 말 9.1%로 전분기 대비 0.6%포인트 상승했습니다.', hook: '우리금융저축은행 연체율 벤치마크에 닿습니다.', shook: '우리금융저축은행 연체율과 업권 평균의 격차에 닿습니다.', severity: true } },
+      s: { axis: 'market', sector: 'card_capital', score: 66, entity: '저축은행 업권', event_key: '저축은행|연체율 9%대', fact: '저축은행 연체율은 9월 말 9.1%로 전분기 대비 0.6%포인트 상승했습니다.', hook: '우리금융저축은행 연체율 벤치마크에 닿습니다.', shook: '우리금융저축은행 연체율과 업권 평균의 격차에 닿습니다.', severity: true } },
     // ── sector_insurance (보험) ── 40~
     { stage: 'sector_insurance', url: 'https://n.news.naver.com/mnews/article/009/0005400040', title: '생보사 K-ICS 비율 하락세…금리 하락에 경과조치 종료 부담', age: 0, time: '08:00',
       s: { axis: 'market', sector: 'insurance', score: 70, entity: '생명보험 업권', event_key: '생보사|K-ICS 하락', fact: '금융감독원 집계 기준 6월 말 생보사 평균 K-ICS 비율은 198%로 전분기 대비 6%포인트 하락했습니다.', hook: '동양생명·ABL생명 K-ICS 비율과 그룹 보험 자본 보강 수요에 닿습니다.', shook: '동양생명·ABL생명의 K-ICS 비율 금리 민감도와 경과조치 종료 시 자본 영향 추정치에 닿습니다.', severity: false } },
@@ -218,10 +218,11 @@ export async function mockResponse(label, requestBody, { date }) {
       const company = sec.companies.join('·');
       const news = sec.news.map((it, idx) => ({
         title: it.title, url: it.url, published: it.published, source_name: it.source_name, source_type: it.source_type,
-        summary: `${it.source_name}이(가) ${it.published.slice(0, 10)}에 보도한 바에 따르면 ${it.one_line_fact || it.title + '라는 내용입니다.'} ${it.sector_hook || it.cro_hook || `${company} 관련 포트폴리오에 영향을 줄 수 있는 사안입니다.`} 오늘 ${company} 리스크관리부는 관련 익스포저가 내부 한도 안에 있는지 확인할 필요가 있을까요?`,
+        // 1차 시도(피드백 없음)는 일부러 의문문·3문장 why 를 내보내 재요청 경로를 검증하고, 2차 시도는 규칙대로 서술문만 낸다.
+        summary: `${it.source_name}이(가) ${it.published.slice(0, 10)}에 보도한 바에 따르면 ${it.one_line_fact || it.title + '라는 내용입니다.'} 관련 수치는 ${it.published.slice(0, 10)} 기준입니다.${hasFeedback ? '' : ` 오늘 ${company} 리스크관리부는 관련 익스포저가 내부 한도 안에 있는지 확인할 필요가 있을까요?`}`,
         why_woori_cro: omitCompany && idx === 0
           ? '그룹 리스크 지표에 영향을 줄 수 있는 사안입니다. 관련 지표의 30~90일 변화가 의사결정 포인트입니다.'
-          : `그룹 관점에서는 ${it.cro_hook || '그룹 리스크 지표에 영향을 줄 수 있습니다.'} ${company} 관점에서는 ${it.sector_hook || `${sec.label_ko} 업권 익스포저에 닿습니다.`} ${company} 리스크관리부는 30~90일 안에 관련 한도·충당금 지표의 변화를 의사결정 포인트로 둡니다.`,
+          : `그룹 관점에서는 ${it.cro_hook || '그룹 리스크 지표에 영향을 줄 수 있습니다.'} ${company} 관점에서는 ${it.sector_hook || `${sec.label_ko} 업권 익스포저에 닿습니다.`}${hasFeedback ? '' : ` ${company} 리스크관리부는 30~90일 안에 관련 한도·충당금 지표의 변화를 의사결정 포인트로 둡니다.`}`,
         entity: it.entity || '', channel: it.axis === 'group' ? '우리금융그룹 계열사' : it.axis === 'supervision' ? '감독당국·정책' : it.axis === 'peer' ? '경쟁사 동향' : '금융시장',
         risk_type: it.axis === 'supervision' ? '준법·규제' : it.axis === 'group' ? '자본·건전성' : '신용·시장',
         urgency: it.score >= 85 ? '높음' : it.score >= 60 ? '중간' : '낮음', confidence: it.source_type === 'official' ? '높음' : '중간',
@@ -230,8 +231,8 @@ export async function mockResponse(label, requestBody, { date }) {
       }));
       const top = [...sec.news].sort((a, b) => b.score - a.score)[0];
       const judgment = top
-        ? `오늘 ${sec.label_ko} 업권의 가장 큰 리스크는 ${top.entity || top.title} 관련 사안이며, ${top.sector_hook || top.cro_hook || `${company} 관련 지표에 영향을 줄 수 있습니다.`} ${company} 리스크관리부가 오늘 볼 질문은 관련 익스포저와 한도 사용률이 내부 기준치 안에 있는지입니다.`
-        : `오늘 ${sec.label_ko} 업권에서 새로 확인된 리스크 사건은 없습니다. ${company} 리스크관리부가 오늘 볼 질문은 연체율·자본비율 등 상시 지표가 내부 기준치 안에 있는지입니다.`;
+        ? `오늘 ${sec.label_ko} 업권의 가장 큰 리스크는 ${top.entity || top.title} 관련 사안이며, ${top.sector_hook || top.cro_hook || `${company} 관련 지표에 영향을 줄 수 있습니다.`} ${company} 리스크관리부는 관련 익스포저와 한도 사용률이 내부 기준치 안에 있는지를 오늘의 확인 사항으로 둡니다.`
+        : `오늘 ${sec.label_ko} 업권에서 새로 확인된 리스크 사건은 없습니다. ${company} 리스크관리부는 연체율·자본비율 등 상시 지표가 내부 기준치 안에 있는지를 오늘의 확인 사항으로 둡니다.`;
       return { sector: sec.sector, judgment, news };
     });
     return textResponse(JSON.stringify({ sectors }), model);
@@ -252,7 +253,7 @@ export async function mockResponse(label, requestBody, { date }) {
     const injectBanned = SCENARIO === 'default' && !hasFeedback;
     const item = (it, idx) => ({
       title: it.title, url: it.url, published: it.published, source_name: it.source_name, source_type: it.source_type,
-      summary: `${it.source_name}이(가) ${it.published.slice(0, 10)}에 보도한 바에 따르면 ${it.one_line_fact || it.title + '라는 내용입니다.'} ${it.cro_hook || '우리금융 관련 포트폴리오에 영향을 줄 수 있는 사안입니다.'} 오늘 CRO는 관련 익스포저가 그룹 한도 안에 있는지 확인할 필요가 있을까요?`,
+      summary: `${it.source_name}이(가) ${it.published.slice(0, 10)}에 보도한 바에 따르면 ${it.one_line_fact || it.title + '라는 내용입니다.'} 관련 수치는 ${it.published.slice(0, 10)} 기준입니다.${injectBanned && idx === 0 ? ' 오늘 CRO는 관련 익스포저가 그룹 한도 안에 있는지 확인할 필요가 있을까요?' : ''}`,
       why_woori_cro: `${it.cro_hook || '우리금융 관련 지표에 영향을 줄 수 있습니다.'} 30~90일 안에 관련 한도와 충당금 수준을 재점검할지가 의사결정 포인트입니다.${injectBanned && idx === 0 ? ' 관련 지표를 점검해야 합니다.' : ''}`,
       entity: it.entity || '', channel: it.axis === 'group' ? '우리금융그룹 계열사' : it.axis === 'supervision' ? '감독당국·정책' : it.axis === 'peer' ? '경쟁사 동향' : it.axis === 'overseas' ? '해외·글로벌' : '금융시장',
       risk_type: it.axis === 'supervision' ? '준법·규제' : it.axis === 'group' ? '자본·건전성' : '신용·시장',
@@ -262,7 +263,7 @@ export async function mockResponse(label, requestBody, { date }) {
     });
     const top = Object.values(input).flat().sort((a, b) => b.score - a.score);
     const draft = {
-      executive_judgment: `오늘 가장 큰 리스크는 ${top[0]?.entity || '주요 사안'} 관련 사안입니다. ${top[0]?.cro_hook || '그룹 지표에 영향을 줄 수 있습니다.'} 오늘 CRO가 물어볼 질문은 동일 유형 리스크가 우리은행에서도 확인되는지입니다.`,
+      executive_judgment: `오늘 가장 큰 리스크는 ${top[0]?.entity || '주요 사안'} 관련 사안입니다. ${top[0]?.cro_hook || '그룹 지표에 영향을 줄 수 있습니다.'} 오늘 주시할 것은 동일 유형 리스크가 우리은행에서도 확인되는지 여부입니다.`,
       executive_judgment_bullets: top.slice(0, 4).map((c) => `${c.one_line_fact || c.title} ${c.cro_hook || '우리금융 지표에 영향을 줄 수 있습니다.'}`),
       critical: (input.critical || []).map(item), daily_news: (input.daily_news || []).map(item),
       subsidiary_news: (input.subsidiary_news || []).map(item), additional_news: (input.additional_news || []).map(item),

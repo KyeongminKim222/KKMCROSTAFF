@@ -3,12 +3,12 @@
 //
 // 목표: 실패 없이, 고품질로, 매일 '전체본 1 + 업권본 5'를 만든다.
 //   - 공통(그룹 공통, sector=group): 7건(6~8). 지주 관점 — 감독당국·거시·지주·경쟁 금융그룹·해외법인 소재국.
-//   - 업권(bank / card_capital / savings / insurance / securities_am): 각 3건(2~4). 해당 계열사 관점.
+//   - 업권(bank / card_capital(여전·저축은행) / insurance / securities_am): 각 3건(2~4, 업권별 target 은 config/sectors.json). 해당 계열사 관점.
 //   - 총량 약 20~23건. 업권 정의는 config/sectors.json 이 가진다 (코드가 읽는다).
 //
 // 단계 개요
 //   0. 설정·환경변수 로드 (OPENAI_MODEL_RESEARCH / SCORING / WRITING, DRY_RUN, FORCE_REGENERATE) + sectors.json
-//   1. 이전 브리핑 이력 로드 (public/briefing_history/*.json + public/briefing.json, 최근 3개; 공통+업권 기사 모두)
+//   1. 이전 브리핑 이력 로드 (docs/briefing_history/*.json + docs/briefing.json, 최근 3개; 공통+업권 기사 모두)
 //   2. 수집: researchStage() 8회 = 기존 5 (국내 언론 / 우리금융 계열사 / 경쟁사 / 글로벌 / 감독당국·공식자료)
 //      + 업권 3 (여전·저축은행 / 보험 / 증권·운용; sectors.json 의 keywords·companies·sources_hint 를 프롬프트에 주입)
 //      → 각 stage는 조사 메모 + [[SOURCE_METADATA]] (url,title,published) 를 돌려준다.
@@ -23,12 +23,13 @@
 //            → 자사 계열사 기사 1건 우선 → 점수순(목표 3, 최소 2, 최대 4) → 폴백 사다리(4일 → 임계 25)
 //            → 그래도 부족하면 적게 싣고 meta.sector_shortfall[sector] 기록. score≥90 & severity 면 섹션 내 critical:true.
 //   6. 작성(CRO writing): 공통 1회(summary / why_woori_cro / watchpoints / executive_judgment / insights 등)
-//      + 업권 2회 묶음 호출(bank+card_capital+savings / insurance+securities_am; 기사 작성 + sector judgment 2문장).
+//      + 업권 2회 묶음 호출(bank+card_capital / insurance+securities_am; 기사 작성 + sector judgment 2문장).
+//      summary·why_woori_cro·judgment 는 서술문만 허용 — 의문문('?', '까요', '합니까' 로 끝나는 문장)은 금지어처럼 검출해 재요청하고, 남으면 문장 단위로 제거한다.
 //      각 호출은 json_schema strict. 품질 위반(금지어·해라체·누락) 시 해당 호출만 1회 재요청, 그래도 실패하면
 //      one_line_fact / cro_hook / sector_hook 으로 코드가 조립한다 (실패 종료 금지).
 //   7. 후처리: 마크다운·URL 제거, 금지어 문장 제거, url/title/published 강제 덮어쓰기, 플래그 정리.
 //   8. 메타·이력: meta(pipeline_version, slots, sector_counts, sector_shortfall, models, usage, changes) 기록,
-//      public/briefing.json 저장, public/briefing_history/<date>.json 사본 저장(30일 유지).
+//      docs/briefing.json 저장, docs/briefing_history/<date>.json 사본 저장(30일 유지).
 //
 // 출력 JSON (하위 호환):
 //   - 기존 최상위 키(executive_judgment, critical, daily_news, subsidiary_news, additional_news, insights …)에는
@@ -37,7 +38,7 @@
 //   - 신규 `editions`: [{id:'all', label_ko:'전체본', sections:['common','bank',…]}, {id:'bank', sections:['common','bank']}, …]
 //
 // 테스트: DRY_RUN=1 이면 OpenAI 호출을 scripts/dry-run-fixtures.mjs 의 목 응답으로 대체하고
-//         결과를 public/briefing.dryrun.json 에 저장한다 (briefing.json은 건드리지 않는다).
+//         결과를 docs/briefing.dryrun.json 에 저장한다 (briefing.json은 건드리지 않는다).
 // =====================================================================================
 
 import { readFile, writeFile, mkdir, readdir, unlink } from 'node:fs/promises';
@@ -57,9 +58,9 @@ const MODELS = {
 };
 const cooldownMilliseconds = DRY_RUN ? 0 : Number(process.env.OPENAI_COOLDOWN_MS || 30_000);
 
-const outputPath = new URL(DRY_RUN ? '../public/briefing.dryrun.json' : '../public/briefing.json', import.meta.url);
-const liveBriefingPath = new URL('../public/briefing.json', import.meta.url);
-const historyDir = new URL('../public/briefing_history/', import.meta.url);
+const outputPath = new URL(DRY_RUN ? '../docs/briefing.dryrun.json' : '../docs/briefing.json', import.meta.url);
+const liveBriefingPath = new URL('../docs/briefing.json', import.meta.url);
+const historyDir = new URL('../docs/briefing_history/', import.meta.url);
 
 // 공통(그룹 공통) 확정 목표
 const COMMON_TARGET = 7;
@@ -70,7 +71,7 @@ const MAX_GLOBAL_ONLY = 2; // 공통 7건 중 글로벌 단독 기사 상한 (v2
 const MAX_CRITICAL = 2;
 const PROMOTE_MIN_SCORE = 70; // 공통이 최소치에 못 미칠 때 업권 후보를 공통으로 승격하는 하한
 // 업권별 확정 목표
-const SECTOR_TARGET = 3;
+const SECTOR_TARGET = 3; // 기본값. 업권별 target 은 config/sectors.json 의 `target` 으로 덮어쓴다 (여전·저축은행 4)
 const SECTOR_MIN = 2;
 const SECTOR_MAX = 4;
 const SECTOR_CRITICAL_SCORE = 90; // 업권 섹션 내 critical 표시 기준 (score≥90 & severity_flag)
@@ -88,7 +89,7 @@ const SECTORS = sectorConfig.sectors; // 순서 = 출력 순서
 const SECTOR_IDS = SECTORS.map((s) => s.id);
 const SECTOR_ENUM = ['group', ...SECTOR_IDS];
 const sectorById = Object.fromEntries(SECTORS.map((s) => [s.id, s]));
-const SECTOR_WRITING_BATCHES = [['bank', 'card_capital', 'savings'], ['insurance', 'securities_am']]
+const SECTOR_WRITING_BATCHES = [['bank', 'card_capital'], ['insurance', 'securities_am']]
   .map((ids) => ids.filter((id) => sectorById[id]));
 for (const id of SECTOR_IDS) if (!SECTOR_WRITING_BATCHES.some((b) => b.includes(id))) SECTOR_WRITING_BATCHES[SECTOR_WRITING_BATCHES.length - 1].push(id);
 const EDITIONS = [
@@ -96,6 +97,7 @@ const EDITIONS = [
   ...SECTORS.map((s) => ({ id: s.id, label_ko: s.edition_label_ko || `${s.label_ko}본`, sections: ['common', s.id] }))
 ];
 function sectorLabel(id) { return id === 'group' ? GROUP_DEF.label_ko : (sectorById[id]?.label_ko || id); }
+function sectorTarget(id) { const t = Number(sectorById[id]?.target); return Number.isFinite(t) && t > 0 ? Math.min(SECTOR_MAX, Math.max(SECTOR_MIN, t)) : SECTOR_TARGET; }
 function sectorCompanies(id) { return id === 'group' ? GROUP_DEF.companies : (sectorById[id]?.companies || []); }
 
 // ==== 비용/사용량 추적 (모델별) ====
@@ -302,6 +304,16 @@ const BANNED_PHRASES = [
   '기사 풀', '엄격히 적용', '생각보다 좁', '확인된 어제·오늘 기사', '조사 메모', '후보 기사', '선정된 기사', '이번 브리핑에서는'
 ];
 function findBannedPhrases(text) { return BANNED_PHRASES.filter((p) => String(text || '').includes(p)); }
+// 의문문 검출: '?' 또는 '까요/합니까/습니까/입니까/ㄹ까/나요/인가요' 로 끝나는 문장. summary·why_woori_cro·judgment·executive_judgment 에서는 금지어와 같이 취급한다.
+const QUESTION_END_RE = /(\?|까요|합니까|습니까|입니까|[을를일할될볼]까|나요|인가요|인가|일까|할까|될까)[\s.!"”’')\]]*$/;
+function isQuestionSentence(sentence) { return QUESTION_END_RE.test(String(sentence || '').trim()); }
+function findQuestionSentences(text) { return splitSentences(text).filter(isQuestionSentence); }
+function dropQuestionSentences(text) {
+  if (typeof text !== 'string') return text;
+  const sentences = splitSentences(text);
+  const kept = sentences.filter((s) => !isQuestionSentence(s));
+  return (kept.length ? kept : []).join(' ').trim();
+}
 function dropBannedSentences(text) {
   if (typeof text !== 'string') return text;
   const sentences = splitSentences(text);
@@ -318,7 +330,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let mockResponse = null;
 if (DRY_RUN) {
   ({ mockResponse } = await import('./dry-run-fixtures.mjs'));
-  console.log(`[DRY_RUN] OpenAI calls are mocked. Output → public/briefing.dryrun.json (scenario=${process.env.DRY_RUN_SCENARIO || 'default'})`);
+  console.log(`[DRY_RUN] OpenAI calls are mocked. Output → docs/briefing.dryrun.json (scenario=${process.env.DRY_RUN_SCENARIO || 'default'})`);
 }
 
 function extractOutputText(response) {
@@ -969,8 +981,9 @@ function selectSector(sectorId, pool, step, taken) {
   for (const c of unique) {
     if (selected.length >= SECTOR_MAX) break;
     if (selected.includes(c)) continue;
-    if (selected.length >= SECTOR_TARGET && c.score < HIGH_VALUE_SCORE) { log.push(`skip(${sectorId} target ${SECTOR_TARGET} reached, score ${c.score} < ${HIGH_VALUE_SCORE}): ${c.title}`); continue; }
-    take(c, selected.length >= SECTOR_TARGET ? 'high-value overflow' : 'score');
+    const target = sectorTarget(sectorId);
+    if (selected.length >= target && c.score < HIGH_VALUE_SCORE) { log.push(`skip(${sectorId} target ${target} reached, score ${c.score} < ${HIGH_VALUE_SCORE}): ${c.title}`); continue; }
+    take(c, selected.length >= target ? 'high-value overflow' : 'score');
   }
   return { selected: selected.slice(0, SECTOR_MAX), log, eligibleCount: eligible.length, uniqueCount: unique.length };
 }
@@ -1026,7 +1039,7 @@ const sectorShortfall = {};
 const taken = [...selected];
 for (const id of SECTOR_IDS) {
   const pool = candidates.filter((c) => c.sector === id && !taken.some((t) => t.key === c.key));
-  const result = runLadder(id, (step) => selectSector(id, pool, step, taken), SECTOR_TARGET, SECTOR_MIN);
+  const result = runLadder(id, (step) => selectSector(id, pool, step, taken), sectorTarget(id), SECTOR_MIN);
   for (const line of result.log) console.log(`  ${line}`);
   if (result.selected.length < SECTOR_MIN) {
     sectorShortfall[id] = `최근 ${result.step.windowDays}일 내 ${sectorLabel(id)} 업권 검증 후보가 ${result.selected.length}건에 그쳤습니다 (업권 후보 ${pool.length}건, 적격 ${result.eligibleCount}건, 사건 중복 제거 후 ${result.uniqueCount}건).`;
@@ -1151,8 +1164,10 @@ function writingInput() {
   return out;
 }
 const ARTICLE_RULES = `기사별 작성 규칙:
-- summary는 정확히 3문장이다. ① 확인된 사실(수치·날짜·주체를 명시; 증권사·신평사 분석은 '○○증권은 …라고 분석했습니다'처럼 분석 주체 표기) ② 우리금융에 직접 닿는 지점(어느 계열사·포트폴리오·지표인지) ③ 오늘 CRO가 확인할 질문 1개(의문문).
-- watchpoints는 2~3개이며, 각 항목은 '지표·일정·기준값'을 명사형 또는 의문문으로 쓴다 (예: '그룹 연체율 1.4% 이상 지속 여부', '금감원 제재 확정 공시 일정').
+- summary는 기사 내용의 사실 요약 2~3문장만 쓴다(수치·주체·날짜를 명시; 증권사·신평사 분석은 '○○증권은 …라고 분석했습니다'처럼 분석 주체 표기). 우리금융 관점·질문·당부·'확인 필요' 류 문장은 summary에 넣지 않는다.
+- why_woori_cro는 이 사안이 우리금융(업권이면 해당 계열사)에 닿는 지점을 1~2문장 서술문으로 쓴다. 질문 금지.
+- 의문문 절대 금지: summary·why_woori_cro·judgment·executive_judgment 어디에도 '?'나 '까요', '합니까', '습니까', '인가요'로 끝나는 문장을 쓰지 마라. 질문 대신 '○○ 지표가 기준치 안에 있는지가 오늘의 확인 사항입니다'처럼 서술문으로 쓴다.
+- watchpoints는 2~3개이며, 각 항목은 '지표·일정·기준값'을 명사형으로 쓴다 (예: '그룹 연체율 1.4% 이상 지속 여부', '금감원 제재 확정 공시 일정'). 의문문 금지.
 - source_name은 매체·기관명(입력값 참고). entity는 기사 주체. channel·risk_type은 짧은 한국어 명사구. urgency·confidence는 높음/중간/낮음.
 - 금지어(절대 사용 금지): '점검해야 합니다', '확인해야 합니다', '주목해야 합니다', '검증 가능한', '풀이 좁', '기사가 부족', '조사 근거', '조사 메모', '후보 기사'. 브리핑 작성 과정·데이터 수집 상황에 대한 언급은 어떤 필드에도 쓰지 마라.
 - 입력된 one_line_fact·cro_hook·sector_hook·research_excerpt 에 없는 수치·사실을 만들지 마라. 마크다운·URL·괄호 속 도메인을 쓰지 마라.`;
@@ -1164,10 +1179,10 @@ function buildWritingPrompt(feedback) {
 title, url, published, source_type, window, critical 은 입력값을 글자 그대로 복사하라.
 
 ${ARTICLE_RULES}
-- why_woori_cro는 2~3문장으로 ②③을 구체화한다 (영향 경로와 30~90일 의사결정 포인트).
+- why_woori_cro(공통): 그룹에 닿는 영향 경로를 1~2문장 서술문으로 쓴다 (어느 계열사·포트폴리오·지표인지, 30~90일 의사결정 포인트).
 
 종합 섹션 (전체본 기준, 그룹 공통 기사를 중심으로):
-- executive_judgment는 정확히 3문장: (1) 오늘 가장 큰 리스크 1개 (2) 그룹에 닿는 경로 (3) 오늘 CRO가 물어볼 질문 1개. 첫 문장부터 리스크 판단으로 시작하라.
+- executive_judgment는 정확히 3문장의 서술문: (1) 오늘 가장 큰 리스크 1개 (2) 그룹에 닿는 경로 (3) 오늘 주시할 것(지표·일정·기준값을 서술문으로). 첫 문장부터 리스크 판단으로 시작하고, 의문문은 쓰지 마라.
 - executive_judgment_bullets는 3~4개. 선정 기사 중 score가 높은 순으로 '사실 → 의미'를 자연스러운 2문장으로 쓴다. 라벨 단어('확인된 변화는' 등)로 시작하지 마라.
 - forward_looking_points 2~4개(title, horizon 예: '1~2주', likelihood, cro_angle 2문장, trigger 1문장).
 - insights: headline 1문장, bullets 3~5개(기사 간 공통 동인·전이경로), action_items 3~5개(담당 조직과 기한이 드러나는 행동), stance 1~2문장.
@@ -1190,9 +1205,9 @@ function buildSectorWritingPrompt(batchIds, feedback) {
 title, url, published, source_type, window, critical 은 입력값을 글자 그대로 복사하라. sector는 입력값과 같은 id를 쓴다.
 
 ${ARTICLE_RULES}
-- why_woori_cro는 '그룹 관점 1문장 + ○○(해당 업권 계열사명, companies 참고) 관점 1~2문장'으로 쓴다. 계열사명을 반드시 명시하고, sector_hook 의 내용을 구체화하라.
+- why_woori_cro(업권): '그룹 관점 1문장 + ○○(해당 업권 계열사명, companies 참고) 관점 1문장'의 서술문 2문장으로 쓴다. 계열사명을 반드시 명시하고, sector_hook 의 내용을 구체화하라. 질문 금지.
 
-업권별 judgment: 정확히 2문장. (1) 오늘 이 업권(해당 계열사)의 최대 리스크 1개와 그 경로 (2) 해당 계열사 리스크관리부가 오늘 확인할 질문 1개(의문문). 기사가 없는 업권이면 '오늘 (업권명) 업권에서 새로 확인된 리스크 사건은 없습니다.'로 시작하고 두 번째 문장은 상시 지표 질문을 쓴다.
+업권별 judgment: 정확히 2문장의 서술문. (1) 오늘 이 업권(해당 계열사)의 최대 리스크 1개와 그 경로 (2) 해당 계열사 리스크관리부가 오늘 주시할 지표·기준값(서술문, 의문문 금지). 기사가 없는 업권이면 '오늘 (업권명) 업권에서 새로 확인된 리스크 사건은 없습니다.'로 시작하고 두 번째 문장은 상시 지표를 서술문으로 쓴다.
 모든 서술은 정중한 합니다체이며 '한다·이다·있다·된다'로 문장을 끝내지 마라.
 ${feedback ? `\n이전 시도의 품질 문제 (모두 고쳐라):\n${feedback}\n` : ''}
 [[SECTORS]]
@@ -1207,8 +1222,12 @@ function itemProblems(it, { requireCompany } = {}) {
   const problems = [];
   const banned = [it.summary, it.why_woori_cro, ...(it.watchpoints || [])].flatMap(findBannedPhrases);
   if (banned.length) problems.push(`금지어 사용 (${[...new Set(banned)].join(', ')}): ${it.title}`);
-  if (sentenceCount(it.summary) < 3) problems.push(`summary가 3문장 미만: ${it.title}`);
-  if (sentenceCount(it.why_woori_cro) < 2) problems.push(`why_woori_cro가 2문장 미만: ${it.title}`);
+  const questions = [it.summary, it.why_woori_cro, ...(it.watchpoints || [])].flatMap(findQuestionSentences);
+  if (questions.length) problems.push(`의문문 사용 금지 (${questions.slice(0, 2).map((q) => `'${q.slice(0, 40)}'`).join(', ')}): ${it.title}`);
+  if (sentenceCount(it.summary) < 2) problems.push(`summary가 2문장 미만: ${it.title}`);
+  if (sentenceCount(it.summary) > 3) problems.push(`summary가 3문장 초과: ${it.title}`);
+  if (sentenceCount(it.why_woori_cro) < 1) problems.push(`why_woori_cro 누락: ${it.title}`);
+  if (sentenceCount(it.why_woori_cro) > 2) problems.push(`why_woori_cro가 2문장 초과: ${it.title}`);
   if ([it.summary, it.why_woori_cro, ...(it.watchpoints || [])].some(usesNonFormalKorean)) problems.push(`해라체 사용: ${it.title}`);
   if (requireCompany?.length && !requireCompany.some((name) => String(it.why_woori_cro || '').includes(name))) problems.push(`why_woori_cro에 계열사명(${requireCompany.join('/')}) 누락: ${it.title}`);
   return problems;
@@ -1227,6 +1246,7 @@ function writingProblems(draft) {
   const bannedNarrative = narrative.flatMap(findBannedPhrases);
   if (bannedNarrative.length) problems.push(`종합 섹션 금지어 사용: ${[...new Set(bannedNarrative)].join(', ')}`);
   if (narrative.some(usesNonFormalKorean)) problems.push('종합 섹션 해라체 사용');
+  if (findQuestionSentences(draft.executive_judgment).length) problems.push('executive_judgment에 의문문 사용 금지 (서술문 3문장)');
   if (sentenceCount(draft.executive_judgment) < 3) problems.push('executive_judgment가 3문장 미만');
   return problems;
 }
@@ -1240,6 +1260,7 @@ function sectorWritingProblems(draft, batchIds) {
     for (const it of got.news || []) problems.push(...itemProblems(it, { requireCompany: sectorCompanies(id) }));
     if (findBannedPhrases(got.judgment).length) problems.push(`${id} judgment 금지어 사용`);
     if (usesNonFormalKorean(got.judgment)) problems.push(`${id} judgment 해라체 사용`);
+    if (findQuestionSentences(got.judgment).length) problems.push(`${id} judgment에 의문문 사용 금지 (서술문 2문장)`);
     if (sentenceCount(got.judgment) < 2) problems.push(`${id} judgment가 2문장 미만`);
   }
   return problems;
@@ -1308,15 +1329,14 @@ function assembleItem(c) {
   const sourceName = guessSourceName(c.url);
   const fact = c.one_line_fact || `${c.title}라고 보도했습니다.`;
   const hook = c.cro_hook || `${channelOf(c)} 영역에서 우리금융 관련 포트폴리오에 영향을 줄 수 있는 사안입니다.`;
-  const question = `오늘 관련 익스포저와 지표 변화가 그룹 기준치 안에 있는지가 질문입니다.`;
   const isSector = c.sector && c.sector !== 'group';
   const companyName = isSector ? sectorCompanies(c.sector).join('·') : '';
   const sectorLine = isSector ? (c.sector_hook || `${companyName} 관점에서는 ${sectorLabel(c.sector)} 업권 익스포저와 관련 지표에 닿는 사안입니다.`) : '';
   return {
     title: c.title, url: c.url, published: c.published, source_name: sourceName,
-    summary: `${sourceName}이(가) ${c.published.slice(0, 10)}에 보도한 내용입니다. ${fact} ${hook} ${question}`,
+    summary: `${sourceName}이(가) ${c.published.slice(0, 10)}에 보도한 내용입니다. ${fact}`,
     why_woori_cro: isSector
-      ? `${hook} ${sectorLine} ${companyName} 리스크관리부는 30~90일 안에 관련 한도·충당금 지표의 변화 여부를 의사결정 포인트로 둡니다.`
+      ? `${hook} ${sectorLine}`
       : `${hook} 30~90일 안에 관련 한도·충당금·자본 지표의 변화 여부가 의사결정 포인트입니다.`,
     entity: c.entity || '', channel: channelOf(c), source_type: c.source_type, risk_type: riskTypeOf(c),
     urgency: urgencyOf(c), confidence: confidenceOf(c), critical: isSector ? Boolean(c.sector_critical) : c.category === 'critical', window: windowOf(c),
@@ -1327,15 +1347,15 @@ function assembleSectorJudgment(id) {
   const items = [...sectorSelected[id]].sort((a, b) => b.score - a.score);
   const top = items[0];
   const company = sectorCompanies(id).join('·');
-  if (!top) return `오늘 ${sectorLabel(id)} 업권에서 새로 확인된 리스크 사건은 없습니다. ${company} 리스크관리부가 오늘 볼 질문은 연체율·자본비율 등 상시 지표가 내부 기준치 안에 있는지입니다.`;
+  if (!top) return `오늘 ${sectorLabel(id)} 업권에서 새로 확인된 리스크 사건은 없습니다. ${company} 리스크관리부는 연체율·자본비율 등 상시 지표가 내부 기준치 안에 있는지를 오늘의 확인 사항으로 둡니다.`;
   const path = top.sector_hook || top.cro_hook || `${company}의 관련 포트폴리오와 지표에 영향을 줄 수 있습니다.`;
-  return `오늘 ${sectorLabel(id)} 업권의 가장 큰 리스크는 ${top.entity || top.title} 관련 사안이며, ${path} ${company} 리스크관리부가 오늘 볼 질문은 관련 익스포저와 한도 사용률이 기준치 안에 있는지입니다.`;
+  return `오늘 ${sectorLabel(id)} 업권의 가장 큰 리스크는 ${top.entity || top.title} 관련 사안이며, ${path} ${company} 리스크관리부는 관련 익스포저와 한도 사용률이 기준치 안에 있는지를 오늘의 확인 사항으로 둡니다.`;
 }
 function assembleFallbackBriefing() {
   const top = [...selected].sort((a, b) => b.score - a.score);
   const bullet = (c) => `${c.one_line_fact || c.title} ${c.cro_hook || `${channelOf(c)} 관점에서 우리금융 관련 지표에 영향을 줄 수 있습니다.`}`;
   const briefing = {
-    executive_judgment: `오늘 가장 큰 리스크는 ${top[0]?.entity || top[0]?.title || '주요 사안'} 관련 사안입니다. ${top[0]?.cro_hook || '그룹 포트폴리오와 자본 지표에 영향을 줄 수 있습니다.'} 오늘 CRO가 물어볼 질문은 관련 익스포저와 한도 사용률이 기준치 안에 있는지입니다.`,
+    executive_judgment: `오늘 가장 큰 리스크는 ${top[0]?.entity || top[0]?.title || '주요 사안'} 관련 사안입니다. ${top[0]?.cro_hook || '그룹 포트폴리오와 자본 지표에 영향을 줄 수 있습니다.'} 오늘 주시할 것은 관련 익스포저와 한도 사용률이 그룹 기준치 안에 있는지입니다.`,
     executive_judgment_bullets: top.slice(0, 4).map(bullet),
     forward_looking_points: top.slice(0, 2).map((c) => ({ title: c.event_key.replace(/\|/g, ' '), horizon: '1~2주', likelihood: '중간', cro_angle: `${c.cro_hook || '관련 지표의 변화를 지켜볼 사안입니다.'} 후속 발표가 나오면 영향 범위를 재평가합니다.`, trigger: `${c.entity || '관련 기관'}의 후속 발표 또는 수치 변화입니다.` })),
     insights: {
@@ -1370,9 +1390,9 @@ function finalizeItem(c, draftItems, critical) {
   item.risk_type = String(item.risk_type || '').trim() || riskTypeOf(c);
   if (!['높음', '중간', '낮음'].includes(item.urgency)) item.urgency = urgencyOf(c);
   if (!['높음', '중간', '낮음'].includes(item.confidence)) item.confidence = confidenceOf(c);
-  item.summary = dropBannedSentences(cleanText(item.summary));
-  item.why_woori_cro = dropBannedSentences(cleanText(item.why_woori_cro));
-  item.watchpoints = (Array.isArray(item.watchpoints) ? item.watchpoints : []).map(cleanText).filter((w) => w && findBannedPhrases(w).length === 0).slice(0, 3);
+  item.summary = dropQuestionSentences(dropBannedSentences(cleanText(item.summary)));
+  item.why_woori_cro = dropQuestionSentences(dropBannedSentences(cleanText(item.why_woori_cro)));
+  item.watchpoints = (Array.isArray(item.watchpoints) ? item.watchpoints : []).map(cleanText).filter((w) => w && findBannedPhrases(w).length === 0 && !isQuestionSentence(w)).slice(0, 3);
   while (item.watchpoints.length < 2) item.watchpoints.push(`${item.entity || item.channel} 관련 지표의 다음 발표·공시 일정`);
   if (sentenceCount(item.summary) < 2) item.summary = assembleItem(c).summary;
   if (sentenceCount(item.why_woori_cro) < 1) item.why_woori_cro = assembleItem(c).why_woori_cro;
@@ -1385,7 +1405,7 @@ function finalizeItem(c, draftItems, critical) {
 
 let briefing = writing.draft ? writing.draft : assembleFallbackBriefing();
 for (const key of NEWS_KEYS) briefing[key] = buckets[key].map((c) => finalizeItem(c, briefing[key] || [], key === 'critical'));
-briefing.executive_judgment = dropBannedSentences(cleanText(briefing.executive_judgment));
+briefing.executive_judgment = dropQuestionSentences(dropBannedSentences(cleanText(briefing.executive_judgment)));
 briefing.executive_judgment_bullets = (briefing.executive_judgment_bullets || []).map((b) => dropBannedSentences(cleanText(b))).filter(Boolean);
 briefing.insights ||= {};
 briefing.insights.headline = dropBannedSentences(cleanText(briefing.insights.headline || ''));
@@ -1411,7 +1431,7 @@ briefing.sector_judgment = {};
 for (const id of SECTOR_IDS) {
   const draft = sectorWriting[id];
   const news = sectorSelected[id].map((c) => finalizeItem(c, draft?.news || [], Boolean(c.sector_critical)));
-  let judgment = dropBannedSentences(cleanText(draft?.judgment || ''));
+  let judgment = dropQuestionSentences(dropBannedSentences(cleanText(draft?.judgment || '')));
   if (sentenceCount(judgment) < 2) judgment = assembleSectorJudgment(id);
   briefing.sectors[id] = { ...emptySectorSection(id, sectorShortfall[id] || ''), judgment, news };
   briefing.sector_judgment[id] = judgment;
@@ -1427,7 +1447,7 @@ if (residualNonFormal) console.warn(`Quality note: ${residualNonFormal} article(
 // 10. 메타 · 이력 · 저장
 // ---------------------------------------------------------------------------------
 async function saveHistory(finalBriefing) {
-  if (DRY_RUN) { console.log(`[DRY_RUN] Skipping history save (would write public/briefing_history/${date}.json).`); return; }
+  if (DRY_RUN) { console.log(`[DRY_RUN] Skipping history save (would write docs/briefing_history/${date}.json).`); return; }
   await mkdir(historyDir, { recursive: true });
   await writeFile(new URL(`${date}.json`, historyDir), `${JSON.stringify(finalBriefing, null, 2)}\n`, 'utf8');
   const cutoff = shiftDate(date, -HISTORY_RETENTION_DAYS);

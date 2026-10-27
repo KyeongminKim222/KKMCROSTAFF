@@ -1,80 +1,272 @@
 {
   "version": 1,
-  "description": "CRO STAFF 브리핑의 업권(sector) 정의. generate-daily-briefing.mjs 가 읽어 수집 프롬프트·채점 기준·확정 슬롯·출력 sectors/editions 를 만든다. 공통(group)은 지주 관점이며 별도 섹션 키를 갖지 않고 기존 최상위 키(critical/daily_news/subsidiary_news/additional_news)에 들어간다.",
+  "description": "CRO STAFF 브리핑의 업권(sector) 정의 (bank / card_capital=여전·저축은행 / insurance / securities_am). 각 업권의 선택 필드 target 은 그 업권의 일일 목표 건수(기본 3). generate-daily-briefing.mjs 가 읽어 수집 프롬프트·채점 기준·확정 슬롯·출력 sectors/editions 를 만든다. 공통(group)은 지주 관점이며 별도 섹션 키를 갖지 않고 기존 최상위 키(critical/daily_news/subsidiary_news/additional_news)에 들어간다.",
   "group": {
     "id": "group",
     "label_ko": "그룹 공통",
     "label_en": "Group Common",
-    "edition_label_ko": "전체본",
-    "companies": ["우리금융지주"],
+    "edition_label_ko": "전체",
+    "companies": [
+      "우리금융지주"
+    ],
     "scope_ko": "감독당국 조치·규정 변경(업권 전반), 거시·시장 급변(금리·환율·가계부채·PF 전반), 우리금융지주·그룹 차원 이슈(실적·자본·지배구조·M&A·출자), 경쟁 금융그룹 사고·제재, 우리은행 해외법인 소재국 리스크",
-    "keywords_ko": ["우리금융지주", "우리금융그룹", "금융지주", "금융위원회", "금융감독원", "한국은행", "금통위", "기준금리", "환율", "가계부채", "가계대출", "부동산 PF", "거시건전성", "금융안정", "KB금융", "신한금융", "하나금융", "NH농협금융", "해외법인", "베트남", "인도네시아", "캄보디아"],
-    "keywords_en": ["Woori Financial Group", "FSC", "FSS", "Bank of Korea", "Fed", "won", "household debt", "Vietnam", "Indonesia", "Cambodia"]
+    "keywords_ko": [
+      "우리금융지주",
+      "우리금융그룹",
+      "금융지주",
+      "금융위원회",
+      "금융감독원",
+      "한국은행",
+      "금통위",
+      "기준금리",
+      "환율",
+      "가계부채",
+      "가계대출",
+      "부동산 PF",
+      "거시건전성",
+      "금융안정",
+      "KB금융",
+      "신한금융",
+      "하나금융",
+      "NH농협금융",
+      "해외법인",
+      "베트남",
+      "인도네시아",
+      "캄보디아"
+    ],
+    "keywords_en": [
+      "Woori Financial Group",
+      "FSC",
+      "FSS",
+      "Bank of Korea",
+      "Fed",
+      "won",
+      "household debt",
+      "Vietnam",
+      "Indonesia",
+      "Cambodia"
+    ]
   },
   "sectors": [
     {
       "id": "bank",
       "label_ko": "은행",
       "label_en": "Bank",
-      "edition_label_ko": "은행본",
-      "companies": ["우리은행"],
+      "edition_label_ko": "은행업",
+      "companies": [
+        "우리은행"
+      ],
       "scope_ko": "가계·기업 연체율, 은행 부동산 PF, Basel·자본비율(CET1·스트레스완충자본), 금감원 은행 검사·제재, 내부통제·금융사고, 해외점포 건전성, 예대마진·NIM, 시중은행 사고",
-      "keywords_ko": ["우리은행", "은행 연체율", "기업대출", "가계대출", "주택담보대출", "은행 PF", "CET1", "자본비율", "바젤", "스트레스완충자본", "내부통제", "횡령", "금융사고", "기관경고", "NIM", "예대금리차", "해외점포", "시중은행", "국민은행", "신한은행", "하나은행", "농협은행", "기업은행"],
-      "keywords_en": ["Woori Bank", "Basel III", "CET1", "NPL", "net interest margin", "overseas branch"],
-      "sources_hint": ["금융감독원 은행검사 보도자료(fss.or.kr)", "은행연합회(kfb.or.kr)", "DART 전자공시(dart.fss.or.kr)"],
-      "source_domains": ["kfb.or.kr"],
+      "keywords_ko": [
+        "우리은행",
+        "은행 연체율",
+        "기업대출",
+        "가계대출",
+        "주택담보대출",
+        "은행 PF",
+        "CET1",
+        "자본비율",
+        "바젤",
+        "스트레스완충자본",
+        "내부통제",
+        "횡령",
+        "금융사고",
+        "기관경고",
+        "NIM",
+        "예대금리차",
+        "해외점포",
+        "시중은행",
+        "국민은행",
+        "신한은행",
+        "하나은행",
+        "농협은행",
+        "기업은행"
+      ],
+      "keywords_en": [
+        "Woori Bank",
+        "Basel III",
+        "CET1",
+        "NPL",
+        "net interest margin",
+        "overseas branch"
+      ],
+      "sources_hint": [
+        "금융감독원 은행검사 보도자료(fss.or.kr)",
+        "은행연합회(kfb.or.kr)",
+        "DART 전자공시(dart.fss.or.kr)"
+      ],
+      "source_domains": [
+        "kfb.or.kr"
+      ],
       "research_stage": null
     },
     {
       "id": "card_capital",
-      "label_ko": "여신전문금융",
-      "label_en": "Card & Capital",
-      "edition_label_ko": "여전본",
-      "companies": ["우리카드", "우리금융캐피탈"],
-      "scope_ko": "카드 연체율·리볼빙·카드론, 여전채 스프레드·조달비용, 캐피탈 자동차금융·기업금융·부동산 PF, 여신전문금융업법·가맹점수수료, 경쟁 카드사·캐피탈사 사고·제재·건전성",
-      "keywords_ko": ["우리카드", "우리금융캐피탈", "카드 연체율", "리볼빙", "카드론", "여전채", "여신전문금융", "여전사", "캐피탈", "자동차금융", "가맹점수수료", "카드사", "신한카드", "삼성카드", "KB국민카드", "현대카드", "현대캐피탈", "여신금융협회"],
-      "keywords_en": ["credit card delinquency", "card loan", "revolving", "capital company", "auto finance"],
-      "sources_hint": ["여신금융협회 공시·통계(crefia.or.kr)", "금융감독원 여전사 검사 보도자료", "한국신용평가·NICE신평 여전채 리포트"],
-      "source_domains": ["crefia.or.kr"],
-      "research_stage": "sector_nonbank_lending"
-    },
-    {
-      "id": "savings",
-      "label_ko": "저축은행",
-      "label_en": "Savings Bank",
-      "edition_label_ko": "저축은행본",
-      "companies": ["우리금융저축은행"],
-      "scope_ko": "저축은행 부동산 PF 부실·경공매, 연체율·고정이하여신, BIS 비율, 예금보험공사·저축은행중앙회·금감원 저축은행 감독, 업권 M&A·구조조정·영업정지, 예금금리 경쟁",
-      "keywords_ko": ["우리금융저축은행", "저축은행", "저축은행 PF", "저축은행 연체율", "BIS 비율", "저축은행중앙회", "예금보험공사", "예보", "적기시정조치", "영업정지", "저축은행 M&A", "예금금리"],
-      "keywords_en": ["savings bank", "mutual savings", "KDIC"],
-      "sources_hint": ["저축은행중앙회 공시(fsb.or.kr)", "예금보험공사(kdic.or.kr)", "금융감독원 저축은행 감독 보도자료"],
-      "source_domains": ["fsb.or.kr", "kdic.or.kr"],
-      "research_stage": "sector_nonbank_lending"
+      "label_ko": "여전·저축은행",
+      "label_en": "Card, Capital & Savings Bank",
+      "edition_label_ko": "여전·저축은행업",
+      "companies": [
+        "우리카드",
+        "우리금융캐피탈",
+        "우리금융저축은행"
+      ],
+      "scope_ko": "카드 연체율·리볼빙·카드론, 여전채 스프레드·조달비용, 캐피탈 자동차금융·기업금융·부동산 PF, 여신전문금융업법·가맹점수수료, 경쟁 카드사·캐피탈사 사고·제재·건전성; 저축은행 부동산 PF 부실·경공매, 연체율·고정이하여신, BIS 비율, 예금보험공사·저축은행중앙회·금감원 저축은행 감독, 업권 M&A·구조조정·영업정지, 예금금리 경쟁",
+      "keywords_ko": [
+        "우리카드",
+        "우리금융캐피탈",
+        "카드 연체율",
+        "리볼빙",
+        "카드론",
+        "여전채",
+        "여신전문금융",
+        "여전사",
+        "캐피탈",
+        "자동차금융",
+        "가맹점수수료",
+        "카드사",
+        "신한카드",
+        "삼성카드",
+        "KB국민카드",
+        "현대카드",
+        "현대캐피탈",
+        "여신금융협회",
+        "우리금융저축은행",
+        "저축은행",
+        "저축은행 PF",
+        "저축은행 연체율",
+        "BIS 비율",
+        "저축은행중앙회",
+        "예금보험공사",
+        "예보",
+        "적기시정조치",
+        "영업정지",
+        "저축은행 M&A",
+        "예금금리"
+      ],
+      "keywords_en": [
+        "credit card delinquency",
+        "card loan",
+        "revolving",
+        "capital company",
+        "auto finance",
+        "savings bank",
+        "mutual savings",
+        "KDIC"
+      ],
+      "sources_hint": [
+        "여신금융협회 공시·통계(crefia.or.kr)",
+        "금융감독원 여전사 검사 보도자료",
+        "한국신용평가·NICE신평 여전채 리포트",
+        "저축은행중앙회 공시(fsb.or.kr)",
+        "예금보험공사(kdic.or.kr)",
+        "금융감독원 저축은행 감독 보도자료"
+      ],
+      "source_domains": [
+        "crefia.or.kr",
+        "fsb.or.kr",
+        "kdic.or.kr"
+      ],
+      "research_stage": "sector_nonbank_lending",
+      "target": 4
     },
     {
       "id": "insurance",
       "label_ko": "보험",
       "label_en": "Insurance",
-      "edition_label_ko": "보험본",
-      "companies": ["ABL생명", "동양생명"],
+      "edition_label_ko": "보험업",
+      "companies": [
+        "ABL생명",
+        "동양생명"
+      ],
       "scope_ko": "K-ICS·지급여력비율, 금리 변동·해약환급·해지율, 자산운용 손실·대체투자·해외 부동산, 보험업법·IFRS17·계리가정 가이드라인, 금감원 보험 검사·제재, 경쟁 생명보험사 사고·건전성",
-      "keywords_ko": ["동양생명", "ABL생명", "생명보험", "생보사", "손해보험", "K-ICS", "킥스", "지급여력", "해약환급", "해지율", "IFRS17", "계리가정", "보험부채", "보험업법", "대체투자", "보험개발원", "생명보험협회", "삼성생명", "한화생명", "교보생명", "신한라이프"],
-      "keywords_en": ["K-ICS", "life insurer", "IFRS 17", "solvency"],
-      "sources_hint": ["보험개발원(kidi.or.kr)", "생명보험협회 공시(klia.or.kr)", "금융감독원 보험 검사·제재 보도자료"],
-      "source_domains": ["kidi.or.kr", "klia.or.kr"],
+      "keywords_ko": [
+        "동양생명",
+        "ABL생명",
+        "생명보험",
+        "생보사",
+        "손해보험",
+        "K-ICS",
+        "킥스",
+        "지급여력",
+        "해약환급",
+        "해지율",
+        "IFRS17",
+        "계리가정",
+        "보험부채",
+        "보험업법",
+        "대체투자",
+        "보험개발원",
+        "생명보험협회",
+        "삼성생명",
+        "한화생명",
+        "교보생명",
+        "신한라이프"
+      ],
+      "keywords_en": [
+        "K-ICS",
+        "life insurer",
+        "IFRS 17",
+        "solvency"
+      ],
+      "sources_hint": [
+        "보험개발원(kidi.or.kr)",
+        "생명보험협회 공시(klia.or.kr)",
+        "금융감독원 보험 검사·제재 보도자료"
+      ],
+      "source_domains": [
+        "kidi.or.kr",
+        "klia.or.kr"
+      ],
       "research_stage": "sector_insurance"
     },
     {
       "id": "securities_am",
       "label_ko": "증권·자산운용",
       "label_en": "Securities & Asset Management",
-      "edition_label_ko": "증권·운용본",
-      "companies": ["우리투자증권", "우리자산운용"],
+      "edition_label_ko": "증권·운용업",
+      "companies": [
+        "우리투자증권",
+        "우리자산운용"
+      ],
       "scope_ko": "NCR·증권사 부동산 PF 익스포저·채무보증, 시장 급변·ELS·파생결합증권, 펀드 환매 연기·운용리스크·사모펀드, 자본시장법·금감원 증권 검사·제재, 경쟁 증권사·운용사 사고·손실",
-      "keywords_ko": ["우리투자증권", "우리자산운용", "증권사", "NCR", "순자본비율", "채무보증", "증권사 PF", "ELS", "파생결합증권", "펀드 환매", "사모펀드", "운용사", "자산운용", "자본시장법", "금융투자협회", "한국투자증권", "미래에셋증권", "NH투자증권", "KB증권", "신한투자증권"],
-      "keywords_en": ["brokerage", "net capital ratio", "ELS", "fund redemption", "asset manager"],
-      "sources_hint": ["금융투자협회 공시(kofia.or.kr)", "한국거래소 시장경보(krx.co.kr)", "금융감독원 증권 검사·제재 보도자료"],
-      "source_domains": ["kofia.or.kr", "krx.co.kr"],
+      "keywords_ko": [
+        "우리투자증권",
+        "우리자산운용",
+        "증권사",
+        "NCR",
+        "순자본비율",
+        "채무보증",
+        "증권사 PF",
+        "ELS",
+        "파생결합증권",
+        "펀드 환매",
+        "사모펀드",
+        "운용사",
+        "자산운용",
+        "자본시장법",
+        "금융투자협회",
+        "한국투자증권",
+        "미래에셋증권",
+        "NH투자증권",
+        "KB증권",
+        "신한투자증권"
+      ],
+      "keywords_en": [
+        "brokerage",
+        "net capital ratio",
+        "ELS",
+        "fund redemption",
+        "asset manager"
+      ],
+      "sources_hint": [
+        "금융투자협회 공시(kofia.or.kr)",
+        "한국거래소 시장경보(krx.co.kr)",
+        "금융감독원 증권 검사·제재 보도자료"
+      ],
+      "source_domains": [
+        "kofia.or.kr",
+        "krx.co.kr"
+      ],
       "research_stage": "sector_securities"
     }
   ],
@@ -82,19 +274,25 @@
     {
       "id": "sector_nonbank_lending",
       "label": "Card/capital and savings bank sector research",
-      "sectors": ["card_capital", "savings"],
-      "minimum": 4
+      "sectors": [
+        "card_capital"
+      ],
+      "minimum": 5
     },
     {
       "id": "sector_insurance",
       "label": "Insurance sector research",
-      "sectors": ["insurance"],
+      "sectors": [
+        "insurance"
+      ],
       "minimum": 4
     },
     {
       "id": "sector_securities",
       "label": "Securities and asset management sector research",
-      "sectors": ["securities_am"],
+      "sectors": [
+        "securities_am"
+      ],
       "minimum": 4
     }
   ]

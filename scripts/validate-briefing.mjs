@@ -1,14 +1,14 @@
 // 드라이런 결과 검증: 스키마 키·newsItem 필드·금지어·분포·업권(sectors/editions)을 출력한다. 실패 항목이 있으면 exit 1.
-// 사용: node scripts/validate-briefing.mjs [public/briefing.dryrun.json]
+// 사용: node scripts/validate-briefing.mjs [docs/briefing.dryrun.json]
 import { readFile } from 'node:fs/promises';
 
-const path = process.argv[2] || 'public/briefing.dryrun.json';
+const path = process.argv[2] || 'docs/briefing.dryrun.json';
 const b = JSON.parse(await readFile(path, 'utf8'));
 const NEWS = ['critical', 'daily_news', 'subsidiary_news', 'additional_news'];
 const top = ['executive_judgment', 'executive_judgment_bullets', ...NEWS, 'forward_looking_points', 'insights', 'monitoring_points', 'meta'];
 const req = ['title', 'url', 'published', 'source_name', 'summary', 'why_woori_cro', 'entity', 'channel', 'source_type', 'risk_type', 'urgency', 'confidence', 'critical', 'window', 'watchpoints'];
 const banned = ['점검해야 합니다', '확인해야 합니다', '주목해야 합니다', '검증 가능', '조사 근거', '기사가 부족'];
-const SECTOR_IDS = ['bank', 'card_capital', 'savings', 'insurance', 'securities_am'];
+const SECTOR_IDS = ['bank', 'card_capital', 'insurance', 'securities_am']; // card_capital = 여전·저축은행 (savings 는 2026-10-27 card_capital 에 병합)
 const failures = [];
 const check = (ok, msg) => { if (!ok) failures.push(msg); return ok; };
 

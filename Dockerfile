@@ -2,7 +2,7 @@ FROM node:24-alpine
 
 WORKDIR /app
 COPY package.json server.mjs ./
-COPY public ./public
+COPY docs/briefing.json ./docs/briefing.json
 
 ENV NODE_ENV=production
 EXPOSE 8080

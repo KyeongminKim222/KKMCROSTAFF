@@ -10,7 +10,7 @@ on:
         type: boolean
         default: true
       force_regenerate:
-        description: 'Regenerate even if today''s briefing already exists (overwrites public/briefing.json)'
+        description: 'Regenerate even if today''s briefing already exists (overwrites docs/briefing.json)'
         type: boolean
         default: false
 
@@ -48,11 +48,11 @@ jobs:
           if [ "$FORCE_REGENERATE" = "1" ]; then
             echo "force_regenerate requested. Proceeding regardless of existing briefing."
             SKIP=false
-          elif [ ! -f public/briefing.json ]; then
+          elif [ ! -f docs/briefing.json ]; then
             echo "No briefing.json found on main. Proceeding."
             SKIP=false
           else
-            EXISTING=$(node -e "const b=require('./public/briefing.json'); console.log((b.meta&&b.meta.briefing_date)||'')")
+            EXISTING=$(node -e "const b=require('./docs/briefing.json'); console.log((b.meta&&b.meta.briefing_date)||'')")
             if [ "$EXISTING" != "$TODAY" ]; then
               echo "No briefing for $TODAY yet (current: $EXISTING). Proceeding."
               SKIP=false
@@ -78,27 +78,30 @@ jobs:
         run: |
           git config user.name "CRO Staff Automation"
           git config user.email "actions@users.noreply.github.com"
-          git add public/briefing.json public/briefing_history
+          git add docs/briefing.json docs/briefing_history
           git commit -m "Update daily CRO Staff briefing" || exit 0
           git push
 
-      - name: Wait for Render auto-deploy
+      # GitHub Pages (Source: main /docs) is deployed by the automatic 'pages-build-deployment' workflow after the push above.
+      # Poll the published briefing.json until it carries today's briefing_date; the email goes out only after that.
+      - name: Wait for GitHub Pages deploy
         if: steps.dupguard.outputs.skip != 'true'
         env:
-          RENDER_HEALTH_URL: https://kkmcrostaff.onrender.com/healthz
+          PAGES_BASE_URL: ${{ vars.PAGES_BASE_URL || 'https://kyeongminkim222.github.io/KKMCROSTAFF/' }}
         run: |
-          EXPECTED_DATE=$(node -e "console.log(require('./public/briefing.json').meta.briefing_date)")
+          EXPECTED_DATE=$(node -e "console.log(require('./docs/briefing.json').meta.briefing_date)")
+          PAGES_JSON_URL="${PAGES_BASE_URL%/}/briefing.json"
           for attempt in $(seq 1 45); do
-            BODY=$(curl -fsS --max-time 20 "$RENDER_HEALTH_URL" || true)
-            DEPLOYED_DATE=$(printf '%s' "$BODY" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).briefing_date||'')}catch{console.log('')}})")
+            BODY=$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "${PAGES_JSON_URL}?t=$(date +%s)" || true)
+            DEPLOYED_DATE=$(printf '%s' "$BODY" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log((JSON.parse(s).meta||{}).briefing_date||'')}catch{console.log('')}})")
             if [ "$DEPLOYED_DATE" = "$EXPECTED_DATE" ]; then
-              echo "Render deployed briefing date $EXPECTED_DATE"
+              echo "GitHub Pages published briefing date $EXPECTED_DATE at $PAGES_JSON_URL"
               exit 0
             fi
-            echo "Waiting for Render deploy ($attempt/45): expected=$EXPECTED_DATE deployed=$DEPLOYED_DATE"
+            echo "Waiting for GitHub Pages deploy ($attempt/45): expected=$EXPECTED_DATE published=$DEPLOYED_DATE"
             sleep 20
           done
-          echo "Render did not deploy the new briefing in time. Email not sent."
+          echo "GitHub Pages did not publish the new briefing in time. Email not sent."
           exit 1
 
       - name: Wait until 07:00 KST for scheduled delivery
@@ -123,8 +126,7 @@ jobs:
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           EMAIL_TO_BANK: ${{ secrets.EMAIL_TO_BANK }}
           EMAIL_TO_CARD_CAPITAL: ${{ secrets.EMAIL_TO_CARD_CAPITAL }}
-          EMAIL_TO_SAVINGS: ${{ secrets.EMAIL_TO_SAVINGS }}
           EMAIL_TO_INSURANCE: ${{ secrets.EMAIL_TO_INSURANCE }}
           EMAIL_TO_SECURITIES_AM: ${{ secrets.EMAIL_TO_SECURITIES_AM }}
-          REPORT_URL: ${{ secrets.REPORT_URL }}
+          REPORT_URL: ${{ vars.PAGES_BASE_URL || 'https://kyeongminkim222.github.io/KKMCROSTAFF/' }}
         run: python scripts/send-gmail.py --all-editions
