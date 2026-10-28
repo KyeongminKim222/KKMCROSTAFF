@@ -13,6 +13,10 @@ on:
         description: 'Regenerate even if today''s briefing already exists (overwrites docs/briefing.json)'
         type: boolean
         default: false
+      test_mode:
+        description: 'Send only to the EMAIL_TO_TEST secret (owner test), not to the 28 recipients'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -128,5 +132,7 @@ jobs:
           EMAIL_TO_CARD_CAPITAL: ${{ secrets.EMAIL_TO_CARD_CAPITAL }}
           EMAIL_TO_INSURANCE: ${{ secrets.EMAIL_TO_INSURANCE }}
           EMAIL_TO_SECURITIES_AM: ${{ secrets.EMAIL_TO_SECURITIES_AM }}
+          EMAIL_TO_TEST: ${{ secrets.EMAIL_TO_TEST }}
+          TEST_MODE: ${{ inputs.test_mode == true && '1' || '0' }}
           REPORT_URL: ${{ vars.PAGES_BASE_URL || 'https://kyeongminkim222.github.io/KKMCROSTAFF/' }}
         run: python scripts/send-gmail.py --all-editions

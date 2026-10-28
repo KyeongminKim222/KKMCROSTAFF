@@ -43,6 +43,7 @@
 
 import { readFile, writeFile, mkdir, readdir, unlink } from 'node:fs/promises';
 import { RISK_ORDER, LEVELS, normalizeRiskTags, normalizeRiskBrief } from './risk-utils.mjs';
+import { topicBlock } from './topic-caps.mjs';
 
 // ---------------------------------------------------------------------------------
 // 0. 설정 · 환경변수
@@ -957,6 +958,8 @@ function dedupeEvents(eligible, taken, log, { perCompetitor }) {
     if (takenDup) { log.push(`drop(same event already selected in ${takenDup.selected_section}: "${takenDup.title}"): ${c.title}`); continue; }
     const dup = unique.find((u) => sameEvent(u, c));
     if (dup) { log.push(`drop(same event as "${dup.title}" score ${dup.score}): ${c.title} (score ${c.score})`); continue; }
+    const blocked = topicBlock(c, unique, taken);
+    if (blocked) { log.push(`drop(topic cap: ${blocked}): ${c.title}`); continue; }
     if (perCompetitor) {
       const company = c.axis === 'peer' ? competitorOf(`${c.title} ${c.entity}`) : '';
       if (company) {

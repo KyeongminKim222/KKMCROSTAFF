@@ -56,6 +56,11 @@ def normalize_report_url(raw):
 
 
 def recipients_for(edition_id):
+    # TEST_MODE=1: 시험 발송. 전체본만 EMAIL_TO_TEST(본인 주소)로 보내고 나머지 판은 보내지 않는다.
+    if os.environ.get("TEST_MODE", "").strip() == "1":
+        env_name = "EMAIL_TO_TEST" if edition_id == "all" else ""
+        raw = os.environ.get(env_name, "") if env_name else ""
+        return [item.strip() for item in raw.replace(";", ",").split(",") if item.strip()]
     env_name = EDITION_RECIPIENT_ENV.get(edition_id, "")
     raw = os.environ.get(env_name, "") if env_name else ""
     return [item.strip() for item in raw.replace(";", ",").split(",") if item.strip()]
