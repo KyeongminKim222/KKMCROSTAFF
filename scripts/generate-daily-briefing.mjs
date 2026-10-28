@@ -42,6 +42,7 @@
 // =====================================================================================
 
 import { readFile, writeFile, mkdir, readdir, unlink } from 'node:fs/promises';
+import { RISK_ORDER, LEVELS, normalizeRiskTags, normalizeRiskBrief } from './risk-utils.mjs';
 
 // ---------------------------------------------------------------------------------
 // 0. 설정 · 환경변수
@@ -1096,21 +1097,29 @@ function riskTypeOf(c) {
 // ---------------------------------------------------------------------------------
 const newsItemSchema = {
   type: 'object', additionalProperties: false,
-  required: ['title', 'url', 'published', 'source_name', 'summary', 'why_woori_cro', 'entity', 'channel', 'source_type', 'risk_type', 'urgency', 'confidence', 'critical', 'window', 'watchpoints'],
+  required: ['title', 'url', 'published', 'source_name', 'summary', 'why_woori_cro', 'entity', 'channel', 'source_type', 'risk_type', 'urgency', 'confidence', 'critical', 'window', 'watchpoints', 'risk_tags'],
   properties: {
     title: { type: 'string' }, url: { type: 'string' }, published: { type: 'string' }, source_name: { type: 'string' },
     summary: { type: 'string' }, why_woori_cro: { type: 'string' }, entity: { type: 'string' }, channel: { type: 'string' },
     source_type: { type: 'string', enum: ['media', 'official'] }, risk_type: { type: 'string' },
     urgency: { type: 'string', enum: ['높음', '중간', '낮음'] }, confidence: { type: 'string', enum: ['높음', '중간', '낮음'] },
     critical: { type: 'boolean' }, window: { type: 'string', enum: ['primary', 'related'] },
-    watchpoints: { type: 'array', minItems: 2, maxItems: 3, items: { type: 'string' } }
+    watchpoints: { type: 'array', minItems: 2, maxItems: 3, items: { type: 'string' } },
+    risk_tags: { type: 'array', minItems: 1, maxItems: 3, items: { type: 'string', enum: RISK_ORDER } }
   }
 };
 const briefingSchema = {
   type: 'object', additionalProperties: false,
-  required: ['executive_judgment', 'executive_judgment_bullets', 'critical', 'daily_news', 'subsidiary_news', 'additional_news', 'forward_looking_points', 'insights', 'monitoring_points'],
+  required: ['executive_judgment', 'executive_judgment_bullets', 'risk_brief', 'critical', 'daily_news', 'subsidiary_news', 'additional_news', 'forward_looking_points', 'insights', 'monitoring_points'],
   properties: {
     executive_judgment: { type: 'string' },
+    risk_brief: {
+      type: 'array', minItems: 3, maxItems: 7,
+      items: {
+        type: 'object', additionalProperties: false, required: ['risk', 'level', 'headline', 'check'],
+        properties: { risk: { type: 'string', enum: RISK_ORDER }, level: { type: 'string', enum: LEVELS }, headline: { type: 'string' }, check: { type: 'string' } }
+      }
+    },
     executive_judgment_bullets: { type: 'array', minItems: 3, maxItems: 4, items: { type: 'string' } },
     critical: { type: 'array', minItems: 0, maxItems: CATEGORY_CAPS.critical, items: newsItemSchema },
     daily_news: { type: 'array', minItems: 0, maxItems: CATEGORY_CAPS.daily_news, items: newsItemSchema },
@@ -1170,6 +1179,7 @@ const ARTICLE_RULES = `기사별 작성 규칙:
 - watchpoints는 2~3개이며, 각 항목은 '지표·일정·기준값'을 명사형으로 쓴다 (예: '그룹 연체율 1.4% 이상 지속 여부', '금감원 제재 확정 공시 일정'). 의문문 금지.
 - source_name은 매체·기관명(입력값 참고). entity는 기사 주체. channel·risk_type은 짧은 한국어 명사구. urgency·confidence는 높음/중간/낮음.
 - 금지어(절대 사용 금지): '점검해야 합니다', '확인해야 합니다', '주목해야 합니다', '검증 가능한', '풀이 좁', '기사가 부족', '조사 근거', '조사 메모', '후보 기사'. 브리핑 작성 과정·데이터 수집 상황에 대한 언급은 어떤 필드에도 쓰지 마라.
+- risk_tags: 이 기사가 닿는 리스크 유형 1~3개를 신용리스크·시장리스크·운영리스크·금리리스크·유동성리스크·시스템리스크·평판리스크 중에서만 고른다. 가장 직접적인 유형을 첫 번째에 둔다. watchpoints는 그 유형 관점에서 확인할 지표·일정으로 쓴다.
 - 입력된 one_line_fact·cro_hook·sector_hook·research_excerpt 에 없는 수치·사실을 만들지 마라. 마크다운·URL·괄호 속 도메인을 쓰지 마라.`;
 
 function buildWritingPrompt(feedback) {
@@ -1183,6 +1193,7 @@ ${ARTICLE_RULES}
 
 종합 섹션 (전체본 기준, 그룹 공통 기사를 중심으로):
 - executive_judgment는 정확히 3문장의 서술문: (1) 오늘 가장 큰 리스크 1개 (2) 그룹에 닿는 경로 (3) 오늘 주시할 것(지표·일정·기준값을 서술문으로). 첫 문장부터 리스크 판단으로 시작하고, 의문문은 쓰지 마라.
+- risk_brief는 3~7개의 리스크 유형 카드. 오늘 선정 기사에 근거가 있는 유형만 쓰고(7개를 억지로 채우지 마라), 위험도(level) 높은 순으로 정렬한다. headline은 그 리스크의 오늘 핵심을 25자 안팎의 명사구로(수치는 입력에 있는 것만), check는 무엇을 확인할지를 지표·일정 중심의 40자 이내 명사형으로 쓴다(예: '미 10년물 5.0% 상회 여부'). 장문·의문문·'~해야 합니다' 금지.
 - executive_judgment_bullets는 3~4개. 선정 기사 중 score가 높은 순으로 '사실 → 의미'를 자연스러운 2문장으로 쓴다. 라벨 단어('확인된 변화는' 등)로 시작하지 마라.
 - forward_looking_points 2~4개(title, horizon 예: '1~2주', likelihood, cro_angle 2문장, trigger 1문장).
 - insights: headline 1문장, bullets 3~5개(기사 간 공통 동인·전이경로), action_items 3~5개(담당 조직과 기한이 드러나는 행동), stance 1~2문장.
@@ -1248,6 +1259,12 @@ function writingProblems(draft) {
   if (narrative.some(usesNonFormalKorean)) problems.push('종합 섹션 해라체 사용');
   if (findQuestionSentences(draft.executive_judgment).length) problems.push('executive_judgment에 의문문 사용 금지 (서술문 3문장)');
   if (sentenceCount(draft.executive_judgment) < 3) problems.push('executive_judgment가 3문장 미만');
+  const rb = Array.isArray(draft.risk_brief) ? draft.risk_brief : [];
+  if (rb.length < 3) problems.push('risk_brief가 3개 미만');
+  const rbText = rb.flatMap((r) => [r.headline, r.check]);
+  if (rbText.flatMap(findBannedPhrases).length) problems.push('risk_brief 금지어 사용');
+  if (rbText.some((t) => findQuestionSentences(t).length)) problems.push('risk_brief에 의문문 사용 금지');
+  if (rb.some((r) => String(r.headline || '').length > 45 || String(r.check || '').length > 60)) problems.push('risk_brief headline(45자)·check(60자) 길이 초과 — 더 압축');
   return problems;
 }
 function sectorWritingProblems(draft, batchIds) {
@@ -1399,6 +1416,7 @@ function finalizeItem(c, draftItems, critical) {
   // 새 필드 (기존 웹·메일은 무시한다)
   item.score = c.score; item.axis = c.axis; item.event_key = c.event_key; item.one_line_fact = c.one_line_fact; item.cro_hook = c.cro_hook;
   item.sector = c.sector || 'group'; item.sector_hook = c.sector_hook || '';
+  item.risk_tags = normalizeRiskTags(item.risk_tags, `${item.title} ${item.summary} ${item.why_woori_cro}`, c.axis);
   if (c.promoted_from_sector) item.promoted_from_sector = c.promoted_from_sector;
   return item;
 }
@@ -1414,6 +1432,7 @@ briefing.insights.action_items = (briefing.insights.action_items || []).map((b) 
 briefing.insights.stance = dropBannedSentences(cleanText(briefing.insights.stance || ''));
 briefing.insights.as_of = `${date} KST`;
 briefing.monitoring_points = (briefing.monitoring_points || []).map((b) => dropBannedSentences(cleanText(b))).filter(Boolean);
+briefing.risk_brief = normalizeRiskBrief(briefing.risk_brief, NEWS_KEYS.flatMap((key) => briefing[key] || []), (x) => dropQuestionSentences(dropBannedSentences(cleanText(x))));
 briefing.forward_looking_points = (briefing.forward_looking_points || []).map((p) => ({ ...p, title: cleanText(p.title), cro_angle: dropBannedSentences(cleanText(p.cro_angle)), trigger: cleanText(p.trigger) }));
 {
   const fallback = assembleFallbackBriefing();

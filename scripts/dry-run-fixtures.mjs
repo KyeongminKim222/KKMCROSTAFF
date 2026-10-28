@@ -227,7 +227,8 @@ export async function mockResponse(label, requestBody, { date }) {
         risk_type: it.axis === 'supervision' ? '준법·규제' : it.axis === 'group' ? '자본·건전성' : '신용·시장',
         urgency: it.score >= 85 ? '높음' : it.score >= 60 ? '중간' : '낮음', confidence: it.source_type === 'official' ? '높음' : '중간',
         critical: it.critical, window: it.window,
-        watchpoints: [`${it.entity || '관련 기관'} 후속 발표 일정`, `${company} 관련 지표 기준값 대비 변화`]
+        watchpoints: [`${it.entity || '관련 기관'} 후속 발표 일정`, `${company} 관련 지표 기준값 대비 변화`],
+        risk_tags: [it.axis === 'supervision' ? '운영리스크' : it.axis === 'group' ? '신용리스크' : '시장리스크', '평판리스크']
       }));
       const top = [...sec.news].sort((a, b) => b.score - a.score)[0];
       const judgment = top
@@ -259,12 +260,14 @@ export async function mockResponse(label, requestBody, { date }) {
       risk_type: it.axis === 'supervision' ? '준법·규제' : it.axis === 'group' ? '자본·건전성' : '신용·시장',
       urgency: it.score >= 85 ? '높음' : it.score >= 60 ? '중간' : '낮음', confidence: it.source_type === 'official' ? '높음' : '중간',
       critical: it.critical, window: it.window,
-      watchpoints: [`${it.entity || '관련 기관'} 후속 발표 일정`, `${it.axis === 'group' ? '그룹' : '우리은행'} 관련 지표 기준값 대비 변화`]
+      watchpoints: [`${it.entity || '관련 기관'} 후속 발표 일정`, `${it.axis === 'group' ? '그룹' : '우리은행'} 관련 지표 기준값 대비 변화`],
+        risk_tags: [it.axis === 'supervision' ? '운영리스크' : it.axis === 'group' ? '신용리스크' : '시장리스크', '평판리스크']
     });
     const top = Object.values(input).flat().sort((a, b) => b.score - a.score);
     const draft = {
       executive_judgment: `오늘 가장 큰 리스크는 ${top[0]?.entity || '주요 사안'} 관련 사안입니다. ${top[0]?.cro_hook || '그룹 지표에 영향을 줄 수 있습니다.'} 오늘 주시할 것은 동일 유형 리스크가 우리은행에서도 확인되는지 여부입니다.`,
       executive_judgment_bullets: top.slice(0, 4).map((c) => `${c.one_line_fact || c.title} ${c.cro_hook || '우리금융 지표에 영향을 줄 수 있습니다.'}`),
+      risk_brief: [{ risk: '신용리스크', level: '높음', headline: `${top[0]?.entity || '주요 사안'} 관련 건전성 변화`, check: '관련 익스포저 한도 사용률' }, { risk: '시장리스크', level: '중간', headline: '시장 변동성 확대 국면', check: '평가손익 민감도 변화 여부' }, { risk: '운영리스크', level: '중간', headline: '내부통제·제재 이슈 확산', check: '동일 유형 위반 자체점검 결과' }],
       critical: (input.critical || []).map(item), daily_news: (input.daily_news || []).map(item),
       subsidiary_news: (input.subsidiary_news || []).map(item), additional_news: (input.additional_news || []).map(item),
       forward_looking_points: top.slice(0, 2).map((c) => ({ title: `${c.entity || c.title} 후속 전개`, horizon: '1~2주', likelihood: '중간', cro_angle: `${c.cro_hook || '관련 지표에 영향을 줄 수 있습니다.'} 후속 발표가 나오면 영향 범위를 다시 평가합니다.`, trigger: `${c.entity || '관련 기관'}의 추가 발표 또는 수치 변화입니다.` })),

@@ -1032,7 +1032,25 @@ body.chat-open .chat-fab { display: none; }
 @media(max-width:859px){.chat-robot,.chat-robot img.rf{width:132px;height:132px}}
 @media(prefers-reduced-motion:reduce){.chat-robot,.chat-robot.is-talk{animation:none!important}}
 </style>
-<style id="herologo-off">.hero-logo{display:none!important}</style><style id="chat-suggest-v13">#chatSuggest.is-hidden{display:none!important}.chat-panel .chat-log{flex:1 1 auto;min-height:0}</style></head>
+<style id="herologo-off">.hero-logo{display:none!important}</style><style id="chat-suggest-v13">#chatSuggest.is-hidden{display:none!important}.chat-panel .chat-log{flex:1 1 auto;min-height:0}</style><style id="risk-brief-v14">
+:root{--rk-credit:#D14343;--rk-market:#0067AC;--rk-op:#7B57B8;--rk-rate:#E08A2C;--rk-liq:#12968A;--rk-sys:#4A5D7A;--rk-rep:#CC5A96}
+.rk-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0;padding:0;list-style:none}
+.rk-card{display:flex;flex-direction:column;gap:7px;padding:12px 14px 12px;background:#fff;border:1px solid var(--line);border-top:3px solid var(--rkc,#0067AC);border-radius:10px;min-width:0}
+.rk-top{display:flex;align-items:center;gap:8px;min-width:0}
+.rk-name{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;font-weight:800;color:var(--rkc,#0067AC);letter-spacing:-.01em}
+.rk-name::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--rkc,#0067AC)}
+.rk-lv{margin-left:auto;font-size:11px;font-weight:700;padding:1px 9px;border-radius:999px;line-height:18px;border:1px solid transparent}
+.rk-lv.hi{background:#FDECEC;color:#B42323;border-color:#F6C9C9}
+.rk-lv.mid{background:#FFF4E3;color:#A8620A;border-color:#F4DDB5}
+.rk-lv.lo{background:#EAF6EE;color:#1F7A45;border-color:#C6E6D2}
+.rk-head{margin:0;font-size:15px;line-height:1.45;font-weight:700;color:var(--navy);letter-spacing:-.01em}
+.rk-check{margin:0;display:flex;gap:7px;align-items:flex-start;font-size:13px;line-height:1.5;color:var(--ink-2);padding-top:7px;border-top:1px dashed var(--line)}
+.rk-check b{flex:0 0 auto;font-size:11px;font-weight:800;color:#fff;background:var(--rkc,#0067AC);border-radius:4px;padding:0 6px;line-height:18px;margin-top:1px}
+.rk-tags{display:inline-flex;flex-wrap:wrap;gap:4px;margin-left:6px;vertical-align:middle}
+.rk-tag{display:inline-block;font-size:11px;font-weight:700;line-height:17px;padding:0 7px;border-radius:999px;color:var(--rkc,#0067AC);background:#fff;border:1px solid var(--rkc,#0067AC)}
+.watch-rel{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin:10px 0 0;font-size:12px;font-weight:700;color:var(--muted)}
+@media (max-width:640px){.rk-grid{grid-template-columns:1fr}.rk-tags{margin-left:4px}}
+</style></head>
 <body>
   <div id="app"></div>
   <script>
@@ -1563,21 +1581,45 @@ function sectionHead(title, count) {
   return h;
 }
 
+var RISK_META = {
+  '신용리스크': { c: '#D14343' }, '시장리스크': { c: '#0067AC' }, '운영리스크': { c: '#7B57B8' }, '금리리스크': { c: '#E08A2C' },
+  '유동성리스크': { c: '#12968A' }, '시스템리스크': { c: '#4A5D7A' }, '평판리스크': { c: '#CC5A96' }
+};
+function riskColor(name) { return (RISK_META[name] || { c: '#0067AC' }).c; }
+function riskShort(name) { return String(name || '').replace(/리스크$/, ''); }
+function riskTagsHtml(tags) {
+  if (!tags || !tags.length) return '';
+  return tags.map(function (t) { return '<span class="rk-tag" style="--rkc:' + riskColor(t) + '">' + esc(riskShort(t)) + '</span>'; }).join('');
+}
+function levelCls(l) { return l === '높음' ? 'hi' : l === '낮음' ? 'lo' : 'mid'; }
+
 function renderJudgmentBlock(data) {
-  var sentences = splitSentences(data.executive_judgment).filter(function (s) { return !isQuestion(s); });
-  var bullets = stripList(data.executive_judgment_bullets);
+  var cards = (data.risk_brief || []).filter(function (r) { return r && r.risk && r.headline; });
   var meta = data.meta || {};
-  var html = sectionHead('핵심 판단 포인트', bullets.length || null);
+  var html = sectionHead('핵심 판단 포인트', cards.length || null);
   html += '<div class="judgment-box">';
-  if (sentences.length) {
-    html += '<div class="judg-lead">' + sentences.map(function (s) { return '<p>' + esc(s) + '</p>'; }).join('') + '</div>';
-  }
-  if (bullets.length) {
-    html += '<ul class="judgment-bullets"' + (sentences.length ? '' : ' style="margin-top:0;padding-top:0;border-top:0"') + '>';
-    bullets.forEach(function (b) { html += '<li>' + esc(b) + '</li>'; });
+  if (cards.length) {
+    html += '<ul class="rk-grid">';
+    cards.forEach(function (r) {
+      html += '<li class="rk-card" style="--rkc:' + riskColor(r.risk) + '">';
+      html += '<div class="rk-top"><span class="rk-name">' + esc(r.risk) + '</span><span class="rk-lv ' + levelCls(r.level) + '">' + esc(r.level || '중간') + '</span></div>';
+      html += '<p class="rk-head">' + esc(stripQuestions(r.headline)) + '</p>';
+      if (r.check) html += '<p class="rk-check"><b>확인</b><span>' + esc(stripQuestions(r.check)) + '</span></p>';
+      html += '</li>';
+    });
     html += '</ul>';
+  } else {
+    /* risk_brief 가 없는 과거 데이터: 기존 서술형으로 표시 */
+    var sentences = splitSentences(data.executive_judgment).filter(function (s) { return !isQuestion(s); });
+    var bullets = stripList(data.executive_judgment_bullets);
+    if (sentences.length) html += '<div class="judg-lead">' + sentences.map(function (s) { return '<p>' + esc(s) + '</p>'; }).join('') + '</div>';
+    if (bullets.length) {
+      html += '<ul class="judgment-bullets"' + (sentences.length ? '' : ' style="margin-top:0;padding-top:0;border-top:0"') + '>';
+      bullets.forEach(function (b) { html += '<li>' + esc(b) + '</li>'; });
+      html += '</ul>';
+    }
+    if (!sentences.length && !bullets.length) html += '<p class="empty">오늘 해당 없음</p>';
   }
-  if (!sentences.length && !bullets.length) html += '<p class="empty">오늘 해당 없음</p>';
   if (meta.shortfall_reason) html += '<p class="shortfall">※ ' + esc(stripQuestions(meta.shortfall_reason)) + '</p>';
   html += '</div>';
   return html;
@@ -1640,7 +1682,9 @@ function renderNewsCard(item, idx, opts) {
   /* 체크포인트: 기본 접힘 */
   var wps = stripList(item.watchpoints);
   if (wps.length) {
-    html += '<details class="watch-fold"><summary>체크포인트 ' + wps.length + ' <span class="caret" aria-hidden="true">▾</span></summary><ul class="watch">';
+    var rtags = item.risk_tags || [];
+    html += '<details class="watch-fold"><summary>체크포인트 ' + wps.length + (rtags.length ? '<span class="rk-tags">' + riskTagsHtml(rtags) + '</span>' : '') + ' <span class="caret" aria-hidden="true">▾</span></summary>';
+    html += '<ul class="watch">';
     wps.forEach(function (w) { html += '<li>' + esc(w) + '</li>'; });
     html += '</ul></details>';
   }

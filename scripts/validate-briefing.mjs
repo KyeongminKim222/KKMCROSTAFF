@@ -17,6 +17,12 @@ console.log('top-level keys present:', check(top.every((k) => k in b), 'top-leve
 const line = (it) => `   ${String(it.published).padEnd(16)} | ${String(it.axis).padEnd(11)} ${String(it.score).padStart(3)} | ${String(it.sector).padEnd(13)} ${String(it.window).padEnd(7)} crit=${it.critical} ${String(it.source_type).padEnd(8)} | ${String(it.title).slice(0, 55)} | ${it.event_key}`;
 let missing = 0;
 for (const k of NEWS) for (const it of b[k]) { const m = req.filter((f) => !(f in it)); if (m.length) { missing += 1; console.log('MISSING', k, it.title, m); } }
+const RISKS = ['신용리스크', '시장리스크', '운영리스크', '금리리스크', '유동성리스크', '시스템리스크', '평판리스크'];
+const rb = Array.isArray(b.risk_brief) ? b.risk_brief : [];
+console.log(`risk_brief: ${rb.length}개`, check(rb.length >= 3 && rb.every((r) => RISKS.includes(r.risk) && r.headline && r.check), 'risk_brief invalid (3개 이상, 유효 유형, headline/check 필수)'));
+for (const r of rb) console.log(`   [${r.level}] ${r.risk} | ${r.headline} | ${r.check}`);
+const noTags = [...NEWS.flatMap((k) => b[k]), ...SECTOR_IDS.flatMap((id) => (b.sectors?.[id]?.news) || [])].filter((it) => !Array.isArray(it.risk_tags) || !it.risk_tags.length || !it.risk_tags.every((t) => RISKS.includes(t)));
+console.log('every article has valid risk_tags:', check(noTags.length === 0, `risk_tags missing/invalid: ${noTags.length}`));
 console.log('newsItem required fields present:', check(missing === 0, 'newsItem required fields missing'));
 const urls = new Set(); const eventKeys = new Set(); let dupUrl = 0; let dupEvent = 0;
 const seen = (it) => { if (urls.has(it.url)) dupUrl += 1; urls.add(it.url); const ek = String(it.event_key || '').toLowerCase().replace(/\s/g, ''); if (ek) { if (eventKeys.has(ek)) dupEvent += 1; eventKeys.add(ek); } };

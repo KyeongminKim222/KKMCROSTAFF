@@ -282,18 +282,64 @@ def cta_button(url, label="리포트 보기 →", on_dark=True):
     )
 
 
+RISK_COLOR = {
+    "신용리스크": "#D14343", "시장리스크": "#0067AC", "운영리스크": "#7B57B8", "금리리스크": "#E08A2C",
+    "유동성리스크": "#12968A", "시스템리스크": "#4A5D7A", "평판리스크": "#CC5A96",
+}
+LEVEL_STYLE = {"높음": ("#B42323", "#FDECEC", "#F6C9C9"), "중간": ("#A8620A", "#FFF4E3", "#F4DDB5"), "낮음": ("#1F7A45", "#EAF6EE", "#C6E6D2")}
+
+
+def risk_tag_html(tags):
+    out = ""
+    for t in tags or []:
+        c = RISK_COLOR.get(t, WOORI)
+        out += (f'<span style="display:inline-block;font-family:{FONT};font-size:10.5px;font-weight:700;line-height:16px;'
+                f'padding:0 6px;margin:0 3px 0 0;border:1px solid {c};border-radius:9px;color:{c};background:#ffffff">'
+                f'{escape(str(t).replace("리스크", ""))}</span>')
+    return out
+
+
 def render_judgment_short(b):
-    sents = [s for s in split_sentences(b.get("executive_judgment")) if not is_question(s)][:3]
-    if not sents:
-        return ""
-    body = "".join(
-        f'<p style="margin:0 0 8px;font-family:{FONT};font-size:14.5px;line-height:1.65;color:{NAVY};font-weight:700">{escape(s)}</p>'
-        for s in sents
-    )
-    return f"""
+    cards = [r for r in (b.get("risk_brief") or []) if isinstance(r, dict) and r.get("risk") and r.get("headline")]
+    if not cards:
+        sents = [s for s in split_sentences(b.get("executive_judgment")) if not is_question(s)][:3]
+        if not sents:
+            return ""
+        body = "".join(
+            f'<p style="margin:0 0 8px;font-family:{FONT};font-size:14.5px;line-height:1.65;color:{NAVY};font-weight:700">{escape(s)}</p>'
+            for s in sents
+        )
+        return f"""
     <tr><td style="padding:18px 20px 6px">
       <div style="font-family:{FONT};font-size:12px;font-weight:700;color:{WOORI};margin:0 0 8px">핵심 판단</div>
       <div style="border-left:3px solid {WOORI};padding:2px 0 0 12px">{body}</div>
+    </td></tr>
+    """
+    rows = ""
+    for r in cards:
+        c = RISK_COLOR.get(r["risk"], WOORI)
+        fg, bg, bd = LEVEL_STYLE.get(r.get("level"), LEVEL_STYLE["중간"])
+        head = escape(" ".join(p for p in [strip_questions(str(r.get("headline") or ""))] if p))
+        chk = escape(strip_questions(str(r.get("check") or "")))
+        check_row = (
+            f'<tr><td style="padding:6px 0 0"><span style="display:inline-block;font-family:{FONT};font-size:10.5px;font-weight:800;'
+            f'color:#ffffff;background:{c};border-radius:3px;padding:0 6px;line-height:17px;margin-right:6px">확인</span>'
+            f'<span style="font-family:{FONT};font-size:12.5px;line-height:1.55;color:{INK}">{chk}</span></td></tr>'
+        ) if chk else ""
+        rows += (
+            f'<tr><td style="padding:0 0 8px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+            f'style="border:1px solid {LINE};border-left:4px solid {c};border-radius:6px;background:#ffffff"><tr><td style="padding:10px 12px">'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+            f'<td style="font-family:{FONT};font-size:13px;font-weight:800;color:{c}">{escape(r["risk"])}</td>'
+            f'<td align="right"><span style="display:inline-block;font-family:{FONT};font-size:10.5px;font-weight:700;line-height:17px;'
+            f'padding:0 8px;border-radius:9px;border:1px solid {bd};background:{bg};color:{fg}">{escape(str(r.get("level") or "중간"))}</span></td></tr>'
+            f'<tr><td colspan="2" style="padding:4px 0 0;font-family:{FONT};font-size:14.5px;line-height:1.5;font-weight:700;color:{NAVY}">{head}</td></tr>'
+            f'{check_row}</table></td></tr></table></td></tr>'
+        )
+    return f"""
+    <tr><td style="padding:18px 20px 6px">
+      <div style="font-family:{FONT};font-size:12px;font-weight:700;color:{WOORI};margin:0 0 8px">핵심 판단 · 리스크별 확인 포인트</div>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">{rows}</table>
     </td></tr>
     """
 
@@ -318,6 +364,7 @@ def list_row(item, idx, last):
         f'<td valign="top" style="padding:9px 8px 9px 0;{border}font-family:{FONT};font-size:14px;line-height:1.5;color:{INK}">'
         f'{link}'
         f'<div style="font-size:12px;color:{MUTED};margin-top:2px">{src}</div>'
+        f'<div style="margin-top:4px">{risk_tag_html(item.get("risk_tags"))}</div>'
         f'</td>'
         f'<td valign="top" align="right" width="46" style="padding:10px 0 9px;{border}">{chips}</td>'
         f'</tr>'
