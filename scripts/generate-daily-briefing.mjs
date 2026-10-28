@@ -44,6 +44,7 @@
 import { readFile, writeFile, mkdir, readdir, unlink } from 'node:fs/promises';
 import { RISK_ORDER, LEVELS, normalizeRiskTags, normalizeRiskBrief } from './risk-utils.mjs';
 import { topicBlock } from './topic-caps.mjs';
+import { big4Of, peerBias } from './peer-focus.mjs';
 
 // ---------------------------------------------------------------------------------
 // 0. 설정 · 환경변수
@@ -788,6 +789,8 @@ function buildScoringPrompt(batch) {
 - supervision: 금감원·금융위 제재·검사결과·규정 제·개정·의결, 한국은행 금통위·금융안정·거시건전성 조치 → 기본 80~100.
 - group: 우리금융지주·계열사·해외법인의 건전성·자본·실적·금융사고·제재·소송·시장평가 → 70~100. 금융사고·제재·대규모 손실은 90 이상.
 - peer: 경쟁사의 금융사고·제재·대규모 손실·건전성 악화·자본비율 급변 → 40~85. 단순 실적 호조·목표가 상향·수상은 40 이하.
+  · 비교 대상은 4대금융(KB금융·신한금융·하나금융·우리금융)이 기준이다. KB·신한·하나(계열사 포함)의 기사에서 자본비율(CET1·BIS)·연체율·NPL·충당금·유동성·대형 사고·제재 같은 리스크 지표나 사건이 기사에 있으면 60~85로 채점한다. 4대금융의 순수 실적 기사도 리스크 지표(연체율·충당금·CET1 등)가 함께 있으면 55 이상으로 한다.
+  · 지방금융지주(BNK·iM·DGB·JB 등)와 기타 금융그룹(농협·IBK기업은행·카카오뱅크 등)의 기사는 금융위기급 사건·감독당국 조치가 아니면 score 45 이하로 한다.
 - market: 금리·환율·채권·PF·가계부채·연체율·유동성의 급변 중 수치가 있는 것 → 40~80. 수치 없는 일반 시황은 40 이하.
 - overseas: 우리은행 해외법인 소재국(베트남·인도네시아·캄보디아·미국·중국·브라질·러시아·방글라데시·미얀마)의 감독·시장 리스크, 글로벌 은행 건전성·제재·AML → 40~80.
 - none: 위 어디에도 해당하지 않으면 none, score 0~20.
@@ -944,7 +947,14 @@ function filterEligible(pool, { windowDays, minScore }, log) {
     if (c.axis === 'overseas' && c.score < minScore + 10) { log.push(`drop(overseas relevance, score ${c.score} < ${minScore + 10}): ${c.title}`); continue; }
     eligible.push(c);
   }
-  eligible.sort((a, b) => b.score - a.score || (ageInDays(a.published) ?? 9) - (ageInDays(b.published) ?? 9));
+  const rank = (c) => {
+    const text = `${c.title} ${c.entity || ''}`;
+    const isWoori = mentionsWooriSubsidiary(text) || c.axis === 'group';
+    // 해킹·감독·시장 등 peer 가 아닌 축은 편향 없음. 경쟁사 개별 기사(peer)와 업권 풀의 타사 기사에만 적용.
+    const applies = c.axis === 'peer' || (c.axis !== 'supervision' && c.axis !== 'market' && c.axis !== 'overseas' && c.axis !== 'group');
+    return c.score + (applies ? peerBias(text, isWoori) : 0);
+  };
+  eligible.sort((a, b) => rank(b) - rank(a) || (ageInDays(a.published) ?? 9) - (ageInDays(b.published) ?? 9));
   return eligible;
 }
 // 사건 중복 제거: 이전 브리핑 재등장 차단 → 이미 다른 섹션에 확정된 기사와 같은 사건 제외 → 풀 내부 같은 사건은 최고점 1건
@@ -981,7 +991,8 @@ function selectCommon(pool, step, taken = []) {
   const slots = { supervision: 0, group: 0, peer: 0, market: 0, overseas: 0 };
   const take = (c, reason) => { selected.push(c); slots[c.axis] = (slots[c.axis] || 0) + 1; log.push(`select(${reason}, ${c.axis}, score ${c.score}): ${c.title}`); };
   for (const axis of ['supervision', 'group', 'peer', 'market', 'overseas']) {
-    const pick = unique.find((c) => c.axis === axis && !selected.includes(c));
+    const pick = (axis === 'peer' ? unique.find((c) => c.axis === 'peer' && big4Of(`${c.title} ${c.entity || ''}`) && !selected.includes(c)) : null)
+      || unique.find((c) => c.axis === axis && !selected.includes(c));
     if (pick) take(pick, `slot:${axis}`);
   }
   for (const c of unique) {
@@ -989,6 +1000,7 @@ function selectCommon(pool, step, taken = []) {
     if (selected.includes(c)) continue;
     if (selected.length >= COMMON_TARGET && c.score < HIGH_VALUE_SCORE) { log.push(`skip(target ${COMMON_TARGET} reached, score ${c.score} < ${HIGH_VALUE_SCORE}): ${c.title}`); continue; }
     if (c.is_global_only && selected.filter((s) => s.is_global_only).length >= MAX_GLOBAL_ONLY) { log.push(`skip(global cap ${MAX_GLOBAL_ONLY}): ${c.title}`); continue; }
+    if (c.axis === 'peer' && !big4Of(`${c.title} ${c.entity || ''}`) && selected.filter((s) => s.axis === 'peer' && !big4Of(`${s.title} ${s.entity || ''}`)).length >= 1) { log.push(`skip(non-4대 peer cap 1): ${c.title}`); continue; }
     take(c, selected.length >= COMMON_TARGET ? 'high-value overflow' : 'score');
   }
   return { selected: selected.slice(0, COMMON_MAX), slots, log, eligibleCount: eligible.length, uniqueCount: unique.length };
