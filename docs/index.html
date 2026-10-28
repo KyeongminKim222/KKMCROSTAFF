@@ -830,7 +830,7 @@ body.chat-open .chat-fab { display: none; }
 }
 .chat-panel {
   position: fixed; right: 22px; bottom: 92px; z-index: 90;
-  width: 380px; height: 560px; max-height: calc(100vh - 112px);
+  width: min(460px, calc(100vw - 32px)); height: min(78vh, 780px); min-width: 320px; min-height: 360px; max-width: calc(100vw - 32px); max-height: calc(100vh - 112px);
   background: #fff; border: 1px solid var(--line); border-radius: 16px;
   box-shadow: 0 24px 60px rgba(6,27,51,0.28);
   display: none; flex-direction: column; overflow: hidden;
@@ -897,7 +897,7 @@ body.chat-open .chat-fab { display: none; }
   .card { scroll-margin-top: 66px; }
   .chat-fab { right: 14px; bottom: 14px; }
   .chat-fab-label { display: none; }
-  .chat-panel { inset: 0; right: 0; bottom: 0; width: auto; height: auto; max-height: none; border-radius: 0; border: 0; }
+  .chat-panel { inset: 0; right: 0; bottom: 0; width: auto; height: auto; min-width: 0; min-height: 0; max-width: none; max-height: none; border-radius: 0; border: 0; }
   body.chat-open { overflow: hidden; }
   body.chat-open .chat-fab { display: none; }
   .hero { height: 340px; }
@@ -1050,6 +1050,17 @@ body.chat-open .chat-fab { display: none; }
 .rk-tag{display:inline-block;font-size:11px;font-weight:700;line-height:17px;padding:0 7px;border-radius:999px;color:var(--rkc,#0067AC);background:#fff;border:1px solid var(--rkc,#0067AC)}
 .watch-rel{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin:10px 0 0;font-size:12px;font-weight:700;color:var(--muted)}
 @media (max-width:640px){.rk-grid{grid-template-columns:1fr}.rk-tags{margin-left:4px}}
+</style><style id="chat-resize-v15">
+.chat-grip{position:absolute;left:0;top:0;width:26px;height:26px;cursor:nwse-resize;z-index:3;touch-action:none;display:flex;align-items:flex-start;justify-content:flex-start}
+.chat-grip::before{content:"";width:12px;height:12px;margin:6px 0 0 6px;border-left:3px solid rgba(255,255,255,.85);border-top:3px solid rgba(255,255,255,.85);border-top-left-radius:4px}
+.chat-grip:hover::before{border-color:#fff}
+.chat-size{background:rgba(255,255,255,.14);border:0;color:#fff;border-radius:8px;height:30px;padding:0 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.chat-size:hover{background:rgba(255,255,255,.28)}
+.chat-panel-head{padding-left:30px;gap:8px}
+.chat-panel-head .chat-head-btns{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+body.chat-resizing{user-select:none;cursor:nwse-resize}
+body.chat-resizing .chat-panel{transition:none}
+@media (max-width:640px){.chat-grip,.chat-size{display:none!important}.chat-panel-head{padding-left:16px}}
 </style></head>
 <body>
   <div id="app"></div>
@@ -1968,9 +1979,11 @@ function setupServerChatPanel(data) {
   if (!el) return;
 
   el.innerHTML = [
+    '<div class="chat-grip" id="chatGrip" title="끌어서 크기 조정" aria-label="창 크기 조절"></div>',
     '<div class="chat-panel-head">',
     '  <div><h3>AI에게 질문 · CRO Staff</h3><p>기준일 ' + esc(date) + ' · 오늘 브리핑 근거 · 우리금융그룹 CRO 관점</p></div>',
-    '  <button type="button" class="chat-close" id="chatClose" aria-label="닫기">×</button>',
+    '  <div class="chat-head-btns"><button type="button" class="chat-size" id="chatSize" title="창 크기 키우기/기본">크게</button>',
+    '  <button type="button" class="chat-close" id="chatClose" aria-label="닫기">×</button></div>',
     '</div>',
     '<p id="serverLlmStatus" class="chat-llm-status">보안 답변 서버 연결 확인 중…</p>',
     '<div id="chatLog" class="chat-log"></div>',
@@ -1981,6 +1994,55 @@ function setupServerChatPanel(data) {
     '</form>',
     '<p class="chat-footnote">API Key 입력 불필요 · 질문 전송 시에만 AI 사용량 발생 · 당일 브리핑 근거</p>'
   ].join('');
+
+  (function setupChatResize() {
+    var KEY = 'croChatSize';
+    var grip = document.getElementById('chatGrip');
+    var btn = document.getElementById('chatSize');
+    var MIN_W = 320, MIN_H = 360;
+    function bounds() { return { w: window.innerWidth - 32, h: window.innerHeight - 112 }; }
+    function clamp(w, h) { var b = bounds(); return { w: Math.max(MIN_W, Math.min(w, b.w)), h: Math.max(MIN_H, Math.min(h, b.h)) }; }
+    function apply(w, h) { var s = clamp(w, h); el.style.width = s.w + 'px'; el.style.height = s.h + 'px'; return s; }
+    function isMobile() { return window.innerWidth <= 640; }
+    function save(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} }
+    function load() { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } }
+    function isBig() { var b = bounds(); return el.offsetWidth > 520 || el.offsetHeight > b.h - 20; }
+    function syncBtn() { if (el.offsetWidth) btn.textContent = isBig() ? '기본' : '크게'; }
+    var saved = load();
+    if (saved && saved.w && !isMobile()) apply(saved.w, saved.h);
+    var sx = 0, sy = 0, sw = 0, sh = 0, drag = false;
+    grip.addEventListener('pointerdown', function (e) {
+      if (isMobile()) return;
+      drag = true; sx = e.clientX; sy = e.clientY; sw = el.offsetWidth; sh = el.offsetHeight;
+      try { grip.setPointerCapture(e.pointerId); } catch (x) {}
+      document.body.classList.add('chat-resizing'); e.preventDefault();
+    });
+    grip.addEventListener('pointermove', function (e) {
+      if (!drag) return;
+      apply(sw + (sx - e.clientX), sh + (sy - e.clientY));
+    });
+    function end(e) {
+      if (!drag) return; drag = false;
+      document.body.classList.remove('chat-resizing');
+      try { grip.releasePointerCapture(e.pointerId); } catch (x) {}
+      save({ w: el.offsetWidth, h: el.offsetHeight }); syncBtn();
+    }
+    grip.addEventListener('pointerup', end); grip.addEventListener('pointercancel', end);
+    grip.addEventListener('dblclick', function () { el.style.width = ''; el.style.height = ''; try { localStorage.removeItem(KEY); } catch (e) {} syncBtn(); });
+    btn.addEventListener('click', function () {
+      var b = bounds();
+      if (!isBig()) { var s = apply(Math.min(720, b.w), b.h); save(s); }
+      else { el.style.width = ''; el.style.height = ''; try { localStorage.removeItem(KEY); } catch (e) {} }
+      syncBtn();
+    });
+    window.addEventListener('resize', function () {
+      if (isMobile()) { el.style.width = ''; el.style.height = ''; return; }
+      if (el.style.width) { apply(el.offsetWidth, el.offsetHeight); }
+      syncBtn();
+    });
+    new MutationObserver(syncBtn).observe(el, { attributes: true, attributeFilter: ['class', 'style'] });
+    setTimeout(syncBtn, 0);
+  })();
 
   var suggestions = [
     '오늘 크리티컬 3건만 한 줄씩 요약',
