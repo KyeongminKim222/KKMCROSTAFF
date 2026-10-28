@@ -44,7 +44,7 @@ for (const id of SECTOR_IDS) {
   for (const f of ['label_ko', 'label_en', 'companies', 'judgment', 'news', 'shortfall_reason']) check(f in s, `sectors.${id}.${f} missing`);
   check(Array.isArray(s.companies) && s.companies.length > 0, `sectors.${id}.companies empty`);
   check(isFallback || (s.judgment || '').split(/(?<=[.!?])\s+/).filter(Boolean).length >= 2, `sectors.${id}.judgment < 2 sentences`);
-  check(s.news.length <= 4, `sectors.${id}.news > 4`);
+  check(s.news.length <= 6, `sectors.${id}.news > 6`);
   check(isFallback || s.news.length >= 2 || Boolean(s.shortfall_reason), `sectors.${id} has ${s.news.length} news and no shortfall_reason`);
   console.log(`${id} (${s.label_ko} / ${s.label_en}; ${s.companies.join('·')}): ${s.news.length}${s.shortfall_reason ? ` | shortfall: ${s.shortfall_reason}` : ''}`);
   console.log(`   judgment: ${s.judgment}`);

@@ -64,19 +64,19 @@ const liveBriefingPath = new URL('../docs/briefing.json', import.meta.url);
 const historyDir = new URL('../docs/briefing_history/', import.meta.url);
 
 // 공통(그룹 공통) 확정 목표
-const COMMON_TARGET = 7;
-const COMMON_MIN = 6;
-const COMMON_MAX = 8;
+const COMMON_TARGET = 10;
+const COMMON_MIN = 8;
+const COMMON_MAX = 12;
 const HIGH_VALUE_SCORE = 80; // 목표를 넘겨 최대치까지 추가하는 기준
-const MAX_GLOBAL_ONLY = 2; // 공통 7건 중 글로벌 단독 기사 상한 (v2의 10건 중 3건과 같은 비율)
-const MAX_CRITICAL = 2;
+const MAX_GLOBAL_ONLY = 3; // 공통 7건 중 글로벌 단독 기사 상한 (v2의 10건 중 3건과 같은 비율)
+const MAX_CRITICAL = 3;
 const PROMOTE_MIN_SCORE = 70; // 공통이 최소치에 못 미칠 때 업권 후보를 공통으로 승격하는 하한
 // 업권별 확정 목표
-const SECTOR_TARGET = 3; // 기본값. 업권별 target 은 config/sectors.json 의 `target` 으로 덮어쓴다 (여전·저축은행 4)
+const SECTOR_TARGET = 5; // 기본값. 업권별 target 은 config/sectors.json 의 `target` 으로 덮어쓴다 (여전·저축은행 4)
 const SECTOR_MIN = 2;
-const SECTOR_MAX = 4;
+const SECTOR_MAX = 6;
 const SECTOR_CRITICAL_SCORE = 90; // 업권 섹션 내 critical 표시 기준 (score≥90 & severity_flag)
-const CATEGORY_CAPS = { critical: 2, daily_news: 8, subsidiary_news: 5, additional_news: 3 };
+const CATEGORY_CAPS = { critical: 3, daily_news: 10, subsidiary_news: 5, additional_news: 4 };
 const HISTORY_RETENTION_DAYS = 30;
 const HISTORY_COMPARE_COUNT = 3;
 const PIPELINE_VERSION = 'v3-sectors';
@@ -790,6 +790,12 @@ function buildScoringPrompt(batch) {
 - market: 금리·환율·채권·PF·가계부채·연체율·유동성의 급변 중 수치가 있는 것 → 40~80. 수치 없는 일반 시황은 40 이하.
 - overseas: 우리은행 해외법인 소재국(베트남·인도네시아·캄보디아·미국·중국·브라질·러시아·방글라데시·미얀마)의 감독·시장 리스크, 글로벌 은행 건전성·제재·AML → 40~80.
 - none: 위 어디에도 해당하지 않으면 none, score 0~20.
+관련성 기준(점수 상한): 이 기사가 우리금융그룹(지주·은행·카드·캐피탈·저축은행·증권·자산운용·동양생명·ABL생명) 또는 우리은행 해외법인 소재국의 실제 포트폴리오·지표·규제·운영에 닿는 경로가 기사 내용에서 읽히지 않으면 score를 45 이하로 한다.
+- 한국 금융회사·금융시장·한국 감독당국과 직접 연결이 없는 타국 일반 금융·정책 기사(예: 중국·일본·유럽 중앙은행의 국내 영향 없는 조치, 해외 기업 실적)는 axis=overseas, score 40 이하.
+- 해외 기사는 (a) 한국 금융시장으로의 전이(환율·금리·자금흐름)가 기사에 명시되거나 (b) 우리은행 해외법인 소재국의 감독·시장 리스크일 때만 60 이상.
+- 금융과 무관한 기사(스포츠·연예·부동산 분양·지자체 행정·단순 인사/동정)는 axis=none, score 0~10.
+- 같은 사건이면 매체가 달라도 event_key를 동일하게 쓴다. 한 사건의 후속·분석 기사는 가장 정보가 많은 1건만 60 이상으로 하고 나머지는 50 이하로 한다.
+- 단순 순이익 증감·실적 발표는 연체율·충당금·자본비율·유동성 등 리스크 지표가 기사에 함께 있을 때만 60 이상, 지표가 없으면 50 이하.
 - 홍보·상품 출시·CSR·인사·행사·설계사 수·체크카드 출시·수상 → is_promo=true, score 0. 기획 칼럼·사설·인터뷰·정치인 발언·선거·정쟁 → is_political_or_column=true, score 0. 통안증권 입찰·정례 통계·정례 보도자료도 is_promo=true, score 0.
 - severity_flag: 금융사고·제재·대규모 손실·급변(하루 1% 이상 환율 변동, 연체율 급등 등)이면 true.
 
@@ -934,6 +940,7 @@ function filterEligible(pool, { windowDays, minScore }, log) {
     if (c.is_political_or_column) { log.push(`drop(political/column): ${c.title}`); continue; }
     if (c.score < minScore) { log.push(`drop(score ${c.score} < ${minScore}): ${c.title}`); continue; }
     if (c.axis === 'none') { log.push(`drop(axis none): ${c.title}`); continue; }
+    if (c.axis === 'overseas' && c.score < minScore + 10) { log.push(`drop(overseas relevance, score ${c.score} < ${minScore + 10}): ${c.title}`); continue; }
     eligible.push(c);
   }
   eligible.sort((a, b) => b.score - a.score || (ageInDays(a.published) ?? 9) - (ageInDays(b.published) ?? 9));
@@ -1007,9 +1014,9 @@ function selectSector(sectorId, pool, step, taken) {
 // 폴백 사다리: ① 3일/35 → ② 목표 미달이면 4일 윈도우(related) → ③ 그래도 최소치 미달이면 점수 임계 25.
 // 점수 임계를 낮추는 단계는 최소치를 못 채울 때만 쓴다 (수량보다 품질 우선).
 const ladder = [
-  { windowDays: 3, minScore: 35, label: '3-day window, score≥35' },
-  { windowDays: 4, minScore: 35, label: '4-day window (related), score≥35' },
-  { windowDays: 4, minScore: 25, label: '4-day window (related), score≥25' }
+  { windowDays: 3, minScore: 50, label: '3-day window, score≥50' },
+  { windowDays: 3, minScore: 40, label: '3-day window, score≥40' },
+  { windowDays: 4, minScore: 35, label: '4-day window (related), score≥35' }
 ];
 function runLadder(name, run, target, minimum) {
   const attempt = (step) => {
