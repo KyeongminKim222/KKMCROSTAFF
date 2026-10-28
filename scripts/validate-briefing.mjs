@@ -21,6 +21,9 @@ const RISKS = ['신용리스크', '시장리스크', '운영리스크', '금리�
 const rb = Array.isArray(b.risk_brief) ? b.risk_brief : [];
 console.log(`risk_brief: ${rb.length}개`, check(rb.length >= 3 && rb.every((r) => RISKS.includes(r.risk) && r.headline && r.check), 'risk_brief invalid (3개 이상, 유효 유형, headline/check 필수)'));
 for (const r of rb) console.log(`   [${r.level}] ${r.risk} | ${r.headline} | ${r.check}`);
+import { isNonWooriCard } from './risk-utils.mjs';
+const nonWooriCards = rb.filter((r) => isNonWooriCard(r));
+console.log('risk_brief cards about non-Woori firms:', check(nonWooriCards.length === 0, `risk_brief card is about another firm: ${nonWooriCards.map((r) => r.headline).join(' / ')}`));
 const noTags = [...NEWS.flatMap((k) => b[k]), ...SECTOR_IDS.flatMap((id) => (b.sectors?.[id]?.news) || [])].filter((it) => !Array.isArray(it.risk_tags) || !it.risk_tags.length || !it.risk_tags.every((t) => RISKS.includes(t)));
 console.log('every article has valid risk_tags:', check(noTags.length === 0, `risk_tags missing/invalid: ${noTags.length}`));
 console.log('newsItem required fields present:', check(missing === 0, 'newsItem required fields missing'));

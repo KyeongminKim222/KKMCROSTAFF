@@ -44,7 +44,7 @@
 import { readFile, writeFile, mkdir, readdir, unlink } from 'node:fs/promises';
 import { RISK_ORDER, LEVELS, normalizeRiskTags, normalizeRiskBrief } from './risk-utils.mjs';
 import { topicBlock } from './topic-caps.mjs';
-import { big4Of, peerBias } from './peer-focus.mjs';
+import { big4Of, peerBias, REGIONAL_OR_OTHER } from './peer-focus.mjs';
 
 // ---------------------------------------------------------------------------------
 // 0. 설정 · 환경변수
@@ -1000,7 +1000,7 @@ function selectCommon(pool, step, taken = []) {
     if (selected.includes(c)) continue;
     if (selected.length >= COMMON_TARGET && c.score < HIGH_VALUE_SCORE) { log.push(`skip(target ${COMMON_TARGET} reached, score ${c.score} < ${HIGH_VALUE_SCORE}): ${c.title}`); continue; }
     if (c.is_global_only && selected.filter((s) => s.is_global_only).length >= MAX_GLOBAL_ONLY) { log.push(`skip(global cap ${MAX_GLOBAL_ONLY}): ${c.title}`); continue; }
-    if (c.axis === 'peer' && !big4Of(`${c.title} ${c.entity || ''}`) && selected.filter((s) => s.axis === 'peer' && !big4Of(`${s.title} ${s.entity || ''}`)).length >= 1) { log.push(`skip(non-4대 peer cap 1): ${c.title}`); continue; }
+    if (c.axis === 'peer' && !big4Of(`${c.title} ${c.entity || ''}`) && !mentionsWooriSubsidiary(`${c.title} ${c.entity || ''}`) && c.score < 85) { log.push(`skip(non-4대 peer in common needs score≥85): ${c.title}`); continue; }
     take(c, selected.length >= COMMON_TARGET ? 'high-value overflow' : 'score');
   }
   return { selected: selected.slice(0, COMMON_MAX), slots, log, eligibleCount: eligible.length, uniqueCount: unique.length };
@@ -1020,6 +1020,10 @@ function selectSector(sectorId, pool, step, taken) {
     if (selected.length >= SECTOR_MAX) break;
     if (selected.includes(c)) continue;
     const target = sectorTarget(sectorId);
+    { const tx = `${c.title} ${c.entity || ''}`;
+      if (c.axis === 'peer' && REGIONAL_OR_OTHER.test(tx) && !big4Of(tx) && !mentionsWooriSubsidiary(tx) && c.score < 85
+        && selected.filter((s) => { const sx = `${s.title} ${s.entity || ''}`; return s.axis === 'peer' && REGIONAL_OR_OTHER.test(sx) && !big4Of(sx) && !mentionsWooriSubsidiary(sx); }).length >= 1) {
+        log.push(`skip(${sectorId} non-4대 peer cap 1): ${c.title}`); continue; } }
     if (selected.length >= target && c.score < HIGH_VALUE_SCORE) { log.push(`skip(${sectorId} target ${target} reached, score ${c.score} < ${HIGH_VALUE_SCORE}): ${c.title}`); continue; }
     take(c, selected.length >= target ? 'high-value overflow' : 'score');
   }
@@ -1230,7 +1234,7 @@ ${ARTICLE_RULES}
 
 종합 섹션 (전체본 기준, 그룹 공통 기사를 중심으로):
 - executive_judgment는 정확히 3문장의 서술문: (1) 오늘 가장 큰 리스크 1개 (2) 그룹에 닿는 경로 (3) 오늘 주시할 것(지표·일정·기준값을 서술문으로). 첫 문장부터 리스크 판단으로 시작하고, 의문문은 쓰지 마라.
-- risk_brief는 3~7개의 리스크 유형 카드. 오늘 선정 기사에 근거가 있는 유형만 쓰고(7개를 억지로 채우지 마라), 위험도(level) 높은 순으로 정렬한다. headline은 그 리스크의 오늘 핵심을 25자 안팎의 명사구로(수치는 입력에 있는 것만), check는 무엇을 확인할지를 지표·일정 중심의 40자 이내 명사형으로 쓴다(예: '미 10년물 5.0% 상회 여부'). 장문·의문문·'~해야 합니다' 금지.
+- risk_brief는 3~7개의 리스크 유형 카드. 오늘 선정 기사에 근거가 있는 유형만 쓰고(7개를 억지로 채우지 마라). 모든 카드는 우리금융그룹(지주·계열사)이 직접 받는 영향이어야 한다. headline·check의 주어는 우리금융그룹·계열사 또는 그룹 공통 요인(감독·시장·보안)이다. JB금융·BNK·농협·기업은행 같은 타 금융사의 실적·건전성 자체를 카드로 만들지 마라. 타사 기사는 우리금융으로 전이되는 경로가 기사에 있을 때만 그룹 영향으로 반영한다, 위험도(level) 높은 순으로 정렬한다. headline은 그 리스크의 오늘 핵심을 25자 안팎의 명사구로(수치는 입력에 있는 것만), check는 무엇을 확인할지를 지표·일정 중심의 40자 이내 명사형으로 쓴다(예: '미 10년물 5.0% 상회 여부'). 장문·의문문·'~해야 합니다' 금지.
 - executive_judgment_bullets는 3~4개. 선정 기사 중 score가 높은 순으로 '사실 → 의미'를 자연스러운 2문장으로 쓴다. 라벨 단어('확인된 변화는' 등)로 시작하지 마라.
 - forward_looking_points 2~4개(title, horizon 예: '1~2주', likelihood, cro_angle 2문장, trigger 1문장).
 - insights: headline 1문장, bullets 3~5개(기사 간 공통 동인·전이경로), action_items 3~5개(담당 조직과 기한이 드러나는 행동), stance 1~2문장.

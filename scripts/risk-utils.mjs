@@ -3,6 +3,19 @@
 
 export const RISK_ORDER = ['신용리스크', '시장리스크', '운영리스크', '금리리스크', '유동성리스크', '시스템리스크', '평판리스크'];
 export const LEVELS = ['높음', '중간', '낮음'];
+
+// 핵심판단 카드는 '우리금융그룹이 받는 영향'만 다룬다. 타 금융사의 실적·건전성 자체가 주어인 카드는 제외한다.
+const OTHER_FIRMS = /JB금융|전북은행|광주은행|JB우리|BNK|부산은행|경남은행|iM금융|iM뱅크|DGB|대구은행|제주은행|농협|NH|기업은행|IBK|산업은행|수협|카카오뱅크|케이뱅크|토스뱅크|KB|국민은행|신한|하나(금융|은행|카드|증권)|한국금융지주|삼성(카드|생명|화재|증권)|미래에셋|대신증권|메리츠|한화|현대(카드|해상|캐피탈)|롯데카드|빗썸/;
+const WOORI_RE = /우리/;
+export function isNonWooriCard(r) {
+  const t = `${r?.headline || ''} ${r?.check || ''}`;
+  return OTHER_FIRMS.test(t) && !WOORI_RE.test(t);
+}
+// 카드의 근거 기사로 쓸 수 있는 기사: 타사 경쟁 기사(peer 축)인데 우리 언급이 없으면 제외
+export function isWooriRelevantItem(it) {
+  if (it?.axis !== 'peer') return true;
+  return WOORI_RE.test(`${it.title || ''} ${it.entity || ''} ${it.why_woori_cro || ''}`.slice(0, 400)) && /우리(금융|은행|카드|캐피탈|저축|투자증권|자산|생명|라이프)/.test(`${it.title || ''} ${it.entity || ''}`);
+}
 const LEVEL_RANK = { 높음: 0, 중간: 1, 낮음: 2 };
 
 // 모델이 태그를 못 붙였을 때만 쓰는 키워드 보정 규칙 (유형별 키워드 개수로 판정)
@@ -41,7 +54,7 @@ export function normalizeRiskTags(tags, text, axis) {
 }
 
 function cut(s, n) {
-  const t = String(s || '').replace(/\s+/g, ' ').trim().replace(/[…]+$/, '');
+  const t = String(s || '').replace(/^(\s*\[[^\]]{1,14}\]\s*)+/, '').replace(/\s+/g, ' ').trim().replace(/[…]+$/, '');
   return t.length > n ? `${t.slice(0, n - 1).trim()}…` : t;
 }
 function levelOfScore(score) { return score >= 85 ? '높음' : score >= 60 ? '중간' : '낮음'; }
@@ -69,17 +82,25 @@ export function deriveRiskBrief(items, max = 7) {
 export function normalizeRiskBrief(raw, items, clean = (x) => String(x || '').trim()) {
   const out = [];
   const seen = new Set();
+  const dropped = [];
+  const pool = items.filter(isWooriRelevantItem);
   for (const r of Array.isArray(raw) ? raw : []) {
     const risk = toRiskName(r?.risk);
     if (!risk || seen.has(risk)) continue;
     const headline = clean(r.headline);
     const check = clean(r.check);
     if (!headline || !check) continue;
+    if (isNonWooriCard({ headline, check })) { dropped.push(risk); continue; }
     seen.add(risk);
     out.push({ risk, level: LEVELS.includes(r.level) ? r.level : '중간', headline, check });
   }
+  // 타사 중심이라 제외한 유형은 우리금융 관련 기사에서 같은 유형 카드를 다시 만든다
+  const derived = deriveRiskBrief(pool).filter((d) => !isNonWooriCard(d));
+  for (const d of derived) {
+    if (dropped.includes(d.risk) && !seen.has(d.risk)) { seen.add(d.risk); out.push(d); }
+  }
   if (out.length < 3) {
-    for (const d of deriveRiskBrief(items)) {
+    for (const d of derived) {
       if (seen.has(d.risk)) continue;
       seen.add(d.risk);
       out.push(d);
