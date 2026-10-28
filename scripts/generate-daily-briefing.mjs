@@ -635,8 +635,23 @@ for (const def of stageDefinitions) {
   await coolDown(def.label);
 }
 
+// 뉴스 검색 피드 수집 (결정적 크롤러, LLM 비사용): 네이버 뉴스 최신순 + Bing News RSS 로 후보를 대량 확보한다.
+// LLM web_search 조사팀은 팀당 2~11건 수준이라 후보가 모자랐다. NEWS_FEEDS=0 이면 끈다. DRY_RUN 에서는 호출하지 않는다.
+let feedStats = null;
+if (!DRY_RUN && process.env.NEWS_FEEDS !== '0') {
+  try {
+    const { collectFeedCandidates } = await import('./news-feeds.mjs');
+    const feed = await collectFeedCandidates({ sectorConfig, now: new Date() });
+    const feedSources = feed.sources.map((s) => ({ ...s, key: safeCanonical(s.url) })).filter((s) => s.key);
+    researchStages.push({ stage: 'feed_search', narrative: '', sources: feedSources });
+    feedStats = feed.stats;
+  } catch (error) {
+    console.warn(`News feed collector failed (continuing with LLM research only): ${error.message}`);
+  }
+}
+
 // 후보 풀 조립 (URL 기준 중복 통합)
-const stageSectorHint = Object.fromEntries(stageDefinitions.map((d) => [d.id, d.sectors || ['group']]));
+const stageSectorHint = { ...Object.fromEntries(stageDefinitions.map((d) => [d.id, d.sectors || ['group']])), feed_search: ['group'] };
 const candidateByKey = new Map();
 for (const stage of researchStages) {
   for (const s of stage.sources) {
@@ -644,14 +659,14 @@ for (const stage of researchStages) {
     const existing = candidateByKey.get(s.key);
     if (existing) {
       if (!existing.published && s.published) existing.published = s.published;
-      if (!existing.excerpt) existing.excerpt = excerptFor(stage.narrative, s.url, s.title);
+      if (!existing.excerpt) existing.excerpt = s.excerpt || excerptFor(stage.narrative, s.url, s.title);
       existing.stages.add(stage.stage);
       continue;
     }
     candidateByKey.set(s.key, {
       id: candidateByKey.size + 1, key: s.key, url: s.url, title: s.title, published: s.published,
-      stage: stage.stage, stages: new Set([stage.stage]), excerpt: excerptFor(stage.narrative, s.url, s.title),
-      stage_sector_hint: stageSectorHint[stage.stage] || ['group'],
+      stage: stage.stage, stages: new Set([stage.stage]), excerpt: s.excerpt || excerptFor(stage.narrative, s.url, s.title),
+      stage_sector_hint: (stage.stage === 'feed_search' && Array.isArray(s.hint) && s.hint.length) ? s.hint : (stageSectorHint[stage.stage] || ['group']),
       source_type: isOfficialUrl(s.url) ? 'official' : 'media',
       is_global_only: stage.stage === 'global_media' || isGlobalMediaUrl(s.url)
     });
@@ -1492,6 +1507,7 @@ briefing.meta = {
   briefing_date: date,
   generated_at: new Date().toISOString(),
   primary_window: '어제·오늘(KST) 우선, 최근 3일 이내 기사 중심 (부족 시 4일까지 related)',
+  feed_search: feedStats,
   research_method: `${stageDefinitions.length} research stages (domestic/woori/peer/global/official + ${sectorConfig.research_stages.length} sector) + LLM scoring (axis+sector) + deterministic selection (common ${COMMON_TARGET} + ${SECTOR_IDS.length} sectors × ${SECTOR_TARGET}) + CRO writing (1 common + ${SECTOR_WRITING_BATCHES.length} sector batches)`,
   pipeline_version: PIPELINE_VERSION,
   dry_run: DRY_RUN,
