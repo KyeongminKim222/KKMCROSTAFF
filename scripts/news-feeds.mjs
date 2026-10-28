@@ -79,6 +79,69 @@ function parseBing(xml) {
   return out;
 }
 
+// 언론사 RSS (원문 URL 직접 제공, 최신 기사 전체). 접속 확인된 곳만 둔다. 실패한 피드는 건너뛴다.
+const RSS_FEEDS = [
+  ['연합뉴스', 'https://www.yna.co.kr/rss/economy.xml'], ['연합뉴스', 'https://www.yna.co.kr/rss/news.xml'],
+  ['매일경제', 'https://www.mk.co.kr/rss/30100041/'], ['매일경제', 'https://www.mk.co.kr/rss/50200011/'],
+  ['서울경제', 'https://www.sedaily.com/rss/finance'], ['서울경제', 'https://www.sedaily.com/rss/economy'],
+  ['뉴시스', 'https://www.newsis.com/RSS/economy.xml'], ['뉴시스', 'https://www.newsis.com/RSS/bank.xml'],
+  ['아시아경제', 'https://www.asiae.co.kr/rss/economy.htm'], ['헤럴드경제', 'https://biz.heraldcorp.com/rss/google/economy'],
+  ['연합인포맥스', 'https://news.einfomax.co.kr/rss/allArticle.xml'], ['전자신문', 'https://rss.etnews.com/Section901.xml'],
+  ['EBN', 'https://www.ebn.co.kr/rss/allArticle.xml'], ['시사저널e', 'https://www.sisajournal-e.com/rss/allArticle.xml'],
+  ['서울파이낸스', 'https://www.seoulfn.com/rss/allArticle.xml'], ['이코노믹리뷰', 'https://www.econovill.com/rss/allArticle.xml'],
+  ['FETV', 'https://www.fetv.co.kr/rss/allArticle.xml'], ['디지털투데이', 'https://www.digitaltoday.co.kr/rss/allArticle.xml'],
+  ['인포스탁데일리', 'https://www.infostockdaily.co.kr/rss/allArticle.xml'], ['finomy', 'https://www.finomy.com/rss/allArticle.xml'],
+  ['보험신문', 'https://www.insnews.co.kr/rss/allArticle.xml'], ['금융소비자뉴스', 'https://www.fsnews.co.kr/rss/allArticle.xml'],
+  ['CNB뉴스', 'https://www.cnbnews.com/rss/allArticle.xml'], ['코리아IT타임스', 'https://www.koreaittimes.com/rss/allArticle.xml'],
+  ['핀포인트뉴스', 'https://www.pinpointnews.co.kr/rss/allArticle.xml'], ['더투데이', 'https://www.the-today.com/rss/allArticle.xml'],
+  ['뉴스클레임', 'https://www.newsclaim.co.kr/rss/allArticle.xml'], ['M이코노미', 'https://www.m-i.kr/rss/allArticle.xml'],
+  ['스트레이트뉴스', 'https://www.straightnews.co.kr/rss/allArticle.xml'], ['잡포스트', 'https://www.job-post.co.kr/rss/allArticle.xml']
+];
+const FIN = /금융|은행|증권|보험|카드|캐피탈|저축|자산운용|운용사|대출|금리|환율|채권|증시|코스피|코스닥|펀드|연금|핀테크|가상자산|코인|예금|여신|수신|자본|지주|ELS|PF|해킹|정보유출|전산|연체|부실|충당금/;
+
+function parseRssDate(s) {
+  const t = String(s || '').trim(); if (!t) return null;
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/.test(t)) return new Date(`${t.replace(' ', 'T')}${t.length === 16 ? ':00' : ''}+09:00`);
+  const d = new Date(t); return Number.isNaN(d.getTime()) ? null : d;
+}
+function parseRss(xml, press) {
+  const out = [];
+  for (const it of xml.matchAll(/<item[ >]([\s\S]*?)<\/item>/g)) {
+    const b = it[1];
+    const pick = (tag) => { const m = b.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`)); return m ? m[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1') : ''; };
+    const title = cleanTitle(pick('title'));
+    const link = cleanTitle(pick('link')) || cleanTitle((b.match(/<link[^>]*href="([^"]+)"/) || [])[1]);
+    const published = parseRssDate(pick('pubDate') || pick('dc:date') || pick('published'));
+    const snippet = cleanTitle(pick('description') || pick('content:encoded')).slice(0, 400);
+    if (title && /^https?:/.test(link)) out.push({ url: link.replace(/&amp;/g, '&'), title, published, snippet, press });
+  }
+  return out;
+}
+
+// MSN(msn.com) 재배포 링크 → 원문 언론사 URL 복원 (assets.msn.com Detail API)
+async function restoreMsn(items, stats, concurrency = 6) {
+  const targets = items.filter((it) => /(^|\.)msn\.com$/.test(hostOf(it.url)));
+  stats.msn = { found: targets.length, restored: 0, failed: 0 };
+  let i = 0;
+  async function worker() {
+    while (i < targets.length) {
+      const it = targets[i]; i += 1;
+      const m = it.url.match(/\/ar-([A-Za-z0-9]+)/) || it.url.match(/\/(AA[A-Za-z0-9]+)/);
+      if (!m) { stats.msn.failed += 1; continue; }
+      const id = m[1];
+      const r = await fetchText(`https://assets.msn.com/content/view/v2/Detail/ko-kr/${id}`, { Accept: 'application/json' }, 15000);
+      if (!r.ok) { stats.msn.failed += 1; continue; }
+      try {
+        const j = JSON.parse(r.text);
+        if (j.sourceHref && /^https?:/.test(j.sourceHref) && !/msn\.com/.test(hostOf(j.sourceHref))) {
+          it.url = j.sourceHref; it.press = (j.provider && j.provider.name) || it.press; stats.msn.restored += 1;
+        } else stats.msn.failed += 1;
+      } catch { stats.msn.failed += 1; }
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+}
+
 export function buildQueries(sectorConfig) {
   const q = []; // {text, hint[], pages}
   const group = sectorConfig.group || {};
@@ -93,7 +156,7 @@ export function buildQueries(sectorConfig) {
   return q;
 }
 
-export async function collectFeedCandidates({ sectorConfig, now = new Date(), maxAgeDays = 4, maxKeep = 110, log = console.log, concurrency = 3 } = {}) {
+export async function collectFeedCandidates({ sectorConfig, now = new Date(), maxAgeDays = 4, maxKeep = 170, log = console.log, concurrency = 3 } = {}) {
   const queries = buildQueries(sectorConfig);
   const stats = { queries: queries.length, naverOk: 0, naverFail: 0, bingOk: 0, bingFail: 0, raw: 0 };
   const raw = [];
@@ -127,7 +190,32 @@ export async function collectFeedCandidates({ sectorConfig, now = new Date(), ma
     }
     await Promise.all(Array.from({ length: concurrency }, () => worker()));
   }
-  await Promise.all([naverLoop(), bingLoop()]);
+  // 언론사 RSS: 병렬. 금융 관련성(FIN)+리스크 키워드(RISK)가 있는 기사만 남기고, 업권 힌트는 키워드 적중으로 정한다.
+  const termSets = [['group', (sectorConfig.group?.keywords_ko || [])], ...(sectorConfig.sectors || []).map((s) => [s.id, [...(s.companies || []), ...(s.keywords_ko || [])]])]
+    .map(([id, terms]) => [id, terms.filter((t) => String(t).length >= 2)]);
+  async function rssLoop() {
+    stats.rssOk = 0; stats.rssFail = 0; stats.rssItems = 0; stats.rssRelevant = 0;
+    let k = 0;
+    async function worker() {
+      while (k < RSS_FEEDS.length) {
+        const [press, url] = RSS_FEEDS[k]; k += 1;
+        const r = await fetchText(url, { Accept: 'application/rss+xml,text/xml,*/*' }, 20000);
+        if (!r.ok) { stats.rssFail += 1; continue; }
+        stats.rssOk += 1;
+        for (const x of parseRss(r.text, press)) {
+          stats.rssItems += 1;
+          const text = `${x.title} ${x.snippet}`;
+          if (!(FIN.test(x.title) || FIN.test(text)) || !(RISK.test(x.title) || RISK.test(text))) continue;
+          const hint = termSets.filter(([, terms]) => terms.some((t) => text.includes(t))).map(([id]) => id);
+          stats.rssRelevant += 1;
+          raw.push({ ...x, hint: hint.length ? hint : ['group'], query: 'rss', via: 'rss' });
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: 6 }, () => worker()));
+  }
+  await Promise.all([naverLoop(), bingLoop(), rssLoop()]);
+  await restoreMsn(raw, stats);
   stats.raw = raw.length;
 
   const cutoff = now.getTime() - maxAgeDays * 86_400_000;
@@ -157,6 +245,7 @@ export async function collectFeedCandidates({ sectorConfig, now = new Date(), ma
     s += Math.min(3, it.hits - 1);
     if (/우리금융|우리은행|우리카드|우리금융캐피탈|우리투자증권|우리자산운용|우리금융저축|동양생명|ABL생명/.test(t)) s += 2;
     const ageH = (now.getTime() - it.published.getTime()) / 3_600_000; if (ageH <= 36) s += 1;
+    if (it.via === 'rss' && /(^|\.)(yna|mk|sedaily|newsis|einfomax|asiae)\./.test(hostOf(it.url))) s += 1;
     return s;
   };
   uniq.forEach((it) => { it.pre = scoreOf(it); });
@@ -169,7 +258,7 @@ export async function collectFeedCandidates({ sectorConfig, now = new Date(), ma
   }
   for (const it of uniq) { if (out.length >= maxKeep) break; if (!take.has(it) && it.pre >= 1) { take.add(it); out.push(it); } }
   stats.afterFilter = uniq.length; stats.sent = out.length;
-  log(`Feed collector: ${stats.queries} queries (naver ok ${stats.naverOk}/fail ${stats.naverFail}, bing ok ${stats.bingOk}/fail ${stats.bingFail}) → raw ${stats.raw} → filtered ${stats.afterFilter} → candidates ${stats.sent}.`);
+  log(`Feed collector: ${stats.queries} queries (naver ok ${stats.naverOk}/fail ${stats.naverFail}, bing ok ${stats.bingOk}/fail ${stats.bingFail}), rss ${stats.rssOk}/${RSS_FEEDS.length} feeds (${stats.rssItems} items, ${stats.rssRelevant} relevant), msn restored ${stats.msn.restored}/${stats.msn.found} → raw ${stats.raw} → filtered ${stats.afterFilter} → candidates ${stats.sent}.`);
   return {
     stats,
     sources: out.map((it) => ({
