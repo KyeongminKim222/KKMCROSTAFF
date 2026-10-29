@@ -1061,6 +1061,24 @@ body.chat-open .chat-fab { display: none; }
 body.chat-resizing{user-select:none;cursor:nwse-resize}
 body.chat-resizing .chat-panel{transition:none}
 @media (max-width:640px){.chat-grip,.chat-size{display:none!important}.chat-panel-head{padding-left:16px}}
+</style>
+<style id="chat-messenger-v16">
+.chat-row{flex-direction:row!important;align-items:flex-start!important;gap:8px;max-width:94%}
+.chat-row.is-user{flex-direction:row-reverse!important;align-self:flex-end;align-items:flex-start!important}
+.chat-row.is-bot{align-self:flex-start}
+.chat-ava{flex:0 0 auto;width:36px;height:36px;border-radius:50%;object-fit:cover;display:block;border:1px solid #C5D8EA;background:#fff;box-shadow:0 1px 3px rgba(11,42,74,.12);user-select:none;-webkit-user-drag:none}
+.chat-row.is-user .chat-ava{border-color:#D5DEE8}
+.chat-col{display:flex;flex-direction:column;min-width:0}
+.chat-row.is-user .chat-col{align-items:flex-end}
+.chat-row.is-bot .chat-col{align-items:flex-start}
+.chat-row.is-bot .chat-bubble{border-top-left-radius:5px;border-bottom-left-radius:14px}
+.chat-row.is-user .chat-bubble{border-top-right-radius:5px;border-bottom-right-radius:14px}
+.chat-typing{font-style:normal}
+.chat-typing i{display:inline-block;width:6px;height:6px;margin:0 2px;border-radius:50%;background:#7A8CA0;animation:chat-dot 1.1s ease-in-out infinite}
+.chat-typing i:nth-child(2){animation-delay:.18s}.chat-typing i:nth-child(3){animation-delay:.36s}
+@keyframes chat-dot{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+.chat-panel .chat-footnote{text-align:center;padding-top:2px}
+@media(max-width:640px){.chat-ava{width:32px;height:32px}}
 </style></head>
 <body>
   <div id="app"></div>
@@ -1981,18 +1999,17 @@ function setupServerChatPanel(data) {
   el.innerHTML = [
     '<div class="chat-grip" id="chatGrip" title="끌어서 크기 조정" aria-label="창 크기 조절"></div>',
     '<div class="chat-panel-head">',
-    '  <div><h3>AI에게 질문 · CRO Staff</h3><p>기준일 ' + esc(date) + ' · 오늘 브리핑 근거 · 우리금융그룹 CRO 관점</p></div>',
+    '  <div><h3>AI에게 질문 · CRO Staff</h3></div>',
     '  <div class="chat-head-btns"><button type="button" class="chat-size" id="chatSize" title="창 크기 키우기/기본">크게</button>',
     '  <button type="button" class="chat-close" id="chatClose" aria-label="닫기">×</button></div>',
     '</div>',
-    '<p id="serverLlmStatus" class="chat-llm-status">보안 답변 서버 연결 확인 중…</p>',
     '<div id="chatLog" class="chat-log"></div>',
     '<div class="chat-suggest" id="chatSuggest"></div>',
     '<form id="chatForm" class="chat-form">',
     '  <textarea id="chatInput" class="chat-input" rows="2" placeholder="예: 오늘 크리티컬 이슈가 우리금융 자본에 미치는 영향은?"></textarea>',
     '  <button type="submit" id="chatSend" class="chat-send">질문</button>',
     '</form>',
-    '<p class="chat-footnote">API Key 입력 불필요 · 질문 전송 시에만 AI 사용량 발생 · 당일 브리핑 근거</p>'
+    '<p class="chat-footnote">AI는 완벽하지 않습니다. 확인은 언제나 리스크관리의 기본이니까요.</p>'
   ].join('');
 
   (function setupChatResize() {
@@ -2063,7 +2080,7 @@ function setupServerChatPanel(data) {
     suggest.appendChild(button);
   });
 
-  appendChat('assistant', '오늘(' + date + ') 브리핑을 근거로 답합니다. 별도 API Key 입력은 필요하지 않습니다.');
+  appendChat('assistant', '안녕하세요. 궁금한 점을 편하게 물어보세요.');
   probeServerHealth();
 
   document.getElementById('chatForm').addEventListener('submit', function (event) {
@@ -2102,9 +2119,8 @@ function probeServerHealth() {
       if (!response.ok) throw new Error('HTTP ' + response.status);
       return response.json();
     })
-    .then(function (data) { setServerStatus(true, data.model || 'OpenAI'); setFabLimited(false); })
+    .then(function () { setFabLimited(false); })
     .catch(function () {
-      setServerStatus(false, '사내망에서는 AI 질문이 제한됩니다 · 브리핑 본문은 정상 표시됩니다');
       setFabLimited(true);
     });
 }
@@ -2125,7 +2141,7 @@ function sendServerQuestion() {
   var typing = document.createElement('div');
   typing.className = 'chat-row is-bot';
   typing.id = 'chatTyping';
-  typing.innerHTML = '<div class="chat-bubble chat-typing">보안 서버에서 답변 작성 중…</div>';
+  typing.innerHTML = '<img class="chat-ava" src="./assets/avatar_bot.webp" alt="" width="36" height="36" draggable="false"><div class="chat-col"><div class="chat-bubble chat-typing" aria-label="답변 작성 중"><i></i><i></i><i></i></div></div>';
   if (log) {
     log.appendChild(typing);
     log.scrollTop = log.scrollHeight;
@@ -2154,13 +2170,11 @@ function sendServerQuestion() {
       if (pending) pending.remove();
       appendChat('assistant', data.answer, { sources: local.sources || [] });
       __croChatHistory.push({ role: 'assistant', content: data.answer });
-      setServerStatus(true, data.model || 'OpenAI');
     })
     .catch(function (error) {
       var pending = document.getElementById('chatTyping');
       if (pending) pending.remove();
       appendChat('assistant', '**질문 전송 실패**\n' + (error.message || '잠시 후 다시 시도해 주세요.'));
-      setServerStatus(false, error.message || '질문 전송 실패');
     })
     .finally(function () { setChatBusy(false); });
 }
@@ -2173,10 +2187,18 @@ function appendChat(role, content, meta) {
   if (!log) return;
   var row = document.createElement('div');
   row.className = 'chat-row ' + (role === 'user' ? 'is-user' : 'is-bot');
+  var ava = document.createElement('img');
+  ava.className = 'chat-ava';
+  ava.src = './assets/' + (role === 'user' ? 'avatar_user.webp' : 'avatar_bot.webp');
+  ava.alt = '';
+  ava.width = 36; ava.height = 36; ava.draggable = false;
+  row.appendChild(ava);
+  var col = document.createElement('div');
+  col.className = 'chat-col';
   var bubble = document.createElement('div');
   bubble.className = 'chat-bubble';
   bubble.innerHTML = formatChatText(content);
-  row.appendChild(bubble);
+  col.appendChild(bubble);
   if (meta && meta.sources && meta.sources.length) {
     var src = document.createElement('div');
     src.className = 'chat-sources';
@@ -2184,8 +2206,9 @@ function appendChat(role, content, meta) {
       var t = esc(s.title || '');
       return s.url ? '<a class="article-link" href="' + esc(s.url) + '" target="_blank" rel="noopener noreferrer">' + t + '</a>' : t;
     }).join(' · ');
-    row.appendChild(src);
+    col.appendChild(src);
   }
+  row.appendChild(col);
   log.appendChild(row);
   log.scrollTop = log.scrollHeight;
 }

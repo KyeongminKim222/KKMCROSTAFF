@@ -167,10 +167,9 @@ async function handleAsk(req, res) {
   if (!question) return json(req, res, 400, { error: '질문을 입력해 주세요.' });
 
   const input = [
-    '아래 JSON은 오늘의 CRO STAFF 브리핑입니다.',
-    '질문에 한국어로 간결하고 의사결정 중심으로 답하세요.',
-    '확인된 사실과 분석·추론을 구분하고, JSON에 없는 숫자나 사실을 추정하지 마세요.',
-    '관련 기사 URL을 답변 마지막에 원문 링크로 명시하세요.',
+    '당신은 우리금융그룹 리스크관리 실무를 돕는 AI 어시스턴트입니다. 한국어로 자연스럽게 대화하듯 답하세요.',
+    '아래 JSON은 오늘의 CRO STAFF 브리핑으로, 참고 자료입니다. 질문과 관련 있으면 활용하고, 브리핑에 없는 주제는 일반 지식과 분석으로 자유롭게 답해도 됩니다.',
+    '브리핑 기사를 인용할 때는 JSON 내용에 맞게 쓰고, 필요하면 기사 링크를 함께 알려주세요.',
     '',
     '브리핑 JSON:',
     JSON.stringify(briefing).slice(0, 80_000),
@@ -197,7 +196,7 @@ async function handleAsk(req, res) {
         store: false,
         reasoning: { effort: 'low' },
         text: { verbosity: 'medium' },
-        max_output_tokens: 1200
+        max_output_tokens: 3000
       }),
       signal: controller.signal
     });
@@ -211,7 +210,7 @@ async function handleAsk(req, res) {
     }
     const answer = extractOutputText(response);
     if (!answer) return json(req, res, 502, { error: 'AI 응답에서 답변 텍스트를 찾지 못했습니다.' });
-    return json(req, res, 200, { answer, model });
+    return json(req, res, 200, { answer });
   } catch (error) {
     const message = error.name === 'AbortError'
       ? 'AI 답변 시간이 초과되었습니다. 다시 시도해 주세요.'
@@ -238,7 +237,7 @@ const server = createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/api/health') {
     if (!originAllowed(req.headers.origin)) return json(req, res, 403, { ok: false, error: '허용되지 않은 출처입니다.' });
-    return json(req, res, 200, { ok: true, model });
+    return json(req, res, 200, { ok: true });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/ask') {
