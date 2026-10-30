@@ -1,0 +1,1258 @@
+{
+  "executive_judgment": "오늘 가장 큰 리스크는 우리금융지주 관련 사안입니다. 우리금융지주의 실적과 비은행 수익성 개선 여부를 직접 반영하는 기사입니다. 오늘 주시할 것은 관련 익스포저와 한도 사용률이 그룹 기준치 안에 있는지입니다.",
+  "executive_judgment_bullets": [
+    "우리금융그룹은 3분기에도 1조원대 순이익을 기록하며 두 분기 연속 ‘1조 클럽’에 올랐습니다. 우리금융지주의 실적과 비은행 수익성 개선 여부를 직접 반영하는 기사입니다.",
+    "하나금융그룹은 3분기 누적 순익 3조6243억원으로 역대 최대를 기록했지만 연체율과 부실여신비율도 함께 상승했다고 보도됐습니다. 우리금융의 실적 비교와 함께 연체율·부실여신비율 관리 수준을 대조해 봐야 합니다.",
+    "금융위원회가 5대 은행장을 소집해 해킹 대응과 보안 강화 이행 상황을 점검하기로 했습니다. 우리은행의 보안 이행 점검과 내부통제 체계에 직접 영향을 주는 일정입니다.",
+    "금융위원회가 부실감사 위험이 높은 기업에 대해 연내 심사 착수를 예고했습니다. 우리금융그룹의 회계투명성과 외부감사 대응 체계에 영향을 줄 수 있습니다."
+  ],
+  "forward_looking_points": [
+    {
+      "title": "우리금융 3Q실적",
+      "horizon": "1~2주",
+      "likelihood": "중간",
+      "cro_angle": "우리금융지주의 실적과 비은행 수익성 개선 여부를 직접 반영하는 기사입니다. 후속 발표가 나오면 영향 범위를 재평가합니다.",
+      "trigger": "우리금융지주의 후속 발표 또는 수치 변화입니다."
+    },
+    {
+      "title": "하나금융 3Q실적·연체율 상승",
+      "horizon": "1~2주",
+      "likelihood": "중간",
+      "cro_angle": "우리금융의 실적 비교와 함께 연체율·부실여신비율 관리 수준을 대조해 봐야 합니다. 후속 발표가 나오면 영향 범위를 재평가합니다.",
+      "trigger": "하나금융그룹의 후속 발표 또는 수치 변화입니다."
+    }
+  ],
+  "insights": {
+    "headline": "우리금융지주 관련 사안을 중심으로 그룹 리스크 지표를 함께 봅니다.",
+    "bullets": [
+      "우리금융그룹은 3분기에도 1조원대 순이익을 기록하며 두 분기 연속 ‘1조 클럽’에 올랐습니다. 우리금융지주의 실적과 비은행 수익성 개선 여부를 직접 반영하는 기사입니다.",
+      "하나금융그룹은 3분기 누적 순익 3조6243억원으로 역대 최대를 기록했지만 연체율과 부실여신비율도 함께 상승했다고 보도됐습니다. 우리금융의 실적 비교와 함께 연체율·부실여신비율 관리 수준을 대조해 봐야 합니다.",
+      "금융위원회가 5대 은행장을 소집해 해킹 대응과 보안 강화 이행 상황을 점검하기로 했습니다. 우리은행의 보안 이행 점검과 내부통제 체계에 직접 영향을 주는 일정입니다."
+    ],
+    "action_items": [
+      "리스크관리부는 금일 중 관련 익스포저와 한도 사용률을 집계합니다.",
+      "계열사 리스크 담당은 이번 주 안에 관련 지표 변화를 보고합니다.",
+      "그룹 리스크관리협의회에서 다음 회의 때 대응 방향을 결정합니다."
+    ],
+    "stance": "확인된 사실 범위 안에서 보수적으로 대응합니다.",
+    "as_of": "2026-10-31 KST"
+  },
+  "monitoring_points": [
+    "우리금융지주 관련 후속 발표와 수치 변화",
+    "하나금융그룹 관련 후속 발표와 수치 변화",
+    "금융위원회 관련 후속 발표와 수치 변화",
+    "금융위원회 관련 후속 발표와 수치 변화",
+    "4대 금융지주 관련 후속 발표와 수치 변화"
+  ],
+  "critical": [
+    {
+      "title": "비은행 수익성은 \"아픈손가락\"...우리금융지주, 두 분기 연속 ‘1조 클럽’",
+      "url": "https://www.youthdaily.co.kr/news/article.html?no=228894",
+      "published": "2026-10-30 10:00",
+      "source_name": "youthdaily.co.kr",
+      "summary": "youthdaily.co.kr이(가) 2026-10-30에 보도한 내용입니다. 우리금융그룹은 3분기에도 1조원대 순이익을 기록하며 두 분기 연속 ‘1조 클럽’에 올랐습니다.",
+      "why_woori_cro": "우리금융지주의 실적과 비은행 수익성 개선 여부를 직접 반영하는 기사입니다. 30~90일 안에 관련 한도·충당금·자본 지표의 변화 여부가 의사결정 포인트입니다.",
+      "entity": "우리금융지주",
+      "channel": "우리금융그룹 계열사",
+      "source_type": "media",
+      "risk_type": "자본·건전성·운영",
+      "urgency": "높음",
+      "confidence": "중간",
+      "critical": true,
+      "window": "primary",
+      "watchpoints": [
+        "우리금융지주 관련 지표의 다음 발표·공시 일정",
+        "자본·건전성·운영 익스포저 한도 대비 사용률"
+      ],
+      "score": 92,
+      "axis": "group",
+      "event_key": "우리금융|3Q실적",
+      "one_line_fact": "우리금융그룹은 3분기에도 1조원대 순이익을 기록하며 두 분기 연속 ‘1조 클럽’에 올랐습니다.",
+      "cro_hook": "우리금융지주의 실적과 비은행 수익성 개선 여부를 직접 반영하는 기사입니다.",
+      "sector": "group",
+      "sector_hook": "",
+      "risk_tags": [
+        "신용리스크"
+      ]
+    }
+  ],
+  "daily_news": [
+    {
+      "title": "3분기 누적 순익 3조6243억원 '역대 최대'…연체율·부실여신비율 동반 상승",
+      "url": "http://www.newslock.co.kr/news/articleView.html?idxno=138943",
+      "published": "2026-10-30 19:54",
+      "source_name": "newslock.co.kr",
+      "summary": "newslock.co.kr이(가) 2026-10-30에 보도한 내용입니다. 하나금융그룹은 3분기 누적 순익 3조6243억원으로 역대 최대를 기록했지만 연체율과 부실여신비율도 함께 상승했다고 보도됐습니다.",
+      "why_woori_cro": "우리금융의 실적 비교와 함께 연체율·부실여신비율 관리 수준을 대조해 봐야 합니다. 30~90일 안에 관련 한도·충당금·자본 지표의 변화 여부가 의사결정 포인트입니다.",
+      "entity": "하나금융그룹",
+      "channel": "경쟁사 동향",
+      "source_type": "media",
+      "risk_type": "신용·운영·평판",
+      "urgency": "중간",
+      "confidence": "중간",
+      "critical": false,
+      "window": "primary",
+      "watchpoints": [
+        "하나금융그룹 관련 지표의 다음 발표·공시 일정",
+        "신용·운영·평판 익스포저 한도 대비 사용률"
+      ],
+      "score": 84,
+      "axis": "peer",
+      "event_key": "하나금융|3Q실적·연체율 상승",
+      "one_line_fact": "하나금융그룹은 3분기 누적 순익 3조6243억원으로 역대 최대를 기록했지만 연체율과 부실여신비율도 함께 상승했다고 보도됐습니다.",
+      "cro_hook": "우리금융의 실적 비교와 함께 연체율·부실여신비율 관리 수준을 대조해 봐야 합니다.",
+      "sector": "group",
+      "sector_hook": "",
+      "risk_tags": [
+        "신용리스크"
+      ]
+    },
+    {
+      "title": "[머니브리핑] 금융위, 5대 은행장 소집⋯‘해킹 대응’ 연말 인사 변수로 부상",
+      "url": "https://www.etoday.co.kr/news/view/2642339",
+      "published": "2026-10-30 23:00",
+      "source_name": "이투데이",
+      "summary": "이투데이이(가) 2026-10-30에 보도한 내용입니다. 금융위원회가 5대 은행장을 소집해 해킹 대응과 보안 강화 이행 상황을 점검하기로 했습니다.",
+      "why_woori_cro": "우리은행의 보안 이행 점검과 내부통제 체계에 직접 영향을 주는 일정입니다. 30~90일 안에 관련 한도·충당금·자본 지표의 변화 여부가 의사결정 포인트입니다.",
+      "entity": "금융위원회",
+      "channel": "감독당국·정책",
+      "source_type": "media",
+      "risk_type": "준법·규제",
+      "urgency": "중간",
+      "confidence": "중간",
+      "critical": false,
+      "window": "primary",
+      "watchpoints": [
+        "금융위원회 관련 지표의 다음 발표·공시 일정",
+        "준법·규제 익스포저 한도 대비 사용률"
+      ],
+      "score": 78,
+      "axis": "supervision",
+      "event_key": "금융위|5대 은행장 해킹 대응 점검",
+      "one_line_fact": "금융위원회가 5대 은행장을 소집해 해킹 대응과 보안 강화 이행 상황을 점검하기로 했습니다.",
+      "cro_hook": "우리은행의 보안 이행 점검과 내부통제 체계에 직접 영향을 주는 일정입니다.",
+      "sector": "group",
+      "sector_hook": "",
+      "risk_tags": [
+        "시스템리스크",
+        "신용리스크"
+      ]
+    },
+    {
+      "title": "이억원, 회계의 날 맞아 '부실감사' 정조준…연내 심사 착수",
+      "url": "https://www.tfmedia.co.kr/news/article.html?no=208510",
+      "published": "2026-10-30 16:55",
+      "source_name": "tfmedia.co.kr",
+      "summary": "tfmedia.co.kr이(가) 2026-10-30에 보도한 내용입니다. 금융위원회가 부실감사 위험이 높은 기업에 대해 연내 심사 착수를 예고했습니다.",
+      "why_woori_cro": "우리금융그룹의 회계투명성과 외부감사 대응 체계에 영향을 줄 수 있습니다. 30~90일 안에 관련 한도·충당금·자본 지표의 변화 여부가 의사결정 포인트입니다.",
+      "entity": "금융위원회",
+      "channel": "감독당국·정책",
+      "source_type": "media",
+      "risk_type": "준법·규제",
+      "urgency": "중간",
+      "confidence": "중간",
+      "critical": false,
+      "window": "primary",
+      "watchpoints": [
+        "금융위원회 관련 지표의 다음 발표·공시 일정",
+        "준법·규제 익스포저 한도 대비 사용률"
+      ],
+      "score": 75,
+      "axis": "supervision",
+      "event_key": "금융위|부실감사 감독 강화",
+      "one_line_fact": "금융위원회가 부실감사 위험이 높은 기업에 대해 연내 심사 착수를 예고했습니다.",
+      "cro_hook": "우리금융그룹의 회계투명성과 외부감사 대응 체계에 영향을 줄 수 있습니다.",
+      "sector": "group",
+      "sector_hook": "",
+      "risk_tags": [
+        "신용리스크"
+      ]
+    },
+    {
+      "title": "4대 금융, 역대급 순이익 실적에도…'수익성·건전성' 동시 경고음",
+      "url": "https://www.newspim.com/news/view/20261030000486",
+      "published": "2026-10-30 14:00",
+      "source_name": "newspim.com",
+      "summary": "newspim.com이(가) 2026-10-30에 보도한 내용입니다. 4대 금융그룹의 3분기 누적 순이익이 17조원을 넘었지만 비이자이익 둔화와 건전성 부담이 함께 거론됐습니다.",
+      "why_woori_cro": "우리금융그룹의 수익성 둔화와 건전성 부담을 경쟁지주와 함께 비교해야 합니다. 30~90일 안에 관련 한도·충당금·자본 지표의 변화 여부가 의사결정 포인트입니다.",
+      "entity": "4대 금융지주",
+      "channel": "금융시장",
+      "source_type": "media",
+      "risk_type": "시장·신용·유동성",
+      "urgency": "중간",
+      "confidence": "중간",
+      "critical": false,
+      "window": "primary",
+      "watchpoints": [
+        "4대 금융지주 관련 지표의 다음 발표·공시 일정",
+        "시장·신용·유동성 익스포저 한도 대비 사용률"
+      ],
+      "score": 72,
+      "axis": "market",
+      "event_key": "4대금융|3Q실적·건전성 경고",
+      "one_line_fact": "4대 금융그룹의 3분기 누적 순이익이 17조원을 넘었지만 비이자이익 둔화와 건전성 부담이 함께 거론됐습니다.",
+      "cro_hook": "우리금융그룹의 수익성 둔화와 건전성 부담을 경쟁지주와 함께 비교해야 합니다.",
+      "sector": "group",
+      "sector_hook": "",
+      "risk_tags": [
+        "신용리스크",
+        "금리리스크"
+      ]
+    },
+    {
+      "title": "코스피 급락에도 원·달러 환율 하락…월말 네고에 1334.3원 마감 [김혜란의 FX]",
+      "url": "https://www.sedaily.com/article/20108385",
+      "published": "2026-10-30 16:18",
+      "source_name": "서울경제",
+      "summary": "서울경제이(가) 2026-10-30에 보도한 내용입니다. 원/달러 환율은 30일 월말 네고 영향으로 1,334.3원에 마감했습니다.",
+      "why_woori_cro": "환율 하락은 우리금융의 외화자산 평가와 해외법인 환산손익에 영향을 줄 수 있습니다. 30~90일 안에 관련 한도·충당금·자본 지표의 변화 여부가 의사결정 포인트입니다.",
+      "entity": "원/달러 환율",
+      "channel": "금융시장",
+      "source_type": "media",
+      "risk_type": "시장·신용·유동성",
+      "urgency": "중간",
+      "confidence": "낮음",
+      "critical": false,
+      "window": "primary",
+      "watchpoints": [
+        "원/달러 환율 관련 지표의 다음 발표·공시 일정",
+        "시장·신용·유동성 익스포저 한도 대비 사용률"
+      ],
+      "score": 62,
+      "axis": "market",
+      "event_key": "환율|1334.3원 마감",
+      "one_line_fact": "원/달러 환율은 30일 월말 네고 영향으로 1,334.3원에 마감했습니다.",
+      "cro_hook": "환율 하락은 우리금융의 외화자산 평가와 해외법인 환산손익에 영향을 줄 수 있습니다.",
+      "sector": "group",
+      "sector_hook": "",
+      "risk_tags": [
+        "시장리스크",
+        "신용리스크"
+      ]
+    },
+    {
+      "title": "[채권-마감] 강세 플래트닝…주가 급락·WGBI 수요 유입",
+      "url": "https://news.einfomax.co.kr/news/articleView.html?idxno=4442274",
+      "published": "2026-10-30 18:59",
+      "source_name": "news.einfomax.co.kr",
+      "summary": "news.einfomax.co.kr이(가) 2026-10-30에 보도한 내용입니다. 30일 국고채 3년물 최종호가 수익률은 3.715%, 10년물은 4.008%로 전장 대비 각각 5.1bp, 7.3bp 하락했습니다.",
+      "why_woori_cro": "금리 하락은 우리금융의 채권평가이익과 조달비용에 직접 영향을 줄 수 있습니다. 30~90일 안에 관련 한도·충당금·자본 지표의 변화 여부가 의사결정 포인트입니다.",
+      "entity": "국고채 시장",
+      "channel": "금융시장",
+      "source_type": "media",
+      "risk_type": "시장·신용·유동성",
+      "urgency": "중간",
+      "confidence": "중간",
+      "critical": false,
+      "window": "primary",
+      "watchpoints": [
+        "국고채 시장 관련 지표의 다음 발표·공시 일정",
+        "시장·신용·유동성 익스포저 한도 대비 사용률"
+      ],
+      "score": 60,
+      "axis": "market",
+      "event_key": "국고채|강세 플래트닝",
+      "one_line_fact": "30일 국고채 3년물 최종호가 수익률은 3.715%, 10년물은 4.008%로 전장 대비 각각 5.1bp, 7.3bp 하락했습니다.",
+      "cro_hook": "금리 하락은 우리금융의 채권평가이익과 조달비용에 직접 영향을 줄 수 있습니다.",
+      "sector": "group",
+      "sector_hook": "",
+      "risk_tags": [
+        "시장리스크",
+        "신용리스크"
+      ]
+    },
+    {
+      "title": "국고채 금리 일제히 하락…위험회피 속 주요국 채권 강세(종합)",
+      "url": "https://www.yna.co.kr/view/AKR20261030149151008",
+      "published": "2026-10-30 16:56",
+      "source_name": "연합뉴스",
+      "summary": "연합뉴스이(가) 2026-10-30에 보도한 내용입니다. 30일 국고채 금리는 일제히 하락해 위험회피 심리 속 채권 강세가 나타났습니다.",
+      "why_woori_cro": "국고채 금리 하락은 우리금융의 채권평가와 조달금리에 직접 연결됩니다. 30~90일 안에 관련 한도·충당금·자본 지표의 변화 여부가 의사결정 포인트입니다.",
+      "entity": "국고채 시장",
+      "channel": "금융시장",
+      "source_type": "media",
+      "risk_type": "시장·신용·유동성",
+      "urgency": "낮음",
+      "confidence": "중간",
+      "critical": false,
+      "window": "primary",
+      "watchpoints": [
+        "국고채 시장 관련 지표의 다음 발표·공시 일정",
+        "시장·신용·유동성 익스포저 한도 대비 사용률"
+      ],
+      "score": 58,
+      "axis": "market",
+      "event_key": "국고채|금리 일제 하락",
+      "one_line_fact": "30일 국고채 금리는 일제히 하락해 위험회피 심리 속 채권 강세가 나타났습니다.",
+      "cro_hook": "국고채 금리 하락은 우리금융의 채권평가와 조달금리에 직접 연결됩니다.",
+      "sector": "group",
+      "sector_hook": "",
+      "risk_tags": [
+        "금리리스크",
+        "신용리스크"
+      ]
+    },
+    {
+      "title": "불법 가상자산 취급업자(특금법상 미신고 가상자산사업자)에 대한 수사의뢰(DAXA, 3건) 및 접속차단(2건) 요청",
+      "url": "https://www.fsc.go.kr/no010101/88022?curPage=1&srchBeginDt=&srchCtgry=&srchEndDt=&srchKey=&srchText=",
+      "published": "2026-10-30",
+      "source_name": "금융위원회",
+      "summary": "금융위원회이(가) 2026-10-30에 보도한 내용입니다. 금융위원회는 2026-10-30자로 미신고 가상자산사업자 3건 수사의뢰와 2건 접속차단 요청을 공개했습니다.",
+      "why_woori_cro": "가상자산 연계 자금세탁과 불법송금이 우리금융의 AML·고객확인 절차에 닿습니다. 30~90일 안에 관련 한도·충당금·자본 지표의 변화 여부가 의사결정 포인트입니다.",
+      "entity": "금융위원회",
+      "channel": "감독당국·정책",
+      "source_type": "official",
+      "risk_type": "준법·규제",
+      "urgency": "낮음",
+      "confidence": "높음",
+      "critical": false,
+      "window": "primary",
+      "watchpoints": [
+        "금융위원회 관련 지표의 다음 발표·공시 일정",
+        "준법·규제 익스포저 한도 대비 사용률"
+      ],
+      "score": 55,
+      "axis": "supervision",
+      "event_key": "금융위|불법 가상자산업자 수사의뢰",
+      "one_line_fact": "금융위원회는 2026-10-30자로 미신고 가상자산사업자 3건 수사의뢰와 2건 접속차단 요청을 공개했습니다.",
+      "cro_hook": "가상자산 연계 자금세탁과 불법송금이 우리금융의 AML·고객확인 절차에 닿습니다.",
+      "sector": "group",
+      "sector_hook": "",
+      "risk_tags": [
+        "신용리스크"
+      ]
+    },
+    {
+      "title": "IRS 금리 급락…국채선물 연동·안전자산 선호",
+      "url": "https://news.einfomax.co.kr/news/articleView.html?idxno=4442273",
+      "published": "2026-10-30 18:58",
+      "source_name": "news.einfomax.co.kr",
+      "summary": "news.einfomax.co.kr이(가) 2026-10-30에 보도한 내용입니다. 30일 서울 채권시장에서 3년 IRS 금리는 3.50bp 하락했고 10년 IRS 금리는 4.25bp 내렸습니다.",
+      "why_woori_cro": "스왑금리 하락은 우리금융의 금리헤지 비용과 ALM 관리에 영향을 줄 수 있습니다. 30~90일 안에 관련 한도·충당금·자본 지표의 변화 여부가 의사결정 포인트입니다.",
+      "entity": "IRS 시장",
+      "channel": "금융시장",
+      "source_type": "media",
+      "risk_type": "시장·신용·유동성",
+      "urgency": "낮음",
+      "confidence": "중간",
+      "critical": false,
+      "window": "primary",
+      "watchpoints": [
+        "IRS 시장 관련 지표의 다음 발표·공시 일정",
+        "시장·신용·유동성 익스포저 한도 대비 사용률"
+      ],
+      "score": 55,
+      "axis": "market",
+      "event_key": "IRS|금리 급락",
+      "one_line_fact": "30일 서울 채권시장에서 3년 IRS 금리는 3.50bp 하락했고 10년 IRS 금리는 4.25bp 내렸습니다.",
+      "cro_hook": "스왑금리 하락은 우리금융의 금리헤지 비용과 ALM 관리에 영향을 줄 수 있습니다.",
+      "sector": "group",
+      "sector_hook": "",
+      "risk_tags": [
+        "금리리스크",
+        "시장리스크"
+      ]
+    }
+  ],
+  "subsidiary_news": [],
+  "additional_news": [],
+  "risk_brief": [
+    {
+      "risk": "신용리스크",
+      "level": "높음",
+      "headline": "비은행 수익성은 \"아픈손가락\"...우리금융지주, 두 분기 연속 ‘1…",
+      "check": "우리금융지주 관련 지표의 다음 발표·공시 일정"
+    },
+    {
+      "risk": "시스템리스크",
+      "level": "중간",
+      "headline": "금융위, 5대 은행장 소집⋯‘해킹 대응’ 연말 인사 변수로 부상",
+      "check": "금융위원회 관련 지표의 다음 발표·공시 일정"
+    },
+    {
+      "risk": "시장리스크",
+      "level": "중간",
+      "headline": "코스피 급락에도 원·달러 환율 하락…월말 네고에 1334.3원 마감…",
+      "check": "원/달러 환율 관련 지표의 다음 발표·공시 일정"
+    },
+    {
+      "risk": "금리리스크",
+      "level": "낮음",
+      "headline": "국고채 금리 일제히 하락…위험회피 속 주요국 채권 강세(종합)",
+      "check": "국고채 시장 관련 지표의 다음 발표·공시 일정"
+    }
+  ],
+  "sectors": {
+    "bank": {
+      "id": "bank",
+      "label_ko": "은행",
+      "label_en": "Bank",
+      "companies": [
+        "우리은행"
+      ],
+      "judgment": "오늘 은행 업권의 가장 큰 리스크는 시중은행 관련 사안이며, 우리은행의 인터넷뱅킹·직원용 업무시스템 보안과 고객정보 보호에 직결됩니다. 우리은행 리스크관리부는 관련 익스포저와 한도 사용률이 기준치 안에 있는지를 오늘의 확인 사항으로 둡니다.",
+      "news": [
+        {
+          "title": "시중은행 해킹 사태 한 달, 피해 규모·공격 수법·배후 어디까지 확인됐나",
+          "url": "https://www.womaneconomy.co.kr/news/articleView.html?idxno=260414",
+          "published": "2026-10-30 16:00",
+          "source_name": "womaneconomy.co.kr",
+          "summary": "womaneconomy.co.kr이(가) 2026-10-30에 보도한 내용입니다. KB국민·신한·하나은행에서 고객 개인정보 유출이 확인됐고 우리은행은 외부 침입 시도를 차단한 것으로 전해졌습니다.",
+          "why_woori_cro": "우리은행의 정보보안 통제와 고객정보 유출 방지 체계를 직접 점검해야 하는 기사입니다. 우리은행의 인터넷뱅킹·직원용 업무시스템 보안과 고객정보 보호에 직결됩니다.",
+          "entity": "시중은행",
+          "channel": "금융시장",
+          "source_type": "media",
+          "risk_type": "시장·신용·유동성",
+          "urgency": "높음",
+          "confidence": "중간",
+          "critical": false,
+          "window": "primary",
+          "watchpoints": [
+            "시중은행 관련 지표의 다음 발표·공시 일정",
+            "시장·신용·유동성 익스포저 한도 대비 사용률"
+          ],
+          "score": 88,
+          "axis": "market",
+          "event_key": "시중은행|해킹 사태 확산",
+          "one_line_fact": "KB국민·신한·하나은행에서 고객 개인정보 유출이 확인됐고 우리은행은 외부 침입 시도를 차단한 것으로 전해졌습니다.",
+          "cro_hook": "우리은행의 정보보안 통제와 고객정보 유출 방지 체계를 직접 점검해야 하는 기사입니다.",
+          "sector": "bank",
+          "sector_hook": "우리은행의 인터넷뱅킹·직원용 업무시스템 보안과 고객정보 보호에 직결됩니다.",
+          "risk_tags": [
+            "시스템리스크"
+          ]
+        },
+        {
+          "title": "[오늘Who] 우리은행 분기 순이익 1조 시대 열어, 정진완 실적·내부통제 성과에 연임 힘 실리나",
+          "url": "https://www.businesspost.co.kr/BP?command=article_view&num=450795",
+          "published": "2026-10-30 08:53",
+          "source_name": "businesspost.co.kr",
+          "summary": "businesspost.co.kr이(가) 2026-10-30에 보도한 내용입니다. 우리은행은 2026년 3분기에 1조원이 넘는 순이익을 거뒀고 최근 해킹 공격에서도 정보유출 피해가 확인되지 않았습니다.",
+          "why_woori_cro": "우리은행의 실적과 내부통제 성과가 그룹 이익과 보안 리스크 관리에 직접 연결됩니다. 우리은행의 순이익, 내부통제, 보안 대응에 직접 닿는 기사입니다.",
+          "entity": "우리은행",
+          "channel": "우리금융그룹 계열사",
+          "source_type": "media",
+          "risk_type": "자본·건전성·운영",
+          "urgency": "높음",
+          "confidence": "중간",
+          "critical": false,
+          "window": "primary",
+          "watchpoints": [
+            "우리은행 관련 지표의 다음 발표·공시 일정",
+            "자본·건전성·운영 익스포저 한도 대비 사용률"
+          ],
+          "score": 86,
+          "axis": "group",
+          "event_key": "우리은행|3Q실적·내부통제",
+          "one_line_fact": "우리은행은 2026년 3분기에 1조원이 넘는 순이익을 거뒀고 최근 해킹 공격에서도 정보유출 피해가 확인되지 않았습니다.",
+          "cro_hook": "우리은행의 실적과 내부통제 성과가 그룹 이익과 보안 리스크 관리에 직접 연결됩니다.",
+          "sector": "bank",
+          "sector_hook": "우리은행의 순이익, 내부통제, 보안 대응에 직접 닿는 기사입니다.",
+          "risk_tags": [
+            "시스템리스크",
+            "운영리스크"
+          ]
+        },
+        {
+          "title": "은행 연체율 10년 만에 최고…고금리에 기업·가계 ‘빚 경고등’",
+          "url": "https://www.mk.co.kr/news/business/12184152",
+          "published": "2026-10-30",
+          "source_name": "매일경제",
+          "summary": "매일경제이(가) 2026-10-30에 보도한 내용입니다. 8월 말 기준 기업대출 연체율은 0.86%로 한 달 새 0.08%p 상승했고 대기업대출 연체율은 0.39%로 최고치를 경신했습니다.",
+          "why_woori_cro": "우리은행의 기업여신 건전성과 연체율 관리에 직접 닿는 기사입니다.",
+          "entity": "은행권",
+          "channel": "금융시장",
+          "source_type": "media",
+          "risk_type": "시장·신용·유동성",
+          "urgency": "중간",
+          "confidence": "중간",
+          "critical": false,
+          "window": "primary",
+          "watchpoints": [
+            "은행권 관련 지표의 다음 발표·공시 일정",
+            "시장·신용·유동성 익스포저 한도 대비 사용률"
+          ],
+          "score": 75,
+          "axis": "market",
+          "event_key": "은행권|연체율 상승",
+          "one_line_fact": "8월 말 기준 기업대출 연체율은 0.86%로 한 달 새 0.08%p 상승했고 대기업대출 연체율은 0.39%로 최고치를 경신했습니다.",
+          "cro_hook": "우리은행 기업여신의 취약 업종·취약 차주 연체 추이를 선제적으로 점검해야 합니다.",
+          "sector": "bank",
+          "sector_hook": "우리은행의 기업여신 건전성과 연체율 관리에 직접 닿는 기사입니다.",
+          "risk_tags": [
+            "신용리스크",
+            "금리리스크"
+          ]
+        },
+        {
+          "title": "부동산·임대업 연체율 2% 육박…반도체 온기 아랫목으로 안 퍼져",
+          "url": "https://www.sedaily.com/article/20108445",
+          "published": "2026-10-30 11:35",
+          "source_name": "서울경제",
+          "summary": "서울경제이(가) 2026-10-30에 보도한 내용입니다. 부동산·임대업 연체율이 2%에 육박하고 지방은행 연체율이 시중은행의 2배 수준이라고 보도됐습니다.",
+          "why_woori_cro": "우리은행의 기업대출과 부동산 관련 익스포저에서 연체율 확산 여부를 봐야 합니다. 우리은행의 기업대출·부동산 익스포저 건전성에 닿는 기사입니다.",
+          "entity": "은행권",
+          "channel": "금융시장",
+          "source_type": "media",
+          "risk_type": "시장·신용·유동성",
+          "urgency": "중간",
+          "confidence": "중간",
+          "critical": false,
+          "window": "primary",
+          "watchpoints": [
+            "은행권 관련 지표의 다음 발표·공시 일정",
+            "시장·신용·유동성 익스포저 한도 대비 사용률"
+          ],
+          "score": 66,
+          "axis": "market",
+          "event_key": "은행권|부동산·임대업 연체율",
+          "one_line_fact": "부동산·임대업 연체율이 2%에 육박하고 지방은행 연체율이 시중은행의 2배 수준이라고 보도됐습니다.",
+          "cro_hook": "우리은행의 기업대출과 부동산 관련 익스포저에서 연체율 확산 여부를 봐야 합니다.",
+          "sector": "bank",
+          "sector_hook": "우리은행의 기업대출·부동산 익스포저 건전성에 닿는 기사입니다.",
+          "risk_tags": [
+            "신용리스크"
+          ]
+        },
+        {
+          "title": "“잠이 안 와요”…고정형 주담대 금리 5% 돌파에 영끌족 ‘아우성’",
+          "url": "https://m.mk.co.kr/news/economy/12189978",
+          "published": "2026-10-29 16:06",
+          "source_name": "매일경제",
+          "summary": "매일경제이(가) 2026-10-29에 보도한 내용입니다. 9월 예금은행 가계대출 가중평균금리는 연 4.96%로 전월보다 0.2%p 상승했고 고정형 주담대 금리는 5%를 돌파했습니다.",
+          "why_woori_cro": "우리은행의 주담대 금리 경쟁력과 차주 상환부담 확대에 따른 연체 전이를 함께 봐야 합니다. 우리은행의 주택담보대출 포트폴리오와 가계 연체율에 직접 영향을 줄 수 있습니다.",
+          "entity": "주담대 시장",
+          "channel": "금융시장",
+          "source_type": "media",
+          "risk_type": "시장·신용·유동성",
+          "urgency": "중간",
+          "confidence": "중간",
+          "critical": false,
+          "window": "related",
+          "watchpoints": [
+            "주담대 시장 관련 지표의 다음 발표·공시 일정",
+            "시장·신용·유동성 익스포저 한도 대비 사용률"
+          ],
+          "score": 65,
+          "axis": "market",
+          "event_key": "주담대|금리 5% 돌파",
+          "one_line_fact": "9월 예금은행 가계대출 가중평균금리는 연 4.96%로 전월보다 0.2%p 상승했고 고정형 주담대 금리는 5%를 돌파했습니다.",
+          "cro_hook": "우리은행의 주담대 금리 경쟁력과 차주 상환부담 확대에 따른 연체 전이를 함께 봐야 합니다.",
+          "sector": "bank",
+          "sector_hook": "우리은행의 주택담보대출 포트폴리오와 가계 연체율에 직접 영향을 줄 수 있습니다.",
+          "risk_tags": [
+            "신용리스크",
+            "금리리스크"
+          ]
+        }
+      ],
+      "shortfall_reason": ""
+    },
+    "card_capital": {
+      "id": "card_capital",
+      "label_ko": "여전·저축은행",
+      "label_en": "Card, Capital & Savings Bank",
+      "companies": [
+        "우리카드",
+        "우리금융캐피탈",
+        "우리금융저축은행"
+      ],
+      "judgment": "오늘 여전·저축은행 업권의 가장 큰 리스크는 라인저축은행 관련 사안이며, 우리금융저축은행의 금리인하요구권 심사와 소비자보호 절차에 닿는 기사입니다. 우리카드·우리금융캐피탈·우리금융저축은행 리스크관리부는 관련 익스포저와 한도 사용률이 기준치 안에 있는지를 오늘의 확인 사항으로 둡니다.",
+      "news": [
+        {
+          "title": "라인저축은행 '금리인하요구권 심사 부실'..개선사항 조치",
+          "url": "https://www.4th.kr/news/articleView.html?idxno=2120821",
+          "published": "2026-10-30 18:59",
+          "source_name": "4th.kr",
+          "summary": "4th.kr이(가) 2026-10-30에 보도한 내용입니다. 금감원이 라인저축은행의 금리인하요구권 심사기준에 대해 개선사항 1건을 통보했습니다.",
+          "why_woori_cro": "우리금융저축은행의 금리인하요구권 심사 절차와 민원 대응 기준에 참고가 됩니다. 우리금융저축은행의 금리인하요구권 심사와 소비자보호 절차에 닿는 기사입니다.",
+          "entity": "라인저축은행",
+          "channel": "감독당국·정책",
+          "source_type": "media",
+          "risk_type": "준법·규제",
+          "urgency": "중간",
+          "confidence": "중간",
+          "critical": false,
+          "window": "primary",
+          "watchpoints": [
+            "라인저축은행 관련 지표의 다음 발표·공시 일정",
+            "준법·규제 익스포저 한도 대비 사용률"
+          ],
+          "score": 75,
+          "axis": "supervision",
+          "event_key": "라인저축은행|금리인하요구권 개선조치",
+          "one_line_fact": "금감원이 라인저축은행의 금리인하요구권 심사기준에 대해 개선사항 1건을 통보했습니다.",
+          "cro_hook": "우리금융저축은행의 금리인하요구권 심사 절차와 민원 대응 기준에 참고가 됩니다.",
+          "sector": "card_capital",
+          "sector_hook": "우리금융저축은행의 금리인하요구권 심사와 소비자보호 절차에 닿는 기사입니다.",
+          "risk_tags": [
+            "금리리스크",
+            "운영리스크"
+          ]
+        },
+        {
+          "title": "현대카드, 3분기 누적 당기순이익 2758억원…8.2%↑",
+          "url": "https://www.asiae.co.kr/article/2026102916551542465",
+          "published": "2026-10-30",
+          "source_name": "아시아경제",
+          "summary": "아시아경제이(가) 2026-10-30에 보도한 내용입니다. 현대카드는 3분기 누적 순이익 2758억원을 기록했고 1개월 이상 연체율은 0.75%로 전분기보다 0.09%p 하락했습니다.",
+          "why_woori_cro": "우리카드의 연체율 관리 수준과 카드금융 취급 규모를 비교하는 벤치마크가 됩니다. 경쟁 카드사의 연체율과 카드금융 취급액이 제시돼 cardcapital입니다.",
+          "entity": "현대카드",
+          "channel": "경쟁사 동향",
+          "source_type": "media",
+          "risk_type": "신용·운영·평판",
+          "urgency": "중간",
+          "confidence": "중간",
+          "critical": false,
+          "window": "primary",
+          "watchpoints": [
+            "현대카드 관련 지표의 다음 발표·공시 일정",
+            "신용·운영·평판 익스포저 한도 대비 사용률"
+          ],
+          "score": 62,
+          "axis": "peer",
+          "event_key": "현대카드|3Q실적·연체율",
+          "one_line_fact": "현대카드는 3분기 누적 순이익 2758억원을 기록했고 1개월 이상 연체율은 0.75%로 전분기보다 0.09%p 하락했습니다.",
+          "cro_hook": "우리카드의 연체율 관리 수준과 카드금융 취급 규모를 비교하는 벤치마크가 됩니다.",
+          "sector": "card_capital",
+          "sector_hook": "경쟁 카드사의 연체율과 카드금융 취급액이 제시돼 cardcapital입니다.",
+          "risk_tags": [
+            "신용리스크"
+          ]
+        },
+        {
+          "title": "금리 상승에 카드사 수익성 시험대···실적 가를 변수는 ‘비용관리’",
+          "url": "https://www.sisajournal-e.com/news/articleView.html?idxno=424708",
+          "published": "2026-10-30 16:01",
+          "source_name": "sisajournal-e.com",
+          "summary": "sisajournal-e.com이(가) 2026-10-30에 보도한 내용입니다. 주요 카드사들의 수익성이 여전채 금리 상승과 대손비용 증가로 비용관리 역량에 좌우된다고 분석했습니다.",
+          "why_woori_cro": "우리카드의 조달비용과 대손비용 관리가 카드업권 흐름과 맞닿아 있습니다. 우리카드의 여전채 조달비용과 카드론 건전성에 닿는 기사입니다.",
+          "entity": "카드업계",
+          "channel": "경쟁사 동향",
+          "source_type": "media",
+          "risk_type": "신용·운영·평판",
+          "urgency": "낮음",
+          "confidence": "중간",
+          "critical": false,
+          "window": "primary",
+          "watchpoints": [
+            "카드업계 관련 지표의 다음 발표·공시 일정",
+            "신용·운영·평판 익스포저 한도 대비 사용률"
+          ],
+          "score": 57,
+          "axis": "peer",
+          "event_key": "카드업계|비용관리 변수",
+          "one_line_fact": "주요 카드사들의 수익성이 여전채 금리 상승과 대손비용 증가로 비용관리 역량에 좌우된다고 분석했습니다.",
+          "cro_hook": "우리카드의 조달비용과 대손비용 관리가 카드업권 흐름과 맞닿아 있습니다.",
+          "sector": "card_capital",
+          "sector_hook": "우리카드의 여전채 조달비용과 카드론 건전성에 닿는 기사입니다.",
+          "risk_tags": [
+            "신용리스크",
+            "금리리스크"
+          ]
+        },
+        {
+          "title": "양동원 하나저축은행 대표, 부동산 부실자산 감축에 흑자 전환…안전자산 중심 대출 확대 [금융사 2026 3분기 실적]",
+          "url": "http://www.fntimes.com/html/view.php?ud=2026103016570673317c96e79780_18",
+          "published": "2026-10-30 22:09",
+          "source_name": "fntimes.com",
+          "summary": "fntimes.com이(가) 2026-10-30에 보도한 내용입니다. 하나저축은행은 부동산 부실자산 감축과 안전자산 중심 대출 확대에 힘입어 3분기 흑자 전환했다고 보도했습니다.",
+          "why_woori_cro": "우리금융저축은행의 부동산 부실자산 감축 속도와 흑자전환 가능성을 비교할 수 있습니다. 저축은행의 건전성·부동산 PF 이슈이므로 cardcapital입니다.",
+          "entity": "하나저축은행",
+          "channel": "경쟁사 동향",
+          "source_type": "media",
+          "risk_type": "신용·운영·평판",
+          "urgency": "낮음",
+          "confidence": "중간",
+          "critical": false,
+          "window": "primary",
+          "watchpoints": [
+            "하나저축은행 관련 지표의 다음 발표·공시 일정",
+            "신용·운영·평판 익스포저 한도 대비 사용률"
+          ],
+          "score": 55,
+          "axis": "peer",
+          "event_key": "하나저축은행|흑자전환·부실자산 감축",
+          "one_line_fact": "하나저축은행은 부동산 부실자산 감축과 안전자산 중심 대출 확대에 힘입어 3분기 흑자 전환했다고 보도했습니다.",
+          "cro_hook": "우리금융저축은행의 부동산 부실자산 감축 속도와 흑자전환 가능성을 비교할 수 있습니다.",
+          "sector": "card_capital",
+          "sector_hook": "저축은행의 건전성·부동산 PF 이슈이므로 cardcapital입니다.",
+          "risk_tags": [
+            "신용리스크"
+          ]
+        },
+        {
+          "title": "채수웅 신한저축은행 대표, 기업여신 확대·대손비용 절감으로 순익 증가…건전성 관리 주력 [금융사 2026 3분기 실적]",
+          "url": "http://www.fntimes.com/html/view.php?ud=2026102918344911107c96e79780_18",
+          "published": "2026-10-30 21:37",
+          "source_name": "fntimes.com",
+          "summary": "fntimes.com이(가) 2026-10-30에 보도한 내용입니다. 신한저축은행은 기업여신 확대와 대손비용 감소로 3분기 순이익이 18.92% 증가했다고 밝혔습니다.",
+          "why_woori_cro": "우리금융저축은행의 기업대출 확대와 대손비용 추이를 비교해 건전성 완화 여부를 봐야 합니다. 우리금융저축은행의 기업여신 포트폴리오와 대손비용 관리에 닿는 기사입니다.",
+          "entity": "신한저축은행",
+          "channel": "경쟁사 동향",
+          "source_type": "media",
+          "risk_type": "신용·운영·평판",
+          "urgency": "낮음",
+          "confidence": "중간",
+          "critical": false,
+          "window": "primary",
+          "watchpoints": [
+            "신한저축은행 관련 지표의 다음 발표·공시 일정",
+            "신용·운영·평판 익스포저 한도 대비 사용률"
+          ],
+          "score": 55,
+          "axis": "peer",
+          "event_key": "신한저축은행|3Q실적·건전성",
+          "one_line_fact": "신한저축은행은 기업여신 확대와 대손비용 감소로 3분기 순이익이 18.92% 증가했다고 밝혔습니다.",
+          "cro_hook": "우리금융저축은행의 기업대출 확대와 대손비용 추이를 비교해 건전성 완화 여부를 봐야 합니다.",
+          "sector": "card_capital",
+          "sector_hook": "우리금융저축은행의 기업여신 포트폴리오와 대손비용 관리에 닿는 기사입니다.",
+          "risk_tags": [
+            "신용리스크"
+          ]
+        }
+      ],
+      "shortfall_reason": ""
+    },
+    "insurance": {
+      "id": "insurance",
+      "label_ko": "보험",
+      "label_en": "Insurance",
+      "companies": [
+        "ABL생명",
+        "동양생명"
+      ],
+      "judgment": "오늘 보험 업권의 가장 큰 리스크는 금융감독원 관련 사안이며, 보험부채 산정과 계리가정 점검이어서 insurance입니다. ABL생명·동양생명 리스크관리부는 관련 익스포저와 한도 사용률이 기준치 안에 있는지를 오늘의 확인 사항으로 둡니다.",
+      "news": [
+        {
+          "title": "보험사, 보장별 손해율·사업비 물가 반영해야…부채 산정 들여다본다",
+          "url": "https://www.fnnews.com/news/202610291600128716",
+          "published": "2026-10-29 16:00",
+          "source_name": "파이낸셜뉴스",
+          "summary": "파이낸셜뉴스이(가) 2026-10-29에 보도한 내용입니다. 금감원은 보장별 손해율과 사업비에 물가상승률을 반영해 보험부채 산정을 보수적으로 하도록 점검하겠다고 했습니다.",
+          "why_woori_cro": "동양생명과 ABL생명의 계리모형과 보험부채 산정 기준을 재점검하는 계기가 됩니다. 보험부채 산정과 계리가정 점검이어서 insurance입니다.",
+          "entity": "금융감독원",
+          "channel": "감독당국·정책",
+          "source_type": "media",
+          "risk_type": "준법·규제",
+          "urgency": "높음",
+          "confidence": "중간",
+          "critical": false,
+          "window": "related",
+          "watchpoints": [
+            "금융감독원 관련 지표의 다음 발표·공시 일정",
+            "준법·규제 익스포저 한도 대비 사용률"
+          ],
+          "score": 88,
+          "axis": "supervision",
+          "event_key": "금감원|보험부채 산정 점검",
+          "one_line_fact": "금감원은 보장별 손해율과 사업비에 물가상승률을 반영해 보험부채 산정을 보수적으로 하도록 점검하겠다고 했습니다.",
+          "cro_hook": "동양생명과 ABL생명의 계리모형과 보험부채 산정 기준을 재점검하는 계기가 됩니다.",
+          "sector": "insurance",
+          "sector_hook": "보험부채 산정과 계리가정 점검이어서 insurance입니다.",
+          "risk_tags": [
+            "운영리스크"
+          ]
+        },
+        {
+          "title": "금감원 \"매칭조정 승인 기준 내년쯤 마련\"…보험사 자본 부담 던다",
+          "url": "https://www.fnnews.com/news/202610302036304319",
+          "published": "2026-10-30 20:36",
+          "source_name": "파이낸셜뉴스",
+          "summary": "파이낸셜뉴스이(가) 2026-10-30에 보도한 내용입니다. 금감원은 매칭조정 승인 기준을 내년쯤 마련해 보험사 자본 부담을 완화하겠다고 했습니다.",
+          "why_woori_cro": "동양생명과 ABL생명의 K-ICS와 자본 부담 산정 방식에 직접 영향을 줍니다. 보험사 자본 규제와 계리 기준 이슈이므로 insurance입니다.",
+          "entity": "금융감독원",
+          "channel": "감독당국·정책",
+          "source_type": "media",
+          "risk_type": "준법·규제",
+          "urgency": "높음",
+          "confidence": "중간",
+          "critical": false,
+          "window": "primary",
+          "watchpoints": [
+            "금융감독원 관련 지표의 다음 발표·공시 일정",
+            "준법·규제 익스포저 한도 대비 사용률"
+          ],
+          "score": 85,
+          "axis": "supervision",
+          "event_key": "금감원|매칭조정 승인 기준",
+          "one_line_fact": "금감원은 매칭조정 승인 기준을 내년쯤 마련해 보험사 자본 부담을 완화하겠다고 했습니다.",
+          "cro_hook": "동양생명과 ABL생명의 K-ICS와 자본 부담 산정 방식에 직접 영향을 줍니다.",
+          "sector": "insurance",
+          "sector_hook": "보험사 자본 규제와 계리 기준 이슈이므로 insurance입니다.",
+          "risk_tags": [
+            "운영리스크"
+          ]
+        },
+        {
+          "title": "금감원, 보험사 계리가정 관리 강화…연말 결산 집중점검",
+          "url": "https://www.fnnews.com/news/202610291607101523",
+          "published": "2026-10-29 16:07",
+          "source_name": "파이낸셜뉴스",
+          "summary": "파이낸셜뉴스이(가) 2026-10-29에 보도한 내용입니다. 금감원은 계리가정 관리 수준을 평가하는 상시감시지표를 도입하고 결산 때 부적정 산출을 집중 점검하겠다고 했습니다.",
+          "why_woori_cro": "동양생명과 ABL생명의 CSM·BEL·예실차 관리 체계를 선제적으로 맞춰야 합니다. 보험 계리가정과 결산 점검이어서 insurance입니다.",
+          "entity": "금융감독원",
+          "channel": "감독당국·정책",
+          "source_type": "media",
+          "risk_type": "준법·규제",
+          "urgency": "높음",
+          "confidence": "중간",
+          "critical": false,
+          "window": "related",
+          "watchpoints": [
+            "금융감독원 관련 지표의 다음 발표·공시 일정",
+            "준법·규제 익스포저 한도 대비 사용률"
+          ],
+          "score": 85,
+          "axis": "supervision",
+          "event_key": "금감원|보험 계리가정 관리 강화",
+          "one_line_fact": "금감원은 계리가정 관리 수준을 평가하는 상시감시지표를 도입하고 결산 때 부적정 산출을 집중 점검하겠다고 했습니다.",
+          "cro_hook": "동양생명과 ABL생명의 CSM·BEL·예실차 관리 체계를 선제적으로 맞춰야 합니다.",
+          "sector": "insurance",
+          "sector_hook": "보험 계리가정과 결산 점검이어서 insurance입니다.",
+          "risk_tags": [
+            "운영리스크"
+          ]
+        },
+        {
+          "title": "금감원, 보험사 계리가정 개선 요구...연말 보험부채 평가 집중점검",
+          "url": "https://www.greened.kr/news/articleView.html?idxno=353503",
+          "published": "2026-10-30 19:36",
+          "source_name": "greened.kr",
+          "summary": "greened.kr이(가) 2026-10-30에 보도한 내용입니다. 금감원이 전 보험사에 계리가정 자체 점검과 개선계획 제출을 요구하고 연말 보험부채 평가를 집중 점검하겠다고 밝혔습니다.",
+          "why_woori_cro": "동양생명과 ABL생명의 손해율·사업비 가정과 보험부채 평가에 직접 영향을 줍니다. 동양생명과 ABL생명의 보험부채 평가와 계리가정 산출에 직접 닿는 기사입니다.",
+          "entity": "금융감독원",
+          "channel": "감독당국·정책",
+          "source_type": "media",
+          "risk_type": "준법·규제",
+          "urgency": "중간",
+          "confidence": "중간",
+          "critical": false,
+          "window": "primary",
+          "watchpoints": [
+            "금융감독원 관련 지표의 다음 발표·공시 일정",
+            "준법·규제 익스포저 한도 대비 사용률"
+          ],
+          "score": 80,
+          "axis": "supervision",
+          "event_key": "금감원|보험 계리가정 개선 요구",
+          "one_line_fact": "금감원이 전 보험사에 계리가정 자체 점검과 개선계획 제출을 요구하고 연말 보험부채 평가를 집중 점검하겠다고 밝혔습니다.",
+          "cro_hook": "동양생명과 ABL생명의 손해율·사업비 가정과 보험부채 평가에 직접 영향을 줍니다.",
+          "sector": "insurance",
+          "sector_hook": "동양생명과 ABL생명의 보험부채 평가와 계리가정 산출에 직접 닿는 기사입니다.",
+          "risk_tags": [
+            "운영리스크"
+          ]
+        },
+        {
+          "title": "금감원, 내년부터 보험사 계리가정 '상시감시지표' 운영…적정성 평가 강화",
+          "url": "https://www.ngetnews.com/news/articleView.html?idxno=555339",
+          "published": "2026-10-30 13:11",
+          "source_name": "ngetnews.com",
+          "summary": "ngetnews.com이(가) 2026-10-30에 보도한 내용입니다. 금감원이 내년부터 보험사 계리가정을 정량 평가하는 상시감시지표를 운영하겠다고 밝혔습니다.",
+          "why_woori_cro": "동양생명과 ABL생명의 계리가정 적정성 관리와 보험부채 평가에 직접 닿는 기사입니다. 동양생명과 ABL생명의 계리가정 정량평가와 보험부채 관리에 직접 닿는 기사입니다.",
+          "entity": "금융감독원",
+          "channel": "감독당국·정책",
+          "source_type": "media",
+          "risk_type": "준법·규제",
+          "urgency": "중간",
+          "confidence": "중간",
+          "critical": false,
+          "window": "primary",
+          "watchpoints": [
+            "금융감독원 관련 지표의 다음 발표·공시 일정",
+            "준법·규제 익스포저 한도 대비 사용률"
+          ],
+          "score": 80,
+          "axis": "supervision",
+          "event_key": "금감원|보험 계리가정 상시감시지표",
+          "one_line_fact": "금감원이 내년부터 보험사 계리가정을 정량 평가하는 상시감시지표를 운영하겠다고 밝혔습니다.",
+          "cro_hook": "동양생명과 ABL생명의 계리가정 적정성 관리와 보험부채 평가에 직접 닿는 기사입니다.",
+          "sector": "insurance",
+          "sector_hook": "동양생명과 ABL생명의 계리가정 정량평가와 보험부채 관리에 직접 닿는 기사입니다.",
+          "risk_tags": [
+            "운영리스크"
+          ]
+        },
+        {
+          "title": "보험 본업 좋아져도 순익 뒷걸음…지주 보험사 열 곳 중 동양생명 외 모두 감소",
+          "url": "https://www.ceoscoredaily.com/page/view/2026102915110891947",
+          "published": "2026-10-30 19:32",
+          "source_name": "ceoscoredaily.com",
+          "summary": "ceoscoredaily.com이(가) 2026-10-30에 보도한 내용입니다. 지주계 보험사 10곳 가운데 동양생명을 제외한 9곳의 순익이 감소했다고 보도됐습니다.",
+          "why_woori_cro": "동양생명의 순익 추이와 투자손익, 보험손익 변동성을 직접 비교해야 합니다. 동양생명의 실적과 보험손익 변동성에 직접 닿는 기사입니다.",
+          "entity": "지주계 보험사",
+          "channel": "우리금융그룹 계열사",
+          "source_type": "media",
+          "risk_type": "자본·건전성·운영",
+          "urgency": "중간",
+          "confidence": "중간",
+          "critical": false,
+          "window": "primary",
+          "watchpoints": [
+            "지주계 보험사 관련 지표의 다음 발표·공시 일정",
+            "자본·건전성·운영 익스포저 한도 대비 사용률"
+          ],
+          "score": 65,
+          "axis": "group",
+          "event_key": "지주계 보험사|순익 감소",
+          "one_line_fact": "지주계 보험사 10곳 가운데 동양생명을 제외한 9곳의 순익이 감소했다고 보도됐습니다.",
+          "cro_hook": "동양생명의 순익 추이와 투자손익, 보험손익 변동성을 직접 비교해야 합니다.",
+          "sector": "insurance",
+          "sector_hook": "동양생명의 실적과 보험손익 변동성에 직접 닿는 기사입니다.",
+          "risk_tags": [
+            "시장리스크"
+          ]
+        }
+      ],
+      "shortfall_reason": ""
+    },
+    "securities_am": {
+      "id": "securities_am",
+      "label_ko": "증권·자산운용",
+      "label_en": "Securities & Asset Management",
+      "companies": [
+        "우리투자증권",
+        "우리자산운용"
+      ],
+      "judgment": "오늘 증권·자산운용 업권의 가장 큰 리스크는 KB증권 관련 사안이며, 우리투자증권의 고객자금 관리와 내부통제 절차에 직접 닿는 기사입니다. 우리투자증권·우리자산운용 리스크관리부는 관련 익스포저와 한도 사용률이 기준치 안에 있는지를 오늘의 확인 사항으로 둡니다.",
+      "news": [
+        {
+          "title": "KB증권, 3.6억 횡령 겪고도 또 직원 비위 의혹…내부통제 개선 효과 의문",
+          "url": "https://www.the-today.com/news/articleView.html?idxno=92736",
+          "published": "2026-10-30 17:42",
+          "source_name": "the-today.com",
+          "summary": "the-today.com이(가) 2026-10-30에 보도한 내용입니다. KB증권에서 직원 횡령 의혹이 불거졌고, 과거 3억6000만원 횡령 사고 이후 내부통제 개선 효과에 의문이 제기됐습니다.",
+          "why_woori_cro": "우리투자증권의 내부통제와 고객자금 접근 권한 관리 체계를 점검할 때 비교 대상이 됩니다. 우리투자증권의 고객자금 관리와 내부통제 절차에 직접 닿는 기사입니다.",
+          "entity": "KB증권",
+          "channel": "경쟁사 동향",
+          "source_type": "media",
+          "risk_type": "신용·운영·평판",
+          "urgency": "중간",
+          "confidence": "중간",
+          "critical": false,
+          "window": "primary",
+          "watchpoints": [
+            "KB증권 관련 지표의 다음 발표·공시 일정",
+            "신용·운영·평판 익스포저 한도 대비 사용률"
+          ],
+          "score": 82,
+          "axis": "peer",
+          "event_key": "KB증권|직원 비위 의혹",
+          "one_line_fact": "KB증권에서 직원 횡령 의혹이 불거졌고, 과거 3억6000만원 횡령 사고 이후 내부통제 개선 효과에 의문이 제기됐습니다.",
+          "cro_hook": "우리투자증권의 내부통제와 고객자금 접근 권한 관리 체계를 점검할 때 비교 대상이 됩니다.",
+          "sector": "securities_am",
+          "sector_hook": "우리투자증권의 고객자금 관리와 내부통제 절차에 직접 닿는 기사입니다.",
+          "risk_tags": [
+            "운영리스크"
+          ]
+        },
+        {
+          "title": "[단독] 검사·제재 손보는 금융당국…징계 대신 자율개선 유도나서",
+          "url": "https://www.mk.co.kr/news/stock/12191550",
+          "published": "2026-10-30 15:21",
+          "source_name": "매일경제",
+          "summary": "매일경제이(가) 2026-10-30에 보도한 내용입니다. 금융당국이 검사·제재 방식을 손질해 징계 대신 자율개선을 유도하는 방향을 검토한다고 보도했습니다.",
+          "why_woori_cro": "우리투자증권의 검사 대응과 내부통제 개선 프로세스에 영향을 줍니다. 검사·제재 제도 개편이 증권·운용사에 직접 닿아 securitiesam입니다.",
+          "entity": "금융당국",
+          "channel": "감독당국·정책",
+          "source_type": "media",
+          "risk_type": "준법·규제",
+          "urgency": "중간",
+          "confidence": "중간",
+          "critical": false,
+          "window": "primary",
+          "watchpoints": [
+            "금융당국 관련 지표의 다음 발표·공시 일정",
+            "준법·규제 익스포저 한도 대비 사용률"
+          ],
+          "score": 80,
+          "axis": "supervision",
+          "event_key": "금융당국|검사·제재 개선",
+          "one_line_fact": "금융당국이 검사·제재 방식을 손질해 징계 대신 자율개선을 유도하는 방향을 검토한다고 보도했습니다.",
+          "cro_hook": "우리투자증권의 검사 대응과 내부통제 개선 프로세스에 영향을 줍니다.",
+          "sector": "securities_am",
+          "sector_hook": "검사·제재 제도 개편이 증권·운용사에 직접 닿아 securitiesam입니다.",
+          "risk_tags": [
+            "운영리스크"
+          ]
+        },
+        {
+          "title": "[PF 2막 ⑦] 강진두號 KB증권, 홈플러스 영등포점 개발 지분 투자…2500억 차환 부담도",
+          "url": "https://www.ddaily.co.kr/page/view/2026102610042917383",
+          "published": "2026-10-30 02:00",
+          "source_name": "ddaily.co.kr",
+          "summary": "ddaily.co.kr이(가) 2026-10-30에 보도한 내용입니다. KB증권의 홈플러스 영등포점 개발 지분투자와 2500억원 차환 부담이 부동산 PF 리스크로 언급됐습니다.",
+          "why_woori_cro": "우리투자증권의 PF 익스포저와 채무보증 부담을 비교할 수 있는 기사입니다. 우리투자증권의 부동산 PF 익스포저와 차환 리스크에 닿는 기사입니다.",
+          "entity": "KB증권",
+          "channel": "경쟁사 동향",
+          "source_type": "media",
+          "risk_type": "신용·운영·평판",
+          "urgency": "중간",
+          "confidence": "중간",
+          "critical": false,
+          "window": "primary",
+          "watchpoints": [
+            "KB증권 관련 지표의 다음 발표·공시 일정",
+            "신용·운영·평판 익스포저 한도 대비 사용률"
+          ],
+          "score": 68,
+          "axis": "peer",
+          "event_key": "KB증권|PF 익스포저·차환 부담",
+          "one_line_fact": "KB증권의 홈플러스 영등포점 개발 지분투자와 2500억원 차환 부담이 부동산 PF 리스크로 언급됐습니다.",
+          "cro_hook": "우리투자증권의 PF 익스포저와 채무보증 부담을 비교할 수 있는 기사입니다.",
+          "sector": "securities_am",
+          "sector_hook": "우리투자증권의 부동산 PF 익스포저와 차환 리스크에 닿는 기사입니다.",
+          "risk_tags": [
+            "신용리스크"
+          ]
+        },
+        {
+          "title": "KB증권, 3분기 누적 순이익 1조원 돌파…전분기 대비로는 -39%",
+          "url": "https://www.hankyung.com/article/202610293894i",
+          "published": "2026-10-29 15:49",
+          "source_name": "한국경제",
+          "summary": "한국경제이(가) 2026-10-29에 보도한 내용입니다. KB증권의 3분기 누적 순이익은 1조740억원이었고 3분기 순이익은 전분기 대비 39.4% 감소했습니다.",
+          "why_woori_cro": "우리투자증권의 분기 변동성과 시장 민감도를 비교하는 데 유용합니다. 대형 증권사의 분기 실적 변동이어서 securitiesam입니다.",
+          "entity": "KB증권",
+          "channel": "경쟁사 동향",
+          "source_type": "media",
+          "risk_type": "신용·운영·평판",
+          "urgency": "중간",
+          "confidence": "중간",
+          "critical": false,
+          "window": "related",
+          "watchpoints": [
+            "KB증권 관련 지표의 다음 발표·공시 일정",
+            "신용·운영·평판 익스포저 한도 대비 사용률"
+          ],
+          "score": 62,
+          "axis": "peer",
+          "event_key": "KB증권|3Q실적·시장조정",
+          "one_line_fact": "KB증권의 3분기 누적 순이익은 1조740억원이었고 3분기 순이익은 전분기 대비 39.4% 감소했습니다.",
+          "cro_hook": "우리투자증권의 분기 변동성과 시장 민감도를 비교하는 데 유용합니다.",
+          "sector": "securities_am",
+          "sector_hook": "대형 증권사의 분기 실적 변동이어서 securitiesam입니다.",
+          "risk_tags": [
+            "시장리스크"
+          ]
+        },
+        {
+          "title": "[IB토마토](크레딧시그널)부국증권, 펀드 평가손실 500억…유동성 규제도 변수",
+          "url": "http://newstomato.com/ReadNews.aspx?no=1318641",
+          "published": "2026-10-30 13:18",
+          "source_name": "newstomato.com",
+          "summary": "newstomato.com이(가) 2026-10-30에 보도한 내용입니다. 부국증권은 펀드 평가손실 500억원과 2027년 도입 예정인 신조정유동성비율 규제를 부담 요인으로 지목받고 있습니다.",
+          "why_woori_cro": "우리투자증권의 운용손익 변동성과 유동성 규제 대응을 점검할 때 참고할 수 있습니다. 우리투자증권의 자기매매·펀드 운용과 유동성 관리에 직접 닿는 비교 사례입니다.",
+          "entity": "부국증권",
+          "channel": "경쟁사 동향",
+          "source_type": "media",
+          "risk_type": "신용·운영·평판",
+          "urgency": "낮음",
+          "confidence": "중간",
+          "critical": false,
+          "window": "primary",
+          "watchpoints": [
+            "부국증권 관련 지표의 다음 발표·공시 일정",
+            "신용·운영·평판 익스포저 한도 대비 사용률"
+          ],
+          "score": 58,
+          "axis": "peer",
+          "event_key": "부국증권|펀드 평가손실·유동성 규제",
+          "one_line_fact": "부국증권은 펀드 평가손실 500억원과 2027년 도입 예정인 신조정유동성비율 규제를 부담 요인으로 지목받고 있습니다.",
+          "cro_hook": "우리투자증권의 운용손익 변동성과 유동성 규제 대응을 점검할 때 참고할 수 있습니다.",
+          "sector": "securities_am",
+          "sector_hook": "우리투자증권의 자기매매·펀드 운용과 유동성 관리에 직접 닿는 비교 사례입니다.",
+          "risk_tags": [
+            "유동성리스크",
+            "시장리스크"
+          ]
+        }
+      ],
+      "shortfall_reason": ""
+    }
+  },
+  "sector_judgment": {
+    "bank": "오늘 은행 업권의 가장 큰 리스크는 시중은행 관련 사안이며, 우리은행의 인터넷뱅킹·직원용 업무시스템 보안과 고객정보 보호에 직결됩니다. 우리은행 리스크관리부는 관련 익스포저와 한도 사용률이 기준치 안에 있는지를 오늘의 확인 사항으로 둡니다.",
+    "card_capital": "오늘 여전·저축은행 업권의 가장 큰 리스크는 라인저축은행 관련 사안이며, 우리금융저축은행의 금리인하요구권 심사와 소비자보호 절차에 닿는 기사입니다. 우리카드·우리금융캐피탈·우리금융저축은행 리스크관리부는 관련 익스포저와 한도 사용률이 기준치 안에 있는지를 오늘의 확인 사항으로 둡니다.",
+    "insurance": "오늘 보험 업권의 가장 큰 리스크는 금융감독원 관련 사안이며, 보험부채 산정과 계리가정 점검이어서 insurance입니다. ABL생명·동양생명 리스크관리부는 관련 익스포저와 한도 사용률이 기준치 안에 있는지를 오늘의 확인 사항으로 둡니다.",
+    "securities_am": "오늘 증권·자산운용 업권의 가장 큰 리스크는 KB증권 관련 사안이며, 우리투자증권의 고객자금 관리와 내부통제 절차에 직접 닿는 기사입니다. 우리투자증권·우리자산운용 리스크관리부는 관련 익스포저와 한도 사용률이 기준치 안에 있는지를 오늘의 확인 사항으로 둡니다."
+  },
+  "editions": [
+    {
+      "id": "all",
+      "label_ko": "전체",
+      "sections": [
+        "common",
+        "bank",
+        "card_capital",
+        "insurance",
+        "securities_am"
+      ]
+    },
+    {
+      "id": "bank",
+      "label_ko": "은행업",
+      "sections": [
+        "common",
+        "bank"
+      ]
+    },
+    {
+      "id": "card_capital",
+      "label_ko": "여전·저축은행업",
+      "sections": [
+        "common",
+        "card_capital"
+      ]
+    },
+    {
+      "id": "insurance",
+      "label_ko": "보험업",
+      "sections": [
+        "common",
+        "insurance"
+      ]
+    },
+    {
+      "id": "securities_am",
+      "label_ko": "증권·운용업",
+      "sections": [
+        "common",
+        "securities_am"
+      ]
+    }
+  ],
+  "meta": {
+    "fallback_notice": false,
+    "product": "CRO Staff News & Critical Monitor",
+    "perspective": "우리금융그룹 CRO",
+    "mode": "daily",
+    "briefing_date": "2026-10-31",
+    "generated_at": "2026-10-30T22:45:29.874Z",
+    "primary_window": "어제·오늘(KST) 우선, 최근 3일 이내 기사 중심 (부족 시 4일까지 related)",
+    "feed_search": {
+      "queries": 122,
+      "naverOk": 0,
+      "naverFail": 122,
+      "bingOk": 122,
+      "bingFail": 0,
+      "raw": 1525,
+      "rssOk": 30,
+      "rssFail": 0,
+      "rssItems": 1782,
+      "rssRelevant": 420,
+      "msn": {
+        "found": 310,
+        "restored": 306,
+        "failed": 4
+      },
+      "afterFilter": 1057,
+      "sent": 170
+    },
+    "research_method": "8 research stages (domestic/woori/peer/global/official + 3 sector) + LLM scoring (axis+sector) + deterministic selection (common 10 + 4 sectors × 5) + CRO writing (1 common + 2 sector batches)",
+    "pipeline_version": "v3-sectors",
+    "dry_run": false,
+    "candidates_total": 223,
+    "selected_total": 31,
+    "common_total": 10,
+    "slots": {
+      "supervision": 3,
+      "group": 1,
+      "peer": 1,
+      "market": 5,
+      "overseas": 0
+    },
+    "selection_window_days": 3,
+    "selection_min_score": 50,
+    "shortfall_reason": "",
+    "sector_counts": {
+      "group": 10,
+      "bank": 5,
+      "card_capital": 5,
+      "insurance": 6,
+      "securities_am": 5
+    },
+    "sector_shortfall": {},
+    "sector_selection_steps": {
+      "bank": "3-day window, score≥50",
+      "card_capital": "3-day window, score≥50",
+      "insurance": "3-day window, score≥50",
+      "securities_am": "3-day window, score≥50"
+    },
+    "editions": 5,
+    "scoring_fallback": false,
+    "writing_fallback": true,
+    "sector_writing_fallback": [
+      "bank",
+      "card_capital",
+      "insurance",
+      "securities_am"
+    ],
+    "models": {
+      "research": "gpt-5.4-mini",
+      "scoring": "gpt-5.4-mini",
+      "writing": "gpt-5.4"
+    },
+    "usage": {
+      "by_model": {
+        "gpt-5.4-mini": {
+          "input": 593725,
+          "output": 116797,
+          "calls": 17
+        }
+      },
+      "total": {
+        "input": 593725,
+        "output": 116797,
+        "calls": 17,
+        "estimated_cost_usd": 0.9709
+      }
+    },
+    "changes": {
+      "new": [
+        "금융위|5대 은행장 해킹 대응 점검",
+        "우리금융|3Q실적",
+        "하나금융|3Q실적·연체율 상승",
+        "4대금융|3Q실적·건전성 경고",
+        "금융위|부실감사 감독 강화",
+        "환율|1334.3원 마감",
+        "국고채|강세 플래트닝",
+        "국고채|금리 일제 하락",
+        "금융위|불법 가상자산업자 수사의뢰",
+        "IRS|금리 급락",
+        "우리은행|3Q실적·내부통제",
+        "시중은행|해킹 사태 확산",
+        "은행권|연체율 상승",
+        "은행권|부동산·임대업 연체율",
+        "주담대|금리 5% 돌파",
+        "라인저축은행|금리인하요구권 개선조치",
+        "카드업계|비용관리 변수",
+        "하나저축은행|흑자전환·부실자산 감축",
+        "신한저축은행|3Q실적·건전성",
+        "현대카드|3Q실적·연체율",
+        "지주계 보험사|순익 감소",
+        "금감원|보험부채 산정 점검",
+        "금감원|매칭조정 승인 기준",
+        "금감원|보험 계리가정 관리 강화",
+        "금감원|보험 계리가정 개선 요구",
+        "금감원|보험 계리가정 상시감시지표",
+        "KB증권|직원 비위 의혹",
+        "금융당국|검사·제재 개선",
+        "KB증권|PF 익스포저·차환 부담",
+        "KB증권|3Q실적·시장조정",
+        "부국증권|펀드 평가손실·유동성 규제"
+      ],
+      "continued": []
+    },
+    "compared_briefings": [
+      "2026-10-30",
+      "2026-10-29",
+      "2026-10-28"
+    ],
+    "source_mix": {
+      "media": 30,
+      "official": 1
+    }
+  }
+}
