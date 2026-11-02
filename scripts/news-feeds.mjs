@@ -156,12 +156,32 @@ export function buildQueries(sectorConfig) {
   return q;
 }
 
-export async function collectFeedCandidates({ sectorConfig, now = new Date(), maxAgeDays = 4, maxKeep = 170, log = console.log, concurrency = 3 } = {}) {
+export async function collectFeedCandidates({ sectorConfig, now = new Date(), maxAgeDays = 4, maxKeep = 260, log = console.log, concurrency = 3 } = {}) {
   const queries = buildQueries(sectorConfig);
   const stats = { queries: queries.length, naverOk: 0, naverFail: 0, bingOk: 0, bingFail: 0, raw: 0 };
   const raw = [];
   // 네이버: 동시 요청 시 차단되므로 순차 + 간격. 실패하면 3초 후 1회 재시도.
+  // 전일자 전용 패스: 최신순 검색은 오늘 아침 기사에 밀려 전일 기사가 잘린다. 전일(KST) 하루로 기간을 고정하고 관련도순으로 2페이지씩 더 긁는다.
+  const kstNow = new Date(now.getTime() + 9 * 3_600_000);
+  const yd = new Date(kstNow.getTime() - 86_400_000);
+  const ydDot = `${yd.getUTCFullYear()}.${String(yd.getUTCMonth() + 1).padStart(2, '0')}.${String(yd.getUTCDate()).padStart(2, '0')}`;
+  async function naverYesterdayLoop() {
+    stats.naverYdOk = 0; stats.naverYdItems = 0;
+    for (const q of queries) {
+      for (let p = 0; p < 1; p += 1) {
+        const nUrl = `https://search.naver.com/search.naver?where=news&query=${encodeURIComponent(q.text)}&sort=0&pd=3&ds=${ydDot}&de=${ydDot}&start=${p * 10 + 1}`;
+        let r = await fetchText(nUrl);
+        if (!r.ok) { await sleep(3000); r = await fetchText(nUrl); }
+        if (!r.ok) { stats.naverFail += 1; break; }
+        const items = parseNaver(r.text, now); stats.naverYdOk += 1; stats.naverYdItems += items.length;
+        items.forEach((x) => raw.push({ ...x, hint: q.hint, query: q.text, via: 'naver_yd' }));
+        await sleep(1100);
+        if (items.length < 5) break;
+      }
+    }
+  }
   async function naverLoop() {
+    await naverYesterdayLoop();
     for (const q of queries) {
       for (let p = 0; p < q.pages; p += 1) {
         const nUrl = `https://search.naver.com/search.naver?where=news&query=${encodeURIComponent(q.text)}&sort=1&start=${p * 10 + 1}`;

@@ -28,7 +28,7 @@ concurrency:
 jobs:
   generate-deploy-email:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Check out repository

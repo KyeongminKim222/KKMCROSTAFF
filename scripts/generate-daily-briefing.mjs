@@ -384,6 +384,12 @@ async function requestOpenAi(label, requestBody, maxAttempts = 3) {
 
     const body = await response.json().catch(() => ({}));
     if (response.ok) { recordUsage(requestBody.model, body?.usage); return body; }
+    const errCode = String(body?.error?.code || body?.error?.type || '');
+    const errMsg = String(body?.error?.message || '');
+    if (errCode === 'insufficient_quota' || /no credits remaining|exceeded your current quota|billing/i.test(errMsg)) {
+      console.error(`FATAL: OpenAI credits exhausted (${response.status} ${errCode}): ${errMsg}. Aborting run instead of retrying until timeout.`);
+      process.exit(2);
+    }
 
     const retryable = response.status === 429 || response.status >= 500;
     if (!retryable || attempt === maxAttempts) {
@@ -478,6 +484,8 @@ const previousTitlesForPrompt = previousItems.slice(0, 30).map((it) => it.title)
 
 const commonResearchRules = `
 실행일은 ${date} KST다. ${shiftDate(date, -2)} ~ ${date} (최근 3일, KST) 사이에 게시된 공개 정보만 후보로 삼아라. 어제·오늘 기사를 우선하라.
+특히 전일(${shiftDate(date, -1)} KST 00:00~24:00) 하루치를 빠짐없이 훑어라: 전일 오후·저녁·마감 후 기사, 전일 장 마감 시황, 전일 금융위·금감원·한국은행 보도자료, 전일 실적·공시를 반드시 검색하라. 검색어에 날짜(예: '${shiftDate(date, -1)}', 'N월 N일')나 '어제'를 넣은 쿼리도 함께 써라.
+후보 순서는 중요도 순으로 하되, 같은 중요도라면 전일 기사를 오늘 아침 속보·재탕 기사보다 먼저 둬라. 단신·재탕·통계 나열보다 수치와 조치가 있는 원문 기사를 우선하라.
 후보는 8~12건을 제시하라. 각 후보는 서로 다른 단일 사건이어야 하며, 같은 사건의 반복 보도는 가장 상세한 원문 하나로 통합하라.
 URL은 실제 검색으로 확인한 개별 기사·개별 발표의 직접 링크만 사용하라. 검색결과·섹션·게시판 목록 URL은 금지한다.
 각 후보마다 (1) 원문 실제 헤드라인 (2) 매체·기관 (3) 게시 일시 KST (4) 직접 URL (5) 확인된 핵심 사실 2~3줄(수치·날짜·주체 포함) (6) 우리금융 CRO 관점 한 줄을 적어라.
