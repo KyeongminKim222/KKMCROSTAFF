@@ -42,14 +42,20 @@ jobs:
       # Prevent duplicate emails: if today's briefing already exists on main,
       # skip the whole pipeline (including the email step). Manual runs with
       # force_regenerate=true bypass this guard.
-      - name: Skip if today's briefing already exists
+      - name: Skip on weekends, KR holidays, or if today's briefing already exists
         id: dupguard
         env:
           FORCE_REGENERATE: ${{ github.event_name == 'workflow_dispatch' && inputs.force_regenerate == true && '1' || '0' }}
         run: |
           TODAY=$(TZ=Asia/Seoul date +%F)
+          DOW=$(TZ=Asia/Seoul date +%u)
           SKIP=true
-          if [ "$FORCE_REGENERATE" = "1" ]; then
+          HOLIDAY=$(node -e "const h=require('./config/kr_holidays.json'); console.log(h['$TODAY']||'')" 2>/dev/null || true)
+          if [ "$FORCE_REGENERATE" != "1" ] && [ "$DOW" -ge 6 ]; then
+            echo "$TODAY is a weekend (KST). No briefing on Sat/Sun. Skipping."
+          elif [ "$FORCE_REGENERATE" != "1" ] && [ -n "$HOLIDAY" ]; then
+            echo "$TODAY is a Korean public holiday ($HOLIDAY). Skipping."
+          elif [ "$FORCE_REGENERATE" = "1" ]; then
             echo "force_regenerate requested. Proceeding regardless of existing briefing."
             SKIP=false
           elif [ ! -f docs/briefing.json ]; then
