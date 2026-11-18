@@ -1,0 +1,28 @@
+name: OpenAI Credit Probe
+
+# 크레딧 소진 실패 후 자동 복구용: 아주 작은 호출 1번으로 크레딧이 돌아왔는지만 확인한다.
+# 성공 = 크레딧 있음, 실패 = 아직 소진. 메일 발송·커밋 없음.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Tiny OpenAI call
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-5.4-mini' }}
+        run: |
+          code=$(curl -s -o out.json -w '%{http_code}' https://api.openai.com/v1/responses \
+            -H "Authorization: Bearer $OPENAI_API_KEY" -H "Content-Type: application/json" \
+            -d "{\"model\":\"$OPENAI_MODEL\",\"input\":\"ok\",\"max_output_tokens\":16}")
+          echo "HTTP $code"
+          grep -o '"code": *"[^"]*"' out.json || true
+          if [ "$code" = "200" ]; then echo "CREDIT_OK"; exit 0; fi
+          if grep -qiE 'credit_balance_exhausted|insufficient_quota|no credits remaining' out.json; then echo "CREDIT_EXHAUSTED"; else echo "PROBE_OTHER_ERROR"; fi
+          exit 1
