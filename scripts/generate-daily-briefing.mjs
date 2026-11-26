@@ -44,6 +44,7 @@
 import { readFile, writeFile, mkdir, readdir, unlink } from 'node:fs/promises';
 import { RISK_ORDER, LEVELS, normalizeRiskTags, normalizeRiskBrief } from './risk-utils.mjs';
 import { topicBlock } from './topic-caps.mjs';
+import { offTopicReason, speculativePenalty, sameEventLoose, isLooseRepeat, sectorMismatch, repairTitles } from './quality-guards.mjs';
 import { big4Of, peerBias, REGIONAL_OR_OTHER } from './peer-focus.mjs';
 
 // ---------------------------------------------------------------------------------
@@ -921,6 +922,8 @@ for (const c of candidates) {
   if (c.sector !== 'group' && (/우리금융지주|우리금융그룹|Woori Financial Group/.test(c.title) || c.is_global_only)) c.sector = 'group';
   if (c.sector === 'group') c.sector_hook = '';
   if (c.is_promo || c.is_political_or_column) c.score = 0;
+  const spec = speculativePenalty(c.title);
+  if (spec && c.score > 0) { c.score = Math.max(0, c.score - spec); c.speculative_penalty = spec; }
 }
 console.log(`Scoring complete: ${candidates.filter((c) => c.score >= 35).length} candidates scored ≥35, ${candidates.filter((c) => c.is_promo || c.is_political_or_column).length} flagged promo/political. By sector: ${JSON.stringify(Object.fromEntries(SECTOR_ENUM.map((id) => [id, candidates.filter((c) => c.sector === id).length])))}`);
 
@@ -928,17 +931,19 @@ console.log(`Scoring complete: ${candidates.filter((c) => c.score >= 35).length}
 // 7. 확정 (deterministic selection)
 // ---------------------------------------------------------------------------------
 function isRepeatOfPrevious(c) {
-  if (isFollowUpEventKey(c.event_key)) return false;
+  if (isFollowUpEventKey(c.event_key)) return Boolean(isLooseRepeat(c, previousItems));
   if (c.is_repeat_of_previous) return true;
   for (const prev of previousItems) {
     if (prev.event_key_norm && c.event_key_norm && prev.event_key_norm === c.event_key_norm) return true;
     if (titleSimilarity(prev.title, c.title) >= 0.5) return true;
   }
+  if (isLooseRepeat(c, previousItems)) return true;
   return false;
 }
 function sameEvent(a, b) {
   if (a.event_key_norm && b.event_key_norm && a.event_key_norm === b.event_key_norm) return true;
-  return titleSimilarity(a.title, b.title) >= 0.55;
+  if (titleSimilarity(a.title, b.title) >= 0.55) return true;
+  return Boolean(sameEventLoose(a, b));
 }
 
 // 공통 필터: 윈도우·플래그·점수·축. 점수순 정렬.
@@ -950,6 +955,7 @@ function filterEligible(pool, { windowDays, minScore }, log) {
     if (age < -1 || age > windowDays - 1) { log.push(`drop(out of ${windowDays}-day window, age=${age}): ${c.title}`); continue; }
     if (c.is_promo) { log.push(`drop(promo): ${c.title}`); continue; }
     if (c.is_political_or_column) { log.push(`drop(political/column): ${c.title}`); continue; }
+    { const off = offTopicReason(c.title); if (off) { log.push(`drop(off-topic ${off}): ${c.title}`); continue; } }
     if (c.score < minScore) { log.push(`drop(score ${c.score} < ${minScore}): ${c.title}`); continue; }
     if (c.axis === 'none') { log.push(`drop(axis none): ${c.title}`); continue; }
     if (c.axis === 'overseas' && c.score < minScore + 10) { log.push(`drop(overseas relevance, score ${c.score} < ${minScore + 10}): ${c.title}`); continue; }
@@ -1022,11 +1028,12 @@ function selectSector(sectorId, pool, step, taken) {
   const unique = dedupeEvents(eligible, taken, log, { perCompetitor: false });
   const selected = [];
   const take = (c, reason) => { selected.push(c); log.push(`select(${sectorId}:${reason}, ${c.axis}, score ${c.score}): ${c.title}`); };
-  const own = unique.find((c) => companies.some((name) => `${c.title} ${c.entity}`.includes(name)));
+  const own = unique.find((c) => companies.some((name) => `${c.title} ${c.entity}`.includes(name)) && !sectorMismatch(sectorId, c));
   if (own) take(own, 'slot:own-company');
   for (const c of unique) {
     if (selected.length >= SECTOR_MAX) break;
     if (selected.includes(c)) continue;
+    if (sectorMismatch(sectorId, c) && !companies.some((name) => `${c.title} ${c.entity || ''}`.includes(name))) { log.push(`skip(${sectorId} 업권 낱말 없음): ${c.title}`); continue; }
     const target = sectorTarget(sectorId);
     { const tx = `${c.title} ${c.entity || ''}`;
       if (c.axis === 'peer' && REGIONAL_OR_OTHER.test(tx) && !big4Of(tx) && !mentionsWooriSubsidiary(tx) && c.score < 85
@@ -1101,6 +1108,8 @@ for (const id of SECTOR_IDS) {
 }
 const sectorSelected = Object.fromEntries(SECTOR_IDS.map((id) => [id, sectorSelections[id].selected]));
 const allSelected = [...selected, ...SECTOR_IDS.flatMap((id) => sectorSelected[id])];
+const titleFixes = await repairTitles(allSelected, { dryRun: DRY_RUN });
+if (titleFixes.length) console.log(`Title repair: ${titleFixes.length} fixed → ${titleFixes.map((f) => `"${f.from.slice(0, 30)}" ⇒ "${f.to.slice(0, 40)}"`).join(' / ')}`);
 console.log(`Selected sector articles: ${SECTOR_IDS.map((id) => `${id}=${sectorSelected[id].length}`).join(', ')} → total ${allSelected.length} (common ${selected.length}).`);
 
 // 6) critical 판정(공통만): score≥85 이고 (supervision/group 또는 severity_flag) → 최대 2건
