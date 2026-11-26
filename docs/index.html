@@ -1032,6 +1032,20 @@ body.chat-open .chat-fab { display: none; }
 @media(max-width:859px){.chat-robot,.chat-robot img.rf{width:132px;height:132px}}
 @media(prefers-reduced-motion:reduce){.chat-robot,.chat-robot.is-talk{animation:none!important}}
 </style>
+<style id="wonee-v1">
+.chat-robot.wonee{position:relative;width:132px;height:152px;animation:none;filter:none;display:block}
+.chat-robot.wonee::before{content:"";position:absolute;left:9px;right:9px;bottom:0;height:104px;border-radius:80px 80px 0 0;background:radial-gradient(circle at 50% 70%,#20C4F4 0,#0083CA 55%,#0067AC 100%);box-shadow:0 -4px 24px rgba(0,103,172,.25)}
+.chat-robot.wonee img.wf{position:absolute;left:0;bottom:0;width:132px;height:152px;object-fit:contain;opacity:0;pointer-events:none;user-select:none}
+.chat-robot.wonee img.wf.on{opacity:1}
+@media (prefers-reduced-motion:no-preference){.chat-robot.wonee img.wf{animation:wn-sway 4s ease-in-out infinite}}
+@keyframes wn-sway{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+.chat-fab .wn-tag{position:absolute;left:auto;right:66px;bottom:8px;transform:translateX(50%);background:#fff;color:#0067AC;font-weight:800;font-size:13px;line-height:1.4;border-radius:40px;padding:3px 12px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.15);pointer-events:none}
+.chat-fab{bottom:0!important}
+.chat-fab:focus-visible{outline:3px solid #0067AC;outline-offset:4px;border-radius:12px}
+.chat-fab.is-limited .chat-robot.wonee{filter:grayscale(.5)}
+@media(max-width:859px){.chat-robot.wonee,.chat-robot.wonee img.wf{width:112px;height:129px}.chat-robot.wonee::before{height:88px;left:8px;right:8px}.chat-fab .wn-tag{right:56px;font-size:12px}}
+.chat-ava[src*="wonee"]{object-fit:cover;object-position:50% 12%;background:radial-gradient(circle at 50% 70%,#20C4F4 0,#0083CA 60%,#0067AC 100%)}
+</style>
 <style id="herologo-off">.hero-logo{display:none!important}</style><style id="chat-suggest-v13">#chatSuggest.is-hidden{display:none!important}.chat-panel .chat-log{flex:1 1 auto;min-height:0}</style><style id="risk-brief-v14">
 :root{--rk-credit:#D14343;--rk-market:#0067AC;--rk-op:#7B57B8;--rk-rate:#E08A2C;--rk-liq:#12968A;--rk-sys:#4A5D7A;--rk-rep:#CC5A96}
 .rk-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0;padding:0;list-style:none}
@@ -1329,9 +1343,9 @@ document.addEventListener('DOMContentLoaded', function () {
     '  <div class="foot-brand">우리금융그룹 리스크관리부문 <span>· CRO Staff</span></div>',
     '  <div class="foot-text" id="footText"><b>우리금융그룹 리스크관리부문 · CRO Staff</b> · 내부 참고용</div>',
     '</div></footer>',
-    '<button type="button" class="chat-fab" id="chatFab" aria-label="AI에게 질문" aria-expanded="false" aria-controls="chatPanel">',
+    '<button type="button" class="chat-fab" id="chatFab" aria-label="질문 창 열기" aria-expanded="false" aria-controls="chatPanel">',
     '  <span class="chat-fab-label" id="chatFabLabel">리스크 AI에게 질문</span><span class="fab-speech" id="chatBubble" aria-hidden="true"></span>',
-    '  <span class=\"chat-robot\" aria-hidden=\"true\"><img class=\"rf on\" data-f=\"idle\" alt=\"\" src=\"./assets/char/idle.webp\" width=\"168\" height=\"168\" draggable=\"false\"><img class=\"rf\" data-f=\"blink\" alt=\"\" src=\"./assets/char/blink.webp\" width=\"168\" height=\"168\" draggable=\"false\"><img class=\"rf\" data-f=\"talk\" alt=\"\" src=\"./assets/char/talk.webp\" width=\"168\" height=\"168\" draggable=\"false\"><img class=\"rf\" data-f=\"wave\" alt=\"\" src=\"./assets/char/wave.webp\" width=\"168\" height=\"168\" draggable=\"false\"></span>',
+    '  <span class=\"chat-robot wonee\" aria-hidden=\"true\"><img class=\"wf on\" alt=\"\" src=\"./assets/wonee/q00.webp\" draggable=\"false\"><img class=\"wf\" alt=\"\" src=\"./assets/wonee/q01.webp\" draggable=\"false\"><img class=\"wf\" alt=\"\" src=\"./assets/wonee/q02.webp\" draggable=\"false\"><img class=\"wf\" alt=\"\" src=\"./assets/wonee/q03.webp\" draggable=\"false\"><img class=\"wf\" alt=\"\" src=\"./assets/wonee/q04.webp\" draggable=\"false\"><img class=\"wf\" alt=\"\" src=\"./assets/wonee/q05.webp\" draggable=\"false\"><img class=\"wf\" alt=\"\" src=\"./assets/wonee/q06.webp\" draggable=\"false\"><img class=\"wf\" alt=\"\" src=\"./assets/wonee/q07.webp\" draggable=\"false\"><img class=\"wf\" alt=\"\" src=\"./assets/wonee/q08.webp\" draggable=\"false\"><img class=\"wf\" alt=\"\" src=\"./assets/wonee/q09.webp\" draggable=\"false\"><img class=\"wf\" alt=\"\" src=\"./assets/wonee/q10.webp\" draggable=\"false\"><img class=\"wf\" alt=\"\" src=\"./assets/wonee/q11.webp\" draggable=\"false\"><img class=\"wf\" alt=\"\" src=\"./assets/wonee/q12.webp\" draggable=\"false\"><img class=\"wf\" alt=\"\" src=\"./assets/wonee/q13.webp\" draggable=\"false\"><img class=\"wf\" alt=\"\" src=\"./assets/wonee/q14.webp\" draggable=\"false\"><img class=\"wf\" alt=\"\" src=\"./assets/wonee/q15.webp\" draggable=\"false\"><img class=\"wf\" alt=\"\" src=\"./assets/wonee/q16.webp\" draggable=\"false\"></span><span class=\"wn-tag\" aria-hidden=\"true\">질문을 해</span>',
     '</button>',
     '<div class="chat-panel" id="chatPanel" role="dialog" aria-label="AI에게 질문" aria-hidden="true"></div>'
   ].join('');
@@ -2141,7 +2155,7 @@ function sendServerQuestion() {
   var typing = document.createElement('div');
   typing.className = 'chat-row is-bot';
   typing.id = 'chatTyping';
-  typing.innerHTML = '<img class="chat-ava" src="./assets/avatar_bot.webp" alt="" width="36" height="36" draggable="false"><div class="chat-col"><div class="chat-bubble chat-typing" aria-label="답변 작성 중"><i></i><i></i><i></i></div></div>';
+  typing.innerHTML = '<img class="chat-ava" src="./assets/wonee/q08.webp" alt="" width="36" height="36" draggable="false"><div class="chat-col"><div class="chat-bubble chat-typing" aria-label="답변 작성 중"><i></i><i></i><i></i></div></div>';
   if (log) {
     log.appendChild(typing);
     log.scrollTop = log.scrollHeight;
@@ -2189,7 +2203,7 @@ function appendChat(role, content, meta) {
   row.className = 'chat-row ' + (role === 'user' ? 'is-user' : 'is-bot');
   var ava = document.createElement('img');
   ava.className = 'chat-ava';
-  ava.src = './assets/' + (role === 'user' ? 'avatar_user.webp' : 'avatar_bot.webp');
+  ava.src = './assets/' + (role === 'user' ? 'avatar_user.webp' : 'wonee/q08.webp');
   ava.alt = '';
   ava.width = 36; ava.height = 36; ava.draggable = false;
   row.appendChild(ava);
@@ -2448,41 +2462,30 @@ function localBriefingAnswer(q, data) {
 }
 
   </script>
-<script id="robot-js-v12">
+<script id="wonee-js-v1">
 (function(){
-  var MSG=[
-    {t:'안녕하세요! 오늘 브리핑 궁금한 점 있으세요? 💬',a:'wave'},
-    {t:'기사 내용 더 물어보셔도 돼요!',a:'talk'},
-    {t:'우리금융에 닿는 접점을 알려드릴게요',a:'talk'},
-    {t:'긴급 기사부터 같이 볼까요?',a:'talk'},
-    {t:'저를 클릭하면 바로 질문할 수 있어요',a:'wave'}
-  ];
-  var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var busy=false,mi=0,hoverT=null;
-  function q(s){return document.querySelector(s)}
-  function frames(){var o={};document.querySelectorAll('.chat-robot img.rf').forEach(function(i){o[i.getAttribute('data-f')]=i});return o}
-  function show(n){var f=frames();for(var k in f)f[k].classList.toggle('on',k===n)}
-  function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
-  function blocked(){var f=q('#chatFab');return !f||document.body.classList.contains('chat-open')}
-  async function loopAlt(a,b,ms,total){var t0=Date.now(),s=false;while(Date.now()-t0<total&&!blocked()){show(s?b:a);s=!s;await sleep(ms)}show('idle')}
-  async function speak(m){
-    if(busy||blocked()||reduce)return; busy=true;
-    var b=q('#chatBubble'),r=q('.chat-robot');
-    b.textContent=m.t;b.classList.add('on');r.classList.add('is-talk');
-    if(m.a==='wave'){await loopAlt('wave','idle',380,2400);r.classList.remove('is-talk');await loopAlt('talk','idle',230,1800)}
-    else{await loopAlt('talk','idle',230,3600);r.classList.remove('is-talk')}
-    b.classList.remove('on');r.classList.remove('is-talk');show('idle');busy=false;
+  var MSG=['궁금한 건 저한테 물어봐요!','오늘 브리핑 기사 내용을 물어봐요','우리금융에 닿는 접점을 알려 드려요','긴급 기사부터 같이 봐요'];
+  var rm=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var fr=[],fi=0,talking=0,mi=0;
+  function q(x){return document.querySelector(x)}
+  function blocked(){return !q('#chatFab')||document.body.classList.contains('chat-open')||document.hidden}
+  function show(i){if(!fr.length)return;fr[fi].classList.remove('on');fi=i;fr[fi].classList.add('on')}
+  function loop(){
+    if(rm||blocked()){setTimeout(loop,600);return}
+    var t=Date.now();
+    if(t<talking){show((fi+1)%fr.length);setTimeout(loop,110)}
+    else{var idle=[0,13,14,15,16],k=idle.indexOf(fi),nx=k<0?13:idle[(k+1)%idle.length];show(nx);setTimeout(loop,nx===0?2200:160)}
   }
-  async function blinkLoop(){
-    while(true){await sleep(2600+Math.random()*2600);if(busy||blocked()||reduce)continue;show('blink');await sleep(150);if(!busy)show('idle')}
+  function pop(t){var b=q('#chatBubble');if(!b||blocked())return;b.textContent=t;b.classList.add('on');talking=Date.now()+1600;setTimeout(function(){b.classList.remove('on')},4500)}
+  function init(){
+    fr=[].slice.call(document.querySelectorAll('.chat-robot.wonee img.wf'));if(!fr.length)return;
+    if(rm)return;
+    setTimeout(loop,800);
+    setTimeout(function(){pop(MSG[mi++%MSG.length])},1500);
+    setInterval(function(){pop(MSG[mi++%MSG.length])},12000);
+    var f=q('#chatFab');if(f)f.addEventListener('mouseenter',function(){pop('클릭하면 바로 질문할 수 있어요')});
   }
-  function cycle(){setTimeout(async function tick(){await speak(MSG[mi++%MSG.length]);setTimeout(tick,9000)},2800)}
-  function bindHover(){
-    var f=q('#chatFab');if(!f)return;
-    f.addEventListener('mouseenter',function(){if(busy||reduce||blocked())return;busy=true;var b=q('#chatBubble');b.textContent='클릭해서 질문해 보세요!';b.classList.add('on');loopAlt('wave','idle',360,2200).then(function(){b.classList.remove('on');busy=false})});
-  }
-  function init(){show('idle');bindHover();blinkLoop();cycle()}
-  if(document.readyState==='complete')setTimeout(init,600);else window.addEventListener('load',function(){setTimeout(init,600)});
+  if(document.readyState==='complete')setTimeout(init,300);else window.addEventListener('load',function(){setTimeout(init,300)});
 })();
 </script>
 </body>
